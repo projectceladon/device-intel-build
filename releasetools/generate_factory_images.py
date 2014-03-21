@@ -119,7 +119,10 @@ def FastbootWinPingCommand(num_ping):
 
 def ConvertToDOSFormat(filename):
     """Convert to DOS file format"""
-    check_call(["unix2dos", filename])
+    try:
+        check_call(["unix2dos", filename])
+    except OSError:
+        exit("Please install dos2unix package on your workstation")
 
 
 def CreateWinFlashScript(filename, flash_list,
