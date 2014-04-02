@@ -1,0 +1,333 @@
+#!/usr/bin/env python
+"""
+
+Generate archive for fastboot factory installations.
+
+Archive will have 3 scripts for Linux and Windows each:
+
+    flash-base: Provision the non-AOSP parts of the device, including
+    the partition table, bootloader, and Fastboot implementation
+
+    flash-all: Same as 'flash-base' but also run 'fastboot update' to
+    provision the AOSP pieces
+
+    flash-ci: Special script for continuous integration, runs
+    'fastboot boot' into the included Fastboot image, and then
+    runs fastboot update from there. Does not disturb any of the
+    installed non-AOSP components.
+
+"""
+
+from sys import exit, stderr
+from argparse import ArgumentParser
+from tempfile import gettempdir
+from tarfile import DIRTYPE, TarInfo, open as TarOpen
+from hashlib import sha1
+from os import path, chmod, rename, remove
+from time import time
+from subprocess import check_call
+import tempfile
+import os
+
+_FLASHALL_FILENAME = "flash-all.sh"
+_FLASHBASE_FILENAME = "flash-base.sh"
+_FLASHCI_FILENAME = "flash-ci.sh"
+# chmod (octal) -rwxr-x--x
+_PERMS = 0751
+_FLASH_HEADER = """#!/bin/sh
+
+# Copyright 2012 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+_FLASH_FOOTER = "\n"
+_FASTBOOT_REBOOT_COMMAND = "reboot-bootloader"
+_WIN_FLASHALL_FILENAME = "flash-all.bat"
+_WIN_FLASHBASE_FILENAME = "flash-base.bat"
+_WIN_FLASHCI_FILENAME = "flash-ci.bat"
+_WIN_FLASH_HEADER = """@ECHO OFF
+:: Copyright 2012 The Android Open Source Project
+::
+:: Licensed under the Apache License, Version 2.0 (the "License");
+:: you may not use this file except in compliance with the License.
+:: You may obtain a copy of the License at
+::
+::      http://www.apache.org/licenses/LICENSE-2.0
+::
+:: Unless required by applicable law or agreed to in writing, software
+:: distributed under the License is distributed on an "AS IS" BASIS,
+:: WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+:: See the License for the specific language governing permissions and
+:: limitations under the License.
+
+PATH=%PATH%;\"%SYSTEMROOT%\System32\"
+"""
+_WIN_FLASH_FOOTER = """
+echo Press any key to exit...
+pause >nul
+exit
+
+"""
+
+
+def Checksum(filename):
+    """Find SHA-1 checksum"""
+    with open(filename) as fid:
+
+        # Create sha-1 checksum
+        h = sha1()
+        h.update(fid.read())
+
+        fid.close()
+
+        return h.hexdigest()
+
+def ConvertToDOSFormat(filename):
+    """Convert to DOS file format"""
+    try:
+        check_call(["unix2dos", filename])
+    except OSError:
+        exit("Please install dos2unix package on your workstation")
+
+
+def AddFlashScript(filename, tar, commands, windows):
+    print "Archiving", filename
+    tf = tempfile.NamedTemporaryFile(delete=False)
+    if (windows):
+        tf.write(_WIN_FLASH_HEADER)
+    else:
+        tf.write(_FLASH_HEADER)
+
+    for c in commands:
+        if windows:
+            tf.write(c.get_windows_command())
+        else:
+            tf.write(c.get_linux_command())
+
+    if (windows):
+        tf.write(_WIN_FLASH_FOOTER)
+    else:
+        tf.write(_FLASH_FOOTER)
+
+    tf.close()
+    if (windows):
+        ConvertToDOSFormat(tf.name)
+    chmod(tf.name, _PERMS)
+    tar.add(tf.name, arcname=path.basename(filename))
+    os.unlink(tf.name)
+
+def RequireFile(filename):
+    """Ensure file exists"""
+    if not path.exists(filename):
+        raise Usage("Cannot find " + filename)
+
+
+class Usage(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+
+class CommandlineParser(ArgumentParser):
+    """Enhanced argument parser for command line"""
+    def __init__(self):
+        super(CommandlineParser, self).__init__()
+        self.description = __doc__
+
+    def error(self, message):
+        print >>stderr, "ERROR: {}".format(message)
+        print >>stderr, "\n------\n"
+        self.print_help()
+        exit(2)
+
+class Command:
+    def get_linux_command(self):
+        return self.get_command()
+
+    def get_windows_command(self):
+        return self.get_command()
+
+class RebootBootloaderCommand(Command):
+    def __init__(self, delay, args):
+        self.delay = delay
+        self.args = args
+
+    def get_linux_command(self):
+        return "fastboot {} reboot-bootloader\nsleep {}\n".format(self.args, self.delay)
+
+    def get_windows_command(self):
+        return "fastboot {} reboot-bootloader\nping -n {} 127.0.0.1 >nul\n".format(self.args,
+                self.delay)
+
+class BootCommand(Command):
+    def __init__(self, delay, image, args):
+        self.delay = delay
+        self.args = args
+        self.image = path.basename(image)
+
+    def get_linux_command(self):
+        return "fastboot {} boot {}\nsleep {}\n".format(self.args, self.image, self.delay)
+
+    def get_windows_command(self):
+        return "fastboot {} boot {}\nping -n {} 127.0.0.1 >nul\n".format(self.args,
+                self.image, self.delay)
+
+class FlashCommand(Command):
+    def __init__(self, target, image, args):
+        self.target = target
+        self.args = args
+        self.image = path.basename(image)
+
+    def get_command(self):
+        return "fastboot {} flash {} {}\n".format(self.args, self.target, self.image)
+
+class UpdateCommand(Command):
+    def __init__(self, image, args, erase):
+        self.image = path.basename(image)
+        self.args = args
+        if erase:
+            self.args += " -w"
+
+    def get_command(self):
+        return "fastboot {} update {}\n".format(self.args, self.image)
+
+class OEMCommand(Command):
+    def __init__(self, cmd, args):
+        self.cmd = cmd
+        self.args = args
+
+    def get_command(self):
+        return "fastboot {} oem {}\n".format(self.args, self.cmd)
+
+def main():
+    """Main"""
+    parser = CommandlineParser()
+    parser.add_argument('--product', required=True,
+                        help="Product name, e.g. hammerhead")
+    parser.add_argument('--release', required=True,
+                        help="Release name, e.g. krt16m")
+    parser.add_argument('-b', '--bootloader',
+                        help="Bootloader image for fastboot flash")
+    parser.add_argument('-f', '--fastboot',
+                        help="Fastboot image for fastboot flash")
+    parser.add_argument('-u', '--update-archive',
+                        help="Zipped images for fastboot update")
+    parser.add_argument('-i', '--input', nargs="+",
+                        help="Add additional files to archive")
+    parser.add_argument('-F', '--fastboot-args',
+                        default="",
+                        help="Add additional fastboot arguments, " +
+                             "e.g -t 192.168.42.1")
+    parser.add_argument('-e', '--erase',
+                        action='store_true',
+                        help="Erase userdata/cache")
+    parser.add_argument('-s', '--sleeptime',
+                        type=int, default=5,
+                        help="Sleep in seconds for fastboot reboot, default=5")
+    parser.add_argument('--no-checksum',
+                        action='store_true', default=False,
+                        help="Remove SHA-1 checksum from archive filename")
+    parser.add_argument('-o', '--output',
+                        help="Output directory for archived factory scripts")
+    parser.add_argument('-g', '--gpt',
+                        help="GPT configuration file")
+    parser.add_argument('-k', '--unlock',
+                        action="store_true", default=False,
+                        help="Unlock the bootloader before doing anything else")
+    args = parser.parse_args()
+
+    commands = []
+    files = []
+
+    if args.unlock:
+        commands.append(OEMCommand("unlock", args.fastboot_args))
+
+    if args.gpt:
+        files.append(args.gpt)
+        commands.append(FlashCommand("gpt", args.gpt, args.fastboot_args))
+
+    if args.bootloader:
+        files.append(args.bootloader)
+        commands.append(FlashCommand("bootloader", args.bootloader, args.fastboot_args))
+
+    if args.fastboot:
+        files.append(args.fastboot)
+        commands.append(FlashCommand("fastboot", args.fastboot, args.fastboot_args))
+
+    if not files and not args.update:
+        raise Usage("No flash images provided!")
+
+    commands.append(RebootBootloaderCommand(args.sleeptime, args.fastboot_args))
+
+    # Archive Name
+    archive_name = "{}-{}-factory".format(args.product, args.release)
+    archive_name = archive_name.lower()
+    archive_name = path.join(args.output, archive_name)
+
+    # Create Archive
+    print "Creating archive: " + archive_name
+    tar = TarOpen(archive_name, "w:gz")
+
+    if (args.input):
+        files.extend(args.input)
+    for filename in files:
+        print "Archiving " + filename
+        RequireFile(filename)
+        tar.add(filename, arcname=path.basename(filename))
+
+    # flash-base just sets up the non-AOSP parts of the system
+    AddFlashScript(_FLASHBASE_FILENAME, tar, commands, windows=False)
+    AddFlashScript(_WIN_FLASHBASE_FILENAME, tar, commands, windows=True)
+
+    # 'fastboot update' covers the additional AOSP pieces, add this to the
+    # command list now
+    if args.update_archive:
+        commands.append(UpdateCommand(args.update_archive, args.fastboot_args, args.erase))
+        print "Archiving " + args.update_archive
+        RequireFile(args.update_archive)
+        tar.add(args.update_archive, arcname=path.basename(args.update_archive))
+        AddFlashScript(_FLASHALL_FILENAME, tar, commands, windows=False)
+        AddFlashScript(_WIN_FLASHALL_FILENAME, tar, commands, windows=True)
+
+    # Special script for doing CI tests, boots into new Fastboot image and then
+    # just runs 'fastboot update'; bootloader, GPT, and installed fastboot image
+    # are untouched
+    if args.update_archive and args.fastboot:
+        ci_commands = [
+                BootCommand(args.sleeptime, args.fastboot, args.fastboot_args),
+                UpdateCommand(args.update_archive, args.fastboot_args, args.erase)
+                ]
+        AddFlashScript(_FLASHCI_FILENAME, tar, ci_commands, windows=False)
+        AddFlashScript(_WIN_FLASHCI_FILENAME, tar, ci_commands, windows=True)
+
+    tar.close()
+
+    if not args.no_checksum:
+        # Calculate SHA-1 Checksum
+        sha1sum = Checksum(archive_name)
+        print "Checksum: " + sha1sum
+
+        # Rename Archive
+        rename(archive_name, archive_name + "-" + sha1sum[:8] + ".tgz")
+    else:
+        rename(archive_name, archive_name + ".tgz")
+
+    print "Done."
+
+if __name__ == "__main__":
+    try:
+        exit(main())
+    except Usage, err:
+        print >>stderr, "ERROR: {}".format(err.msg)
+        print >>stderr, "       for help use --help"
+        exit(2)
