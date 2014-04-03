@@ -14,17 +14,10 @@
 # 	on the one file we need.
 # 	   e.g. 'make publish_ci'
 
-# Error out if we try to use publish/publish_ci but our lunch target does not
-# support creating our update package
-ifeq (,$(INTERNAL_UPDATE_PACKAGE_TARGET))
-    publish_goals := $(strip $(filter publish publish_ci,$(MAKECMDGOALS)))
-    ifneq (,$(publish_goals))
-	$(error "This lunch target will not support: $(publish_goals)")
-    endif
-endif
-
 publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/
 
+# Do we have the file we need to add the flash.json to
+ifdef INTERNAL_UPDATE_PACKAGE_TARGET
 # This makefile process depends on flash.json, which can be located in either:
 #    vendor/intel/build/flash.json
 #    device/intel/build/flash.json
@@ -36,16 +29,33 @@ define publish_zip_flash
 zip --junk-paths $(publish_dest)/$(notdir $(INTERNAL_UPDATE_PACKAGE_TARGET)) $(publish_flash_json)
 endef
 
+else  # !INTERNAL_UPDATE_PACKAGE_TARGET
+
+# empty definition if we don't have the package file needed to add the
+# flash.json to
+define publish_zip_flash
+endef
+
+endif # !INTERNAL_UPDATE_PACKAGE_TARGET
+
 publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 
 .PHONY: publish_mkdir_dest
 publish_mkdir_dest:
 	$(call publish_make_dir, $(dir $(publish_dest)))
 
+
 .PHONY: publish_ci
+# Can we build our publish_ci file?
+ifdef INTERNAL_UPDATE_PACKAGE_TARGET
 publish_ci: publish_mkdir_dest $(INTERNAL_UPDATE_PACKAGE_TARGET)
 	@$(ACP) $(INTERNAL_UPDATE_PACKAGE_TARGET) $(publish_dest)
 	$(publish_zip_flash)
+
+else  # !INTERNAL_UPDATE_PACKAGE_TARGET
+publish_ci:
+	@echo "Warning: Unable to fulfill publish_ci makefile request"
+endif # !INTERNAL_UPDATE_PACKAGE_TARGET
 
 # We need to make sure our 'publish' target depends on the other targets so
 # that it will get done at the end.  Logic copied from build/core/distdir.mk
