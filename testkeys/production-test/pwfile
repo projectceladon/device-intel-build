@@ -1,0 +1,10 @@
+# Enter key passwords between the [[[ ]]] brackets.
+# (Additional spaces are harmless.)
+
+[[[  uhlersoth  ]]] device/intel/common/testkeys/production-test//media
+[[[  uhlersoth  ]]] device/intel/common/testkeys/production-test//platform
+[[[  uhlersoth  ]]] device/intel/common/testkeys/production-test//releasekey
+[[[  uhlersoth  ]]] device/intel/common/testkeys/production-test//shared
+[[[  uhlersoth  ]]] device/intel/common/testkeys/production-test//DB
+[[[  uhlersoth  ]]] device/intel/common/testkeys/production-test//vendor
+
