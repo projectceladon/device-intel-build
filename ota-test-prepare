@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# Bail on any errors
+set -e
+
+# Allow job control
+set -m
+
+export PROD_KEY_DIR=device/intel/build/testkeys/production-test/
+export NEW_DB_KEY=$PROD_KEY_DIR/DB
+export ANDROID_PW_FILE=$PROD_KEY_DIR/pwfile
+
+while getopts ":jcqs" opt; do
+    case $opt in
+        j)
+            export PARALLEL=1
+            ;;
+        c)
+            export CLEAN=1
+            ;;
+        s)
+            set -x
+            ;;
+        q)
+            export QUICK=1
+            ;;
+        \?)
+            echo "Valid options:"
+            echo "-j: Build parallel"
+            echo "-c: Clean before building package A"
+            echo "-s: Show commands being run"
+            echo "-q: Only build images needed for quick tests"
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
+
+function sign_tfp {
+    ./build/tools/releasetools/sign_target_files_apks  \
+            --default_key_mappings $PROD_KEY_DIR $1 $2
+}
+
+# FIXME can't tell if child jobs exited abnormally
+function wait_for_jobs {
+    while [ 1 ]; do
+        fg &> /dev/null || break
+    done
+}
+
+if [[ "$PARALLEL" == "1" ]]; then
+    function background {
+        $@ &
+    }
+else
+    function background {
+        $@
+    }
+fi
+
+rm -rf ota/
+mkdir ota/
+
+if [[ "$CLEAN" == "1" ]]; then
+    make installclean &> /dev/null
+fi
+
+echo
+
+echo "Building source software version A"
+make -j12 target-files-package otatools &> ota/make-A.log
+cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
+
+echo "Regenerating UEFI Binaries to create artificial deltas"
+cd external/gummiboot
+./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/gummiboot.log
+cd $ANDROID_BUILD_TOP
+
+cd external/uefi_shim
+./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/shim.log
+cd $ANDROID_BUILD_TOP
+
+date > external/gummiboot/SOURCE_CHANGE
+
+echo "Cleaning source tree"
+make installclean &> /dev/null
+
+echo "Building target software version B"
+ANDROID_CONSOLE=usb make -j12 target-files-package otatools &> ota/make-B.log
+cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
+
+if [[ "$QUICK" != "1" ]]; then
+    echo "Re-signing target-files-packages"
+    background sign_tfp ota/tfp-A-testkey.zip ota/tfp-A.zip
+    background sign_tfp ota/tfp-B-testkey.zip ota/tfp-B.zip
+    wait_for_jobs
+fi
+
+echo "Building OTA update packages"
+if [[ "$QUICK" != "1" ]]; then
+    background ./build/tools/releasetools/ota_from_target_files ota/tfp-A.zip ota/ota-A.zip
+    background ./build/tools/releasetools/ota_from_target_files ota/tfp-B.zip ota/ota-B.zip
+    background ./build/tools/releasetools/ota_from_target_files -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
+fi
+background ./build/tools/releasetools/ota_from_target_files ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
+background ./build/tools/releasetools/ota_from_target_files -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
+wait_for_jobs
+
+#echo "Building provisioning media"
+#if [[ "$QUICK" != "1" ]]; then
+#    background ./build/tools/releasetools/img_from_target_files
+#    background build_provimg ota/ota-A.zip ota/tfp-A.zip ota/prov-A.img
+#    background build_provimg ota/ota-B.zip ota/tfp-B.zip ota/prov-B.img
+#fi
+#background build_provimg_testkey ota/ota-A-testkey.zip ota/tfp-A-testkey.zip ota/prov-A-testkey.img
+wait_for_jobs
+
+popd
+echo "OTA preparations complete!"
+
