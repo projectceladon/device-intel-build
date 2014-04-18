@@ -44,18 +44,29 @@ publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 publish_mkdir_dest:
 	$(call publish_make_dir, $(dir $(publish_dest)))
 
+.PHONY: publish_emulator_target
+# Can we build our publish_emulator_target file?
+ifdef INTERNAL_EMULATOR_PACKAGE_TARGET
+publish_emulator_target: publish_mkdir_dest $(INTERNAL_EMULATOR_PACKAGE_TARGET)
+	@$(ACP) $(INTERNAL_EMULATOR_PACKAGE_TARGET) $(publish_dest)
+else  # !INTERNAL_EMULATOR_PACKAGE_TARGET
+publish_emulator_target:
+	@echo "Warning: Unable to fulfill publish_emulator_target makefile request"
+endif # !INTERNAL_EMULATOR_PACKAGE_TARGET
 
-.PHONY: publish_ci
-# Can we build our publish_ci file?
+.PHONY: publish_update_target
+# Can we build our publish_update_target file?
 ifdef INTERNAL_UPDATE_PACKAGE_TARGET
-publish_ci: publish_mkdir_dest $(INTERNAL_UPDATE_PACKAGE_TARGET)
+publish_update_target: publish_mkdir_dest $(INTERNAL_UPDATE_PACKAGE_TARGET)
 	@$(ACP) $(INTERNAL_UPDATE_PACKAGE_TARGET) $(publish_dest)
 	$(publish_zip_flash)
-
 else  # !INTERNAL_UPDATE_PACKAGE_TARGET
-publish_ci:
-	@echo "Warning: Unable to fulfill publish_ci makefile request"
+publish_update_target:
+	@echo "Warning: Unable to fulfill publish_update_target makefile request"
 endif # !INTERNAL_UPDATE_PACKAGE_TARGET
+
+.PHONY: publish_ci
+publish_ci: publish_update_target publish_emulator_target
 
 # We need to make sure our 'publish' target depends on the other targets so
 # that it will get done at the end.  Logic copied from build/core/distdir.mk
