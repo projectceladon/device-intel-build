@@ -55,7 +55,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		--gpt $(BOARD_GPT_INI) \
 		--unlock --erase \
-		--fastboot-args '-t 192.168.42.1' --sleeptime 30 \
+		--sleeptime 45 \
 		--input $(FACTORY_SCRIPTS_FASTBOOT_USB) \
 		--no-checksum --output $(PRODUCT_OUT)
 
