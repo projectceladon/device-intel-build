@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$1" ]; then
+    PACKAGE="$OUT/ota-dev.zip"
+else
+    PACKAGE="$1"
+fi
+
+function wait_for_adb {
+    while [ -z "$(adb devices | awk 'NR==2{print}')" ]; do
+        sleep 1
+    done
+}
+
+echo "Waiting for device..."
+wait_for_adb
+echo "Setting root permissions..."
+adb root
+sleep 1
+wait_for_adb
+
+echo "Copying OTA image $(basename $PACKAGE) to device..."
+adb push $PACKAGE /cache/update.zip
+echo "Setting parameters and rebooting into recovery console..."
+adb shell "mkdir -p /cache/recovery"
+adb shell "echo \"--update_package=/cache/update.zip\" > /cache/recovery/command"
+timeout 4 adb reboot recovery || true
