@@ -201,8 +201,24 @@ class UpdateCommand(Command):
         return "{} update {}\n".format(self.args, self.image)
 
 class OEMCommand(Command):
-    def __init__(self, cmd):
+    def __init__(self, cmd, delay):
         self.cmd = cmd
+        self.delay = delay
+
+    def get_linux_command(self):
+        if self.delay:
+            return '{} oem {}\nsleep {}\n'.format(_LINUX_PREAMBLE, self.cmd, self.delay)
+        else:
+            return '{} oem {}\n'.format(_LINUX_PREAMBLE, self.cmd)
+
+
+    def get_windows_command(self):
+        if self.delay:
+            return '{} oem {}\nping -n {} 127.0.0.1 >nul\n'.format(_WINDOWS_PREAMBLE,
+                    self.cmd, self.delay)
+        else:
+            return '{} oem {}\n'.format(_WINDOWS_PREAMBLE, self.cmd)
+
 
     def get_command(self):
         return "oem {}\n".format(self.cmd)
@@ -244,7 +260,7 @@ def main():
     files = []
 
     if args.unlock:
-        commands.append(OEMCommand("unlock"))
+        commands.append(OEMCommand("unlock", args.sleeptime))
 
     if args.gpt:
         files.append(args.gpt)
