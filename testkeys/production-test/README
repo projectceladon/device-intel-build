@@ -1,0 +1,12 @@
+These keys are used for testing the sign_target_files_apks
+workflow, as detailed here:
+
+https://android-ia.intel.com/wiki/OTA_Update_Test_Cases
+
+Distribution of these keys is uncontrolled, they are just
+for testing the re-signing scenarios.
+
+The passphrase for all these keys is 'uhlersoth'. When running
+sign_target_files_apks, set ANDROID_PW_FILE to the pwfile
+included here so that passwords aren't prompted.
+
