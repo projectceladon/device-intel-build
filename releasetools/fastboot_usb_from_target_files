@@ -15,12 +15,14 @@
 # limitations under the License.
 
 """
-Generates a fastboot boot image from target-files zip.
+Generates a bootable fastboot USB image from target-files zip.
 
-Usage:  fastboot_from_target_files input_target_files_zip output_file
+Usage:  fastboot_usb_from_target_files input_target_files_zip output_file
 """
 
 import sys
+import os
+import zipfile
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -46,14 +48,15 @@ def main(argv):
     OPTIONS.input_tmp, input_zip = common.UnzipTemp(args[0])
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
 
-    # Get Boot Image
     print "creating %s" % (args[1],)
 
-    img = intel_common.GetFastbootImage(OPTIONS.input_tmp)
+    fastboot = intel_common.GetFastbootImage(OPTIONS.input_tmp).WriteToTemp()
+    z = os.path.join(OPTIONS.input_tmp, "RADIO", "loader_usb.zip")
+    rootzip = zipfile.ZipFile(z, "a")
+    rootzip.write(fastboot.name, "fastboot.img")
+    rootzip.close()
 
-    # Write Boot Image
-    intel_common.WriteFileToDest(img, args[1])
-
+    intel_common.MakeVFATFilesystem(z, args[1])
     common.Cleanup()
 
 if __name__ == '__main__':

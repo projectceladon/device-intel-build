@@ -6,30 +6,45 @@ FACTORY_SCRIPTS_PACKAGE_TARGET := $(PRODUCT_OUT)/$(TARGET_PRODUCT)-$(BUILD_ID_LC
 intermediates := $(call intermediates-dir-for,PACKAGING,factory_scripts)
 FACTORY_SCRIPTS_BOOTLOADER_IMAGE := $(intermediates)/bootloader-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).bin
 FACTORY_SCRIPTS_FASTBOOT_IMAGE := $(intermediates)/fastboot-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).img
+FACTORY_SCRIPTS_FASTBOOT_USB := $(intermediates)/fastboot-usb-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).img
 
 # We could just get the fastboot.img and bootloader blobs from the $OUT
 # directory, but let's make sure these scripts don't bit-rot as they are
 # critical for release workflow.
 
-$(FACTORY_SCRIPTS_BOOTLOADER_IMAGE): $(BUILT_TARGET_FILES_PACKAGE)
-	mkdir -p $(dir $@)
-	$(hide) ./device/intel/build/releasetools/bootloader_from_target_files \
-		$(BUILT_TARGET_FILES_PACKAGE) $@
+$(FACTORY_SCRIPTS_BOOTLOADER_IMAGE): \
+		$(BUILT_TARGET_FILES_PACKAGE) \
+		device/intel/build/releasetools/bootloader_from_target_files \
 
-$(FACTORY_SCRIPTS_FASTBOOT_IMAGE): $(BUILT_TARGET_FILES_PACKAGE)
+	mkdir -p $(dir $@)
+	$(hide) device/intel/build/releasetools/bootloader_from_target_files \
+		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
+
+$(FACTORY_SCRIPTS_FASTBOOT_IMAGE): \
+		$(BUILT_TARGET_FILES_PACKAGE) \
+		device/intel/build/releasetools/fastboot_from_target_files \
+
 	mkdir -p $(dir $@)
 	$(hide) MKBOOTIMG=$(BOARD_CUSTOM_MKBOOTIMG) \
-		./device/intel/build/releasetools/fastboot_from_target_files \
-		$(BUILT_TARGET_FILES_PACKAGE) $@
+		device/intel/build/releasetools/fastboot_from_target_files \
+		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
 
-# TODO: add scripts to create fastboot-usb.img from a target-files-package
+$(FACTORY_SCRIPTS_FASTBOOT_USB): \
+		$(BUILT_TARGET_FILES_PACKAGE) \
+		device/intel/build/releasetools/fastboot_usb_from_target_files \
+
+	mkdir -p $(dir $@)
+	$(hide) MKBOOTIMG=$(BOARD_CUSTOM_MKBOOTIMG) \
+		device/intel/build/releasetools/fastboot_usb_from_target_files \
+		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
+
 $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		$(FACTORY_SCRIPTS_BOOTLOADER_IMAGE) \
 		$(FACTORY_SCRIPTS_FASTBOOT_IMAGE) \
+                $(FACTORY_SCRIPTS_FASTBOOT_USB) \
 		$(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		$(DISTTOOLS) $(SELINUX_DEPENDS) \
 		$(BOARD_GPT_INI) \
-		$(PRODUCT_OUT)/fastboot-usb.img \
 
 	@echo "Package: $@"
 	# Generate Package
@@ -40,8 +55,8 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		--gpt $(BOARD_GPT_INI) \
 		--unlock --erase \
-		--fastboot-args '-t 192.168.42.1' --sleeptime 30 \
-		--input $(PRODUCT_OUT)/fastboot-usb.img \
+		--sleeptime 45 \
+		--input $(FACTORY_SCRIPTS_FASTBOOT_USB) \
 		--no-checksum --output $(PRODUCT_OUT)
 
 .PHONY: factoryscripts
