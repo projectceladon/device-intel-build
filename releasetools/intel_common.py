@@ -19,6 +19,7 @@ import tempfile
 import os
 import sys
 import subprocess
+import shlex
 
 sys.path.append("build/tools/releasetools")
 import common
@@ -104,6 +105,12 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     if os.access(fn, os.F_OK):
         cmd.append("--cmdline")
         cmd.append(open(fn).read().rstrip("\n"))
+
+    # Add 2nd-stage loader, if it exists
+    fn = os.path.join(unpack_dir, "RADIO", "ufb-second")
+    if os.access(fn, os.F_OK):
+        cmd.append("--second")
+        cmd.append(fn)
 
     args = info_dict.get("mkbootimg_args", None)
     if args and args.strip():
