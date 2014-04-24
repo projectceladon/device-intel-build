@@ -15,12 +15,14 @@
 # limitations under the License.
 
 """
-Generates a fastboot boot image from target-files zip.
-
-Usage:  fastboot_from_target_files input_target_files_zip output_file
+Generates a VFAT EFI System partition image from a provided
+zip file containing its contents relative to the root directory
 """
 
 import sys
+import tempfile
+import shutil
+import zipfile
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -36,24 +38,41 @@ import intel_common
 OPTIONS = common.OPTIONS
 
 def main(argv):
-    args = common.ParseOptions(argv, __doc__)
 
-    if (len(args) != 2):
+    def option_handler(o, a):
+        if o in ("-f", "--fastboot"):
+            OPTIONS.fastboot = a
+        elif o in ("-z", "--zipfile"):
+            OPTIONS.zipfile = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__,
+                            extra_opts="f:z:",
+                            extra_long_opts=["fastboot=", "zipfile="],
+                            extra_option_handler=option_handler)
+
+    if (len(args) != 1):
         common.Usage(__doc__)
         sys.exit(1)
 
-    print "unzipping target-files..."
-    OPTIONS.input_tmp, input_zip = common.UnzipTemp(args[0])
-    OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+    if not OPTIONS.fastboot or not OPTIONS.zipfile:
+        common.Usage(__doc__)
+        sys.exit(1)
 
-    # Get Boot Image
-    print "creating %s" % (args[1],)
+    # Make a new zip file with the same contents as the one passed in
+    # but also add the fastboot image to the root.
+    tf = tempfile.NamedTemporaryFile(delete=False)
+    z = tf.name
+    OPTIONS.tempfiles.append(z)
+    tf.close()
+    shutil.copyfile(OPTIONS.zipfile, z)
+    rootzip = zipfile.ZipFile(z, "a")
+    rootzip.write(OPTIONS.fastboot, "fastboot.img")
+    rootzip.close()
 
-    img = intel_common.GetFastbootImage(OPTIONS.input_tmp)
-
-    # Write Boot Image
-    intel_common.WriteFileToDest(img, args[1])
-
+    intel_common.MakeVFATFilesystem(z, args[0])
     common.Cleanup()
 
 if __name__ == '__main__':
