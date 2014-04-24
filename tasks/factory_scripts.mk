@@ -18,7 +18,7 @@ $(FACTORY_SCRIPTS_BOOTLOADER_IMAGE): \
 
 	mkdir -p $(dir $@)
 	$(hide) device/intel/build/releasetools/bootloader_from_target_files \
-		$(BUILT_TARGET_FILES_PACKAGE) $@
+		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
 
 $(FACTORY_SCRIPTS_FASTBOOT_IMAGE): \
 		$(BUILT_TARGET_FILES_PACKAGE) \
@@ -27,7 +27,7 @@ $(FACTORY_SCRIPTS_FASTBOOT_IMAGE): \
 	mkdir -p $(dir $@)
 	$(hide) MKBOOTIMG=$(BOARD_CUSTOM_MKBOOTIMG) \
 		device/intel/build/releasetools/fastboot_from_target_files \
-		$(BUILT_TARGET_FILES_PACKAGE) $@
+		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
 
 $(FACTORY_SCRIPTS_FASTBOOT_USB): \
 		$(BUILT_TARGET_FILES_PACKAGE) \
@@ -36,7 +36,7 @@ $(FACTORY_SCRIPTS_FASTBOOT_USB): \
 	mkdir -p $(dir $@)
 	$(hide) MKBOOTIMG=$(BOARD_CUSTOM_MKBOOTIMG) \
 		device/intel/build/releasetools/fastboot_usb_from_target_files \
-		$(BUILT_TARGET_FILES_PACKAGE) $@
+		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
 
 $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		$(FACTORY_SCRIPTS_BOOTLOADER_IMAGE) \
