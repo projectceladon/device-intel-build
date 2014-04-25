@@ -65,8 +65,19 @@ publish_update_target:
 	@echo "Warning: Unable to fulfill publish_update_target makefile request"
 endif # !INTERNAL_UPDATE_PACKAGE_TARGET
 
+.PHONY: publish_factory_target
+# Can we build our publish_factory_target file?
+ifdef TARGET_BUILD_INTEL_FACTORY_SCRIPTS
+publish_factory_target: publish_mkdir_dest $(FACTORY_SCRIPTS_PACKAGE_TARGET)
+	@$(ACP) $(FACTORY_SCRIPTS_PACKAGE_TARGET) $(publish_dest)
+else  # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
+publish_factory_target:
+	@echo "Warning: Unable to fulfill publish_factory_target makefile request"
+endif # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
+
+
 .PHONY: publish_ci
-publish_ci: publish_update_target publish_emulator_target
+publish_ci: publish_update_target publish_emulator_target publish_factory_target
 
 # We need to make sure our 'publish' target depends on the other targets so
 # that it will get done at the end.  Logic copied from build/core/distdir.mk
