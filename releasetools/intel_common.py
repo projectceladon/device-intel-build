@@ -24,12 +24,14 @@ import shlex
 sys.path.append("build/tools/releasetools")
 import common
 
+
 def WriteFileToDest(img, dest):
     """Write common.File to destination"""
     fid = open(dest, 'w')
     fid.write(img.data)
     fid.flush()
     fid.close()
+
 
 def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0):
     """Create a VFAT filesystem image with all the files in the provided
@@ -58,8 +60,13 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0):
     if os.path.exists(filename):
         os.unlink(filename)
 
+    add_dir_to_path("/sbin")
     cmd = ["mkdosfs", "-n", title, "-C", filename, str(size / 1024)]
-    p = common.Run(cmd)
+    try:
+        p = common.Run(cmd)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
     p.wait()
     assert p.returncode == 0, "mkdosfs failed"
     for f in os.listdir(root):
@@ -85,12 +92,23 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     ramdisk_img = tempfile.NamedTemporaryFile()
     img = tempfile.NamedTemporaryFile()
 
-    ramdisk_tmp, ramdisk_zip = common.UnzipTemp(os.path.join(unpack_dir,
-            "RADIO", "ufb-ramdisk.zip"))
+    ramdisk_tmp, ramdisk_zip = common.UnzipTemp(
+        os.path.join(unpack_dir, "RADIO", "ufb-ramdisk.zip"))
 
-    cmd = ["mkbootfs", ramdisk_tmp]
-    p1 = common.Run(cmd, stdout=subprocess.PIPE)
-    p2 = common.Run(["minigzip"], stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
+    cmd1 = ["mkbootfs", ramdisk_tmp]
+    try:
+        p1 = common.Run(cmd1, stdout=subprocess.PIPE)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
+
+    cmd2 = ["minigzip"]
+    try:
+        p2 = common.Run(
+            cmd2, stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
 
     p2.wait()
     p1.wait()
@@ -119,7 +137,11 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     cmd.extend(["--ramdisk", ramdisk_img.name,
                 "--output", img.name])
 
-    p = common.Run(cmd, stdout=subprocess.PIPE)
+    try:
+        p = common.Run(cmd, stdout=subprocess.PIPE)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
     p.communicate()
     assert p.returncode == 0, "mkbootimg of fastboot image failed"
 
@@ -131,10 +153,32 @@ def GetFastbootImage(unpack_dir, info_dict=None):
 
     return common.File("fastboot.img", data)
 
+
 def PutFatFile(fat_img, in_path, out_path):
     cmd = ["mcopy", "-s", "-Q", "-i", fat_img, in_path,
-            "::"+out_path]
-    p = common.Run(cmd)
+           "::" + out_path]
+    try:
+        p = common.Run(cmd)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
     p.wait()
     assert p.returncode == 0, "couldn't insert %s into FAT image" % (in_path,)
 
+
+def add_dir_to_path(dir_name, end=True):
+    """
+    I add a directory to the PATH environment variable, if not already in the
+    path.  By default it gets added to the end of the PATH
+    """
+    dir_name = os.path.abspath(dir_name)
+    path_env_var = os.environ.get('PATH', "")
+    for path_dir in path_env_var.split(os.pathsep):
+        path_dir = os.path.abspath(path_dir)
+        if dir_name == path_dir:
+            return
+    if end:
+        path_env_var += ":" + dir_name
+    else:
+        path_env_var = dir_name + ":" + path_env_var
+    os.environ['PATH'] = path_env_var
