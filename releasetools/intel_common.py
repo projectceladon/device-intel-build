@@ -75,7 +75,7 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0):
         PutFatFile(filename, in_p, out_p)
 
 
-def GetFastbootImage(unpack_dir, info_dict=None):
+def GetFastbootImage(unpack_dir, info_dict=None, password=None):
     """Return a File object 'fastboot.img' with the Fastboot boot image.
     It will either be fetched from BOOTABLE_IMAGES/fastboot.img or built
     using RADIO/ufb_ramdisk.zip, RADIO/ufb_cmdline, and BOOT/kernel"""
@@ -86,7 +86,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     prebuilt_path = os.path.join(unpack_dir, "BOOTABLE_IMAGES", "fastboot.img")
     if (os.path.exists(prebuilt_path)):
         print "using prebuilt fastboot.img"
-        return File.FromLocalFile(name, prebuilt_path)
+        return common.File.FromLocalFile("fastboot.img", prebuilt_path)
 
     print "building Fastboot image from target_files..."
     ramdisk_img = tempfile.NamedTemporaryFile()
@@ -138,11 +138,13 @@ def GetFastbootImage(unpack_dir, info_dict=None):
                 "--output", img.name])
 
     try:
-        p = common.Run(cmd, stdout=subprocess.PIPE)
+        p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     except Exception as exc:
         print "Error: Unable to execute command: {}".format(' '.join(cmd))
         raise exc
-    p.communicate()
+    if password is not None:
+        password += "\n"
+    p.communicate(password)
     assert p.returncode == 0, "mkbootimg of fastboot image failed"
 
     img.seek(os.SEEK_SET, 0)
@@ -182,3 +184,98 @@ def add_dir_to_path(dir_name, end=True):
     else:
         path_env_var = dir_name + ":" + path_env_var
     os.environ['PATH'] = path_env_var
+
+# Variant of the version inside common.py; can communicate a password
+# to mkbootimg. Key path is stored in mkbootimg_args; modify that
+# before calling this
+def BuildBootableImage(sourcedir, fs_config_file, info_dict=None, password=None):
+    """Take a kernel, cmdline, and ramdisk directory from the input (in
+    'sourcedir'), and turn them into a boot image.  Return the image
+    data, or None if sourcedir does not appear to contains files for
+    building the requested image."""
+
+    if (not os.access(os.path.join(sourcedir, "RAMDISK"), os.F_OK) or
+            not os.access(os.path.join(sourcedir, "kernel"), os.F_OK)):
+        return None
+
+    if info_dict is None:
+        info_dict = common.OPTIONS.info_dict
+
+    ramdisk_img = tempfile.NamedTemporaryFile()
+    img = tempfile.NamedTemporaryFile()
+
+    if os.access(fs_config_file, os.F_OK):
+        cmd = ["mkbootfs", "-f", fs_config_file, os.path.join(sourcedir, "RAMDISK")]
+    else:
+        cmd = ["mkbootfs", os.path.join(sourcedir, "RAMDISK")]
+    p1 = common.Run(cmd, stdout=subprocess.PIPE)
+    p2 = common.Run(["minigzip"],
+           stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
+
+    p2.wait()
+    p1.wait()
+    assert p1.returncode == 0, "mkbootfs of %s ramdisk failed" % (targetname,)
+    assert p2.returncode == 0, "minigzip of %s ramdisk failed" % (targetname,)
+
+    # use MKBOOTIMG from environ, or "mkbootimg" if empty or not set
+    mkbootimg = os.getenv('MKBOOTIMG') or "mkbootimg"
+
+    cmd = [mkbootimg, "--kernel", os.path.join(sourcedir, "kernel")]
+
+    fn = os.path.join(sourcedir, "cmdline")
+    if os.access(fn, os.F_OK):
+        cmd.append("--cmdline")
+        cmd.append(open(fn).read().rstrip("\n"))
+
+    fn = os.path.join(sourcedir, "base")
+    if os.access(fn, os.F_OK):
+        cmd.append("--base")
+        cmd.append(open(fn).read().rstrip("\n"))
+
+    fn = os.path.join(sourcedir, "pagesize")
+    if os.access(fn, os.F_OK):
+        cmd.append("--pagesize")
+        cmd.append(open(fn).read().rstrip("\n"))
+
+    args = info_dict.get("mkbootimg_args", None)
+    if args and args.strip():
+        cmd.extend(shlex.split(args))
+
+    cmd.extend(["--ramdisk", ramdisk_img.name,
+                "--output", img.name])
+
+    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    if password is not None:
+        password += "\n"
+    p.communicate(password)
+    assert p.returncode == 0, "mkbootimg of %s image failed" % (
+        os.path.basename(sourcedir),)
+
+    img.seek(os.SEEK_SET, 0)
+    data = img.read()
+
+    ramdisk_img.close()
+    img.close()
+
+    return data
+
+# Variant of the version inside common.py; can communicate a password
+# to mkbootimg
+def GetBootableImage(name, prebuilt_name, unpack_dir, tree_subdir,
+                     info_dict=None, password=None):
+    """Return a File object (with name 'name') with the desired bootable
+    image.  Look for it in 'unpack_dir'/BOOTABLE_IMAGES under the name
+    'prebuilt_name', otherwise construct it from the source files in
+    'unpack_dir'/'tree_subdir'."""
+
+    prebuilt_path = os.path.join(unpack_dir, "BOOTABLE_IMAGES", prebuilt_name)
+    if os.path.exists(prebuilt_path):
+        print "using prebuilt %s..." % (prebuilt_name,)
+        return common.File.FromLocalFile(name, prebuilt_path)
+    else:
+        print "building image from target_files %s..." % (tree_subdir,)
+        fs_config = "META/" + tree_subdir.lower() + "_filesystem_config.txt"
+    return common.File(name, BuildBootableImage(os.path.join(unpack_dir, tree_subdir),
+                                         os.path.join(unpack_dir, fs_config),
+                                         info_dict, password))
+
