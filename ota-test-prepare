@@ -6,28 +6,26 @@ set -e
 # Allow job control
 set -m
 
-export PROD_KEY_DIR=device/intel/build/testkeys/production-test/
+export PROD_KEY_DIR=device/intel/build/testkeys/production-test
 export NEW_DB_KEY=$PROD_KEY_DIR/DB
 export ANDROID_PW_FILE=$PROD_KEY_DIR/pwfile
 
-while getopts ":jcqs" opt; do
+export MKBOOTIMG=out/host/linux-x86/bin/mkbootimg_secure
+
+while getopts "jcqst:" opt; do
     case $opt in
-        j)
-            export PARALLEL=1
-            ;;
-        c)
-            export CLEAN=1
-            ;;
         s)
             set -x
             ;;
         q)
             export QUICK=1
             ;;
+        t)
+            export TFP=$OPTARG
+            ;;
         \?)
             echo "Valid options:"
             echo "-j: Build parallel"
-            echo "-c: Clean before building package A"
             echo "-s: Show commands being run"
             echo "-q: Only build images needed for quick tests"
             exit 1
@@ -43,39 +41,84 @@ fi
 pushd $ANDROID_BUILD_TOP &> /dev/null
 
 function sign_tfp {
+    t1=`mktemp tmp.tfp1.XXXXXXXX`
+    t2=`mktemp tmp.tfp2.XXXXXXXX`
     ./build/tools/releasetools/sign_target_files_apks  \
-            --default_key_mappings $PROD_KEY_DIR $1 $2
+            --verbose \
+            --default_key_mappings $PROD_KEY_DIR $1 $t1
+    ./device/intel/build/releasetools/sign_target_files_efis \
+            --verbose \
+            --first-stage shim.efi \
+            --vendor-cert-replace device/intel/build/testkeys/vendor.x509.pem=device/intel/build/testkeys/production-test/vendor.x509.pem \
+            --key-mapping shim.efi=device/intel/build/testkeys/production-test/DB \
+            --key-mapping gummiboot.efi=device/intel/build/testkeys/production-test/vendor \
+            $t1 $t2
+    rm $t1
+    ./device/intel/build/releasetools/sign_target_files_bootimages \
+            --verbose \
+            --signpair device/intel/build/testkeys/production-test/vendor \
+            --fastboot \
+            $t2 $2
+    rm $t2
 }
 
-# FIXME can't tell if child jobs exited abnormally
-function wait_for_jobs {
-    while [ 1 ]; do
-        fg &> /dev/null || break
-    done
+function build_provimg {
+    t1=`mktemp tmp.fastboot.XXXXXXXX`
+    t2=`mktemp tmp.fastboot-usb.XXXXXXXX`
+    t3=`mktemp tmp.bootloader.XXXXXXXX`
+    t4=`mktemp tmp.img.XXXXXXXX`
+    t5=`mktemp tmp.gpt.XXXXXXXX`
+
+    ./device/intel/build/releasetools/fastboot_from_target_files \
+            --verbose $1 $t1
+
+    ./device/intel/build/releasetools/fastboot_usb_from_target_files \
+            --verbose $1 $t2
+
+    ./device/intel/build/releasetools/bootloader_from_target_files \
+            --verbose $1 $t3
+
+    ./build/tools/releasetools/img_from_target_files \
+            --verbose $1 $t4
+
+    unzip -p $1 RADIO/gpt.ini > $t5
+
+    ./device/intel/build/generate_factory_images \
+	    --product $TARGET_PRODUCT --release otatest \
+            --bootloader $t3 \
+            --fastboot $t1 \
+            --update-archive $t4 \
+            --gpt $t5 \
+            --unlock --erase \
+            --sleeptime 45 \
+            --input $t2=fastboot-usb.img \
+            --output $2
+    rm -f $t1 $t2 $t3 $t4 $t5
 }
 
-if [[ "$PARALLEL" == "1" ]]; then
-    function background {
-        $@ &
-    }
-else
-    function background {
-        $@
-    }
+if [[ -n "$TFP" ]]; then
+    t=`mktemp`
+    sign_tfp $TFP $t
+    build_provimg $t
+    echo "All done!"
+    exit
 fi
 
 rm -rf ota/
 mkdir ota/
 
-if [[ "$CLEAN" == "1" ]]; then
-    make installclean &> /dev/null
-fi
+make installclean &> /dev/null
 
-echo
+# NOTE: The difference in ANDROID_CONSOLE between the two builds is to force a binary
+# change in the boot images so that diffs are computed and we exercise that part of
+# the OTA update. Otherwise they come up identical and are skipped.
 
 echo "Building source software version A"
-make -j12 target-files-package otatools &> ota/make-A.log
+ANDROID_CONSOLE= make -j12 target-files-package otatools &> ota/make-A.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
+
+# Not sure why rebuilds of the EFI binaries don't come out exactly the same, probably
+# embedded date stamps or something. Whatever...
 
 echo "Regenerating UEFI Binaries to create artificial deltas"
 cd external/gummiboot
@@ -86,8 +129,6 @@ cd external/uefi_shim
 ./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/shim.log
 cd $ANDROID_BUILD_TOP
 
-date > external/gummiboot/SOURCE_CHANGE
-
 echo "Cleaning source tree"
 make installclean &> /dev/null
 
@@ -97,29 +138,25 @@ cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.z
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"
-    background sign_tfp ota/tfp-A-testkey.zip ota/tfp-A.zip
-    background sign_tfp ota/tfp-B-testkey.zip ota/tfp-B.zip
-    wait_for_jobs
+    sign_tfp ota/tfp-A-testkey.zip ota/tfp-A.zip
+    sign_tfp ota/tfp-B-testkey.zip ota/tfp-B.zip
 fi
 
 echo "Building OTA update packages"
 if [[ "$QUICK" != "1" ]]; then
-    background ./build/tools/releasetools/ota_from_target_files ota/tfp-A.zip ota/ota-A.zip
-    background ./build/tools/releasetools/ota_from_target_files ota/tfp-B.zip ota/ota-B.zip
-    background ./build/tools/releasetools/ota_from_target_files -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
+    ./build/tools/releasetools/ota_from_target_files --verbose ota/tfp-A.zip ota/ota-A.zip
+    ./build/tools/releasetools/ota_from_target_files --verbose ota/tfp-B.zip ota/ota-B.zip
+    ./build/tools/releasetools/ota_from_target_files --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
 fi
-background ./build/tools/releasetools/ota_from_target_files ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
-background ./build/tools/releasetools/ota_from_target_files -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
-wait_for_jobs
+./build/tools/releasetools/ota_from_target_files --verbose ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
+./build/tools/releasetools/ota_from_target_files --verbose -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
 
-#echo "Building provisioning media"
-#if [[ "$QUICK" != "1" ]]; then
-#    background ./build/tools/releasetools/img_from_target_files
-#    background build_provimg ota/ota-A.zip ota/tfp-A.zip ota/prov-A.img
-#    background build_provimg ota/ota-B.zip ota/tfp-B.zip ota/prov-B.img
-#fi
-#background build_provimg_testkey ota/ota-A-testkey.zip ota/tfp-A-testkey.zip ota/prov-A-testkey.img
-wait_for_jobs
+echo "Building provisioning media"
+if [[ "$QUICK" != "1" ]]; then
+    build_provimg ota/tfp-A.zip ota/factory-A.tgz
+    build_provimg ota/tfp-B.zip ota/factory-B.tgz
+fi
+build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey.tgz
 
 popd
 echo "OTA preparations complete!"
