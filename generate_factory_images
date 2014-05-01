@@ -237,18 +237,15 @@ def main():
     parser.add_argument('-u', '--update-archive',
                         help="Zipped images for fastboot update")
     parser.add_argument('-i', '--input', nargs="+",
-                        help="Add additional files to archive")
+                        help="Add additional files to archive, in the format <src>=<dest>")
     parser.add_argument('-e', '--erase',
                         action='store_true',
                         help="Erase userdata/cache")
     parser.add_argument('-s', '--sleeptime',
                         type=int, default=5,
                         help="Sleep in seconds for fastboot reboot, default=5")
-    parser.add_argument('--no-checksum',
-                        action='store_true', default=False,
-                        help="Remove SHA-1 checksum from archive filename")
     parser.add_argument('-o', '--output',
-                        help="Output directory for archived factory scripts")
+                        help="Output file for archived factory scripts")
     parser.add_argument('-g', '--gpt',
                         help="GPT configuration file")
     parser.add_argument('-k', '--unlock',
@@ -259,41 +256,45 @@ def main():
     commands = []
     files = []
 
+    buildprefix = args.product + "-" + args.release + "-"
+    fastboot_fn = buildprefix + "fastboot.img"
+    update_fn = buildprefix + "img.zip"
+
     if args.unlock:
         commands.append(OEMCommand("unlock", args.sleeptime))
 
     if args.gpt:
-        files.append(args.gpt)
-        commands.append(FlashCommand("gpt", args.gpt))
+        fn = buildprefix + "gpt.ini"
+        files.append((args.gpt, fn))
+        commands.append(FlashCommand("gpt", fn))
 
     if args.bootloader:
-        files.append(args.bootloader)
-        commands.append(FlashCommand("bootloader", args.bootloader))
+        fn = buildprefix + "bootloader"
+        files.append((args.bootloader, fn))
+        commands.append(FlashCommand("bootloader", fn))
 
     if args.fastboot:
-        files.append(args.fastboot)
-        commands.append(FlashCommand("fastboot", args.fastboot))
+        files.append((args.fastboot, fastboot_fn))
+        commands.append(FlashCommand("fastboot", fastboot_fn))
 
     if not files and not args.update:
         raise Usage("No flash images provided!")
 
-    commands.append(RebootBootloaderCommand(args.sleeptime))
-
     # Archive Name
-    archive_name = "{}-{}-factory".format(args.product, args.release)
-    archive_name = archive_name.lower()
-    archive_name = path.join(args.output, archive_name)
+    archive_name = args.output
 
     # Create Archive
     print "Creating archive: " + archive_name
     tar = TarOpen(archive_name, "w:gz")
 
     if (args.input):
-        files.extend(args.input)
-    for filename in files:
-        print "Archiving " + filename
-        RequireFile(filename)
-        tar.add(filename, arcname=path.basename(filename))
+        for i in args.input:
+            k, v = i.split("=")
+            files.append((k, buildprefix + v))
+    for src_path, dst_path in files:
+        print "Archiving " + src_path
+        RequireFile(src_path)
+        tar.add(src_path, arcname=dst_path)
 
     # flash-base just sets up the non-AOSP parts of the system
     AddFlashScript(_FLASHBASE_FILENAME, tar, commands, windows=False)
@@ -302,10 +303,10 @@ def main():
     # 'fastboot update' covers the additional AOSP pieces, add this to the
     # command list now
     if args.update_archive:
-        commands.append(UpdateCommand(args.update_archive, args.erase))
+        commands.append(UpdateCommand(update_fn, args.erase))
         print "Archiving " + args.update_archive
         RequireFile(args.update_archive)
-        tar.add(args.update_archive, arcname=path.basename(args.update_archive))
+        tar.add(args.update_archive, update_fn)
         AddFlashScript(_FLASHALL_FILENAME, tar, commands, windows=False)
         AddFlashScript(_WIN_FLASHALL_FILENAME, tar, commands, windows=True)
 
@@ -314,23 +315,14 @@ def main():
     # are untouched
     if args.update_archive and args.fastboot:
         ci_commands = [
-                BootCommand(args.sleeptime, args.fastboot),
-                UpdateCommand(args.update_archive, args.erase)
+                BootCommand(args.sleeptime, fastboot_fn),
+                BootCommand(args.sleeptime, fastboot_fn),
+                UpdateCommand(update_fn, args.erase)
                 ]
         AddFlashScript(_FLASHCI_FILENAME, tar, ci_commands, windows=False)
         AddFlashScript(_WIN_FLASHCI_FILENAME, tar, ci_commands, windows=True)
 
     tar.close()
-
-    if not args.no_checksum:
-        # Calculate SHA-1 Checksum
-        sha1sum = Checksum(archive_name)
-        print "Checksum: " + sha1sum
-
-        # Rename Archive
-        rename(archive_name, archive_name + "-" + sha1sum[:8] + ".tgz")
-    else:
-        rename(archive_name, archive_name + ".tgz")
 
     print "Done."
 
