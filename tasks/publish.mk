@@ -15,6 +15,16 @@
 # 	   e.g. 'make publish_ci'
 
 publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/
+publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
+
+.PHONY: publish_mkdir_dest
+publish_mkdir_dest:
+	$(call publish_make_dir, $(dir $(publish_dest)))
+
+# Are we doing an 'sdk' type lunch target
+PUBLISH_SDK := $(strip $(filter sdk sdk_x86,$(TARGET_PRODUCT)))
+
+ifndef PUBLISH_SDK
 
 # Do we have the file we need to add the flash.json to
 ifdef INTERNAL_UPDATE_PACKAGE_TARGET
@@ -38,21 +48,6 @@ endef
 
 endif # !INTERNAL_UPDATE_PACKAGE_TARGET
 
-publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
-
-.PHONY: publish_mkdir_dest
-publish_mkdir_dest:
-	$(call publish_make_dir, $(dir $(publish_dest)))
-
-.PHONY: publish_emulator_target
-# Can we build our publish_emulator_target file?
-ifdef INTERNAL_EMULATOR_PACKAGE_TARGET
-publish_emulator_target: publish_mkdir_dest $(INTERNAL_EMULATOR_PACKAGE_TARGET)
-	@$(ACP) $(INTERNAL_EMULATOR_PACKAGE_TARGET) $(publish_dest)
-else  # !INTERNAL_EMULATOR_PACKAGE_TARGET
-publish_emulator_target:
-	@echo "Warning: Unable to fulfill publish_emulator_target makefile request"
-endif # !INTERNAL_EMULATOR_PACKAGE_TARGET
 
 .PHONY: publish_update_target
 # Can we build our publish_update_target file?
@@ -64,6 +59,7 @@ else  # !INTERNAL_UPDATE_PACKAGE_TARGET
 publish_update_target:
 	@echo "Warning: Unable to fulfill publish_update_target makefile request"
 endif # !INTERNAL_UPDATE_PACKAGE_TARGET
+
 
 .PHONY: publish_factory_target
 # Can we build our publish_factory_target file?
@@ -77,7 +73,24 @@ endif # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
 
 
 .PHONY: publish_ci
-publish_ci: publish_update_target publish_emulator_target publish_factory_target
+publish_ci: publish_update_target publish_factory_target
+
+
+else # !PUBLISH_SDK
+# Unfortunately INTERNAL_SDK_TARGET is always defined, so its exisstence does
+# not indicate that we are building the SDK
+
+.PHONY: publish_ci
+publish_ci: publish_sdk_target
+
+
+.PHONY: publish_sdk_target
+publish_sdk_target: publish_mkdir_dest $(INTERNAL_SDK_TARGET)
+	@$(ACP) $(INTERNAL_SDK_TARGET) $(publish_dest)
+
+
+endif # !PUBLISH_SDK
+
 
 # We need to make sure our 'publish' target depends on the other targets so
 # that it will get done at the end.  Logic copied from build/core/distdir.mk
