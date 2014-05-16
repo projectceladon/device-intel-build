@@ -34,7 +34,7 @@ _FLASHBASE_FILENAME = "flash-base.sh"
 _FLASHCI_FILENAME = "flash-ci.sh"
 # chmod (octal) -rwxr-x--x
 _PERMS = 0751
-_FLASH_HEADER = """#!/bin/sh
+_FLASH_HEADER = """#!/bin/bash
 
 # Copyright 2012 The Android Open Source Project
 #
@@ -49,6 +49,8 @@ _FLASH_HEADER = """#!/bin/sh
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+set -e
 
 """
 _FLASH_FOOTER = "\n"

@@ -12,7 +12,7 @@ export ANDROID_PW_FILE=$PROD_KEY_DIR/pwfile
 
 export MKBOOTIMG=out/host/linux-x86/bin/mkbootimg_secure
 
-while getopts "jcqst:" opt; do
+while getopts "qst:" opt; do
     case $opt in
         s)
             set -x
@@ -24,14 +24,27 @@ while getopts "jcqst:" opt; do
             export TFP=$OPTARG
             ;;
         \?)
+            echo "Usage:"
+            echo
+            echo "  ota-test-prepare [-s -q]"
+            echo "    Create two builds A and B with deliverables for performing OTA + Secure Boot test cases"
+            echo
+            echo "OR"
+            echo
+            echo "  ota-test-prepare [-s] -t <path to TFP zipfile> <output directory>"
+            echo "    Use an existing TFP and create 1 set of deliverables for performing OTA + Secure Boot test cases"
+            echo "    The output directory will contain a re-signed TFP, factory archive, and full-image OTA."
+            echo
             echo "Valid options:"
-            echo "-j: Build parallel"
+            echo "-q: Just build testkey signed images"
             echo "-s: Show commands being run"
-            echo "-q: Only build images needed for quick tests"
+            echo "-t: Don't do own build; use supplied target-files to create a re-signed release"
             exit 1
             ;;
     esac
 done
+
+shift $((OPTIND-1))
 
 if [ -z "$ANDROID_BUILD_TOP" ]; then
     echo "Run lunch first!"
@@ -97,9 +110,15 @@ function build_provimg {
 }
 
 if [[ -n "$TFP" ]]; then
-    t=`mktemp`
-    sign_tfp $TFP $t
-    build_provimg $t
+    if [[ -z "$1" ]]; then
+        echo "No destination directory specified!"
+        exit 1
+    fi
+
+    mkdir -p $1
+    sign_tfp $TFP $1/signed-target-files.zip
+    build_provimg $1/signed-target-files.zip $1/signed-factory.tgz
+    ./build/tools/releasetools/ota_from_target_files --verbose $1/signed-target-files.zip $1/signed-ota.zip
     echo "All done!"
     exit
 fi
@@ -135,6 +154,15 @@ make installclean &> /dev/null
 echo "Building target software version B"
 ANDROID_CONSOLE=usb make -j12 target-files-package otatools &> ota/make-B.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
+
+# Clean up the changed EFI binaries from the rebuild
+cd hardware/intel/efi_prebuilts/gummiboot
+git reset --hard
+cd $ANDROID_BUILD_TOP
+
+cd hardware/intel/efi_prebuilts/uefi_shim
+git reset --hard
+cd $ANDROID_BUILD_TOP
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"
