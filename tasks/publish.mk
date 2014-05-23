@@ -72,12 +72,16 @@ publish_factory_target:
 endif # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
 
 
+PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
 publish_ci: publish_update_target publish_factory_target
+	$(if $(wildcard $(publish_dest)), \
+	  $(foreach f,$(PUBLISH_CI_FILES), \
+	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
 
 
 else # !PUBLISH_SDK
-# Unfortunately INTERNAL_SDK_TARGET is always defined, so its exisstence does
+# Unfortunately INTERNAL_SDK_TARGET is always defined, so its existence does
 # not indicate that we are building the SDK
 
 .PHONY: publish_ci
