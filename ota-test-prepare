@@ -31,12 +31,13 @@ while getopts "qst:" opt; do
             echo
             echo "OR"
             echo
-            echo "  ota-test-prepare [-s] -t <path to TFP zipfile> <output directory>"
+            echo "  ota-test-prepare [-s] -t <path to TFP zipfile> <build name>"
             echo "    Use an existing TFP and create 1 set of deliverables for performing OTA + Secure Boot test cases"
-            echo "    The output directory will contain a re-signed TFP, factory archive, and full-image OTA."
+            echo "    The ota/ directory will contain a re-signed TFP, factory archive, and full-image OTA."
+            echo "    The build name identifies the build, using A or B is typical"
             echo
             echo "Valid options:"
-            echo "-q: Just build testkey signed images"
+            echo "-q: Just build testkey signed images for the 'quick' test cases"
             echo "-s: Show commands being run"
             echo "-t: Don't do own build; use supplied target-files to create a re-signed release"
             exit 1
@@ -45,13 +46,6 @@ while getopts "qst:" opt; do
 done
 
 shift $((OPTIND-1))
-
-if [ -z "$ANDROID_BUILD_TOP" ]; then
-    echo "Run lunch first!"
-    exit 1
-fi
-
-pushd $ANDROID_BUILD_TOP &> /dev/null
 
 function sign_tfp {
     t1=`mktemp tmp.tfp1.XXXXXXXX`
@@ -111,17 +105,24 @@ function build_provimg {
 
 if [[ -n "$TFP" ]]; then
     if [[ -z "$1" ]]; then
-        echo "No destination directory specified!"
+        echo "No build name provided!"
         exit 1
     fi
 
-    mkdir -p $1
-    sign_tfp $TFP $1/signed-target-files.zip
-    build_provimg $1/signed-target-files.zip $1/signed-factory.tgz
-    ./build/tools/releasetools/ota_from_target_files --verbose $1/signed-target-files.zip $1/signed-ota.zip
+    mkdir -p ota/
+    sign_tfp $TFP ota/tfp-${1}.zip
+    build_provimg ota/tfp-${1}.zip ota/factory-${1}.tgz
+    ./build/tools/releasetools/ota_from_target_files --verbose ota/tfp-${1}.zip ota/ota-${1}.zip
     echo "All done!"
     exit
 fi
+
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
 
 rm -rf ota/
 mkdir ota/
