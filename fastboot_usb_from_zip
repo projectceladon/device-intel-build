@@ -57,7 +57,7 @@ def main(argv):
         common.Usage(__doc__)
         sys.exit(1)
 
-    if not OPTIONS.fastboot or not OPTIONS.zipfile:
+    if not OPTIONS.zipfile:
         common.Usage(__doc__)
         sys.exit(1)
 
@@ -69,7 +69,8 @@ def main(argv):
     tf.close()
     shutil.copyfile(OPTIONS.zipfile, z)
     rootzip = zipfile.ZipFile(z, "a")
-    rootzip.write(OPTIONS.fastboot, "fastboot.img")
+    if hasattr(OPTIONS, 'fastboot'):
+        rootzip.write(OPTIONS.fastboot, "fastboot.img")
     rootzip.close()
 
     intel_common.MakeVFATFilesystem(z, args[0])
