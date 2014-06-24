@@ -73,7 +73,7 @@ def main(argv):
         rootzip.write(OPTIONS.fastboot, "fastboot.img")
     rootzip.close()
 
-    intel_common.MakeVFATFilesystem(z, args[0])
+    intel_common.MakeVFATFilesystem(z, args[0], extra_size=10*1024*1024)
     common.Cleanup()
 
 if __name__ == '__main__':
