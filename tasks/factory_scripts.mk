@@ -46,6 +46,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
                 $(FACTORY_SCRIPTS_FASTBOOT_USB) \
 		$(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		$(DISTTOOLS) $(SELINUX_DEPENDS) \
+		$(BOARD_SFU_UPDATE) \
 		$(BOARD_GPT_INI) \
 
 	@echo "Package: $@"
@@ -59,6 +60,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--unlock --erase \
 		--sleeptime 45 \
 		--input $(FACTORY_SCRIPTS_FASTBOOT_USB)=fastboot-usb.img \
+		$(patsubst %,--sfu-capsule %,$(BOARD_SFU_UPDATE)) \
 		--output $@
 
 .PHONY: factoryscripts
