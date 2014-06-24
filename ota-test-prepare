@@ -75,6 +75,7 @@ function build_provimg {
     t3=`mktemp tmp.bootloader.XXXXXXXX`
     t4=`mktemp tmp.img.XXXXXXXX`
     t5=`mktemp tmp.gpt.XXXXXXXX`
+    t6=`mktemp tmp.sfu.XXXXXXXX`
 
     ./device/intel/build/releasetools/fastboot_from_target_files \
             --verbose $1 $t1
@@ -90,6 +91,12 @@ function build_provimg {
 
     unzip -p $1 RADIO/gpt.ini > $t5
 
+    if unzip -p $1 SYSTEM/etc/firmware/BIOSUPDATE.fv > $t6; then
+        sfu_cmd="--sfu-capsule $t6"
+    else
+        sfu_cmd=
+    fi
+
     ./device/intel/build/generate_factory_images \
 	    --product $TARGET_PRODUCT --release otatest \
             --bootloader $t3 \
@@ -99,8 +106,10 @@ function build_provimg {
             --unlock --erase \
             --sleeptime 45 \
             --input $t2=fastboot-usb.img \
+            $sfu_cmd \
             --output $2
-    rm -f $t1 $t2 $t3 $t4 $t5
+
+    rm -f $t1 $t2 $t3 $t4 $t5 $t6
 }
 
 if [[ -n "$TFP" ]]; then
