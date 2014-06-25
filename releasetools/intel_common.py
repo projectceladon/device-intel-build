@@ -33,7 +33,7 @@ def WriteFileToDest(img, dest):
     fid.close()
 
 
-def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0):
+def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size=0):
     """Create a VFAT filesystem image with all the files in the provided
     root zipfile. The size of the filesystem, if not provided by the
     caller, will be 101% the size of the containing files"""
@@ -49,6 +49,8 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0):
         if extra < (32 * 1024):
             extra = 32 * 1024
         size += extra
+
+    size += extra_size
 
     # Round the size of the disk up to 32K so that total sectors is
     # a multiple of sectors per track (mtools complains otherwise)
