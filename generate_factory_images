@@ -250,6 +250,8 @@ def main():
                         help="Output file for archived factory scripts")
     parser.add_argument('-g', '--gpt',
                         help="GPT configuration file")
+    parser.add_argument('-c', "--sfu-capsule",
+                        help="SFU Capsule update")
     parser.add_argument('-k', '--unlock',
                         action="store_true", default=False,
                         help="Unlock the bootloader before doing anything else")
@@ -263,7 +265,7 @@ def main():
     update_fn = buildprefix + "img.zip"
 
     if args.unlock:
-        commands.append(OEMCommand("unlock", args.sleeptime))
+        commands.append(OEMCommand("unlock", 0))
 
     if args.gpt:
         fn = buildprefix + "gpt.ini"
@@ -278,6 +280,11 @@ def main():
     if args.fastboot:
         files.append((args.fastboot, fastboot_fn))
         commands.append(FlashCommand("fastboot", fastboot_fn))
+
+    if args.sfu_capsule:
+        fn = buildprefix + "sfu.fv"
+        files.append((args.sfu_capsule, fn))
+        commands.append(FlashCommand("sfu", fn))
 
     if not files and not args.update:
         raise Usage("No flash images provided!")
