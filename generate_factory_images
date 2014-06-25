@@ -265,7 +265,7 @@ def main():
     update_fn = buildprefix + "img.zip"
 
     if args.unlock:
-        commands.append(OEMCommand("unlock", args.sleeptime))
+        commands.append(OEMCommand("unlock", 0))
 
     if args.gpt:
         fn = buildprefix + "gpt.ini"
