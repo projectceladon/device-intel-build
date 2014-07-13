@@ -1,0 +1,105 @@
+#!/usr/bin/python
+
+import tempfile
+import argparse
+
+import verified_boot_common as vbc
+import bootimg_sig_struct as bss
+from pyasn1.type import univ
+from pyasn1.codec.der import encoder as der_encoder
+from pyasn1.codec.ber import decoder as ber_decoder
+
+
+def main():
+    argparser = argparse.ArgumentParser(
+                    description='Verify an Android boot image.')
+    argparser.add_argument("input_image", help="Boot image file to sign.")
+    arggroup = argparser.add_mutually_exclusive_group(required=True)
+    arggroup.add_argument("--legacy",
+                          choices=["sha1", "sha256"], default=None,
+                           help="Digest algorithm to use for signture.")
+    arggroup.add_argument("-t", "--target",
+                          help="Partition where the image should be found.")
+    arggroup = argparser.add_mutually_exclusive_group(required=True)
+    arggroup.add_argument("--cert",
+                          help="Verify using certificate.")
+    argparser.add_argument("-v", "--verbose", action="store_true",
+                           help="Show debug info and commands being run.")
+    argparser.parse_args(namespace=vbc.OPTIONS)
+
+    try:
+        infile = open(vbc.OPTIONS.input_image, "rb")
+        header = vbc.BootimgHeader(infile, vbc.OPTIONS)
+        if vbc.OPTIONS.verbose:
+            print header
+
+        with tempfile.NamedTemporaryFile() as interfile:
+            # Process all sections of the input file, padding as necessary. 'targetlen'
+            # will contain the length of the content prior to signature block.
+            targetlen = 0
+            targetlen = vbc.process_page_buffer(header.header_buf, header.page_size,
+                                                infile, interfile)
+            targetlen += vbc.process_page_file(header.kernel_size, header.page_size,
+                                               infile, interfile)
+            targetlen += vbc.process_page_file(header.ramdisk_size, header.page_size,
+                                               infile, interfile)
+            if header.second_size > 0:
+                targetlen += vbc.process_page_file(header.second_size, header.page_size,
+                                                   infile, interfile)
+
+            # Read the signature block
+            if vbc.OPTIONS.legacy:
+                sigblock = infile.read(header.unused0)
+                if len(sigblock) != header.unused0:
+                    raise vbc.BootimgFormatException("Signature block is too short. Expected %d bytes." % header.unused0)
+                digest_name = vbc.OPTIONS.legacy
+            else:
+                sigblock = infile.read()
+                (sig_struct,remaining) = ber_decoder.decode(sigblock, asn1Spec=bss.AndroidVerifiedBootSignature())
+                if len(remaining) > 0:
+                    raise vbc.BootimgFormatException("Unexpected data after signature block.")
+                if sig_struct.getComponentByName('formatVersion') != 1:
+                    raise vbc.BootimgFormatException("Unknown signature format version.")
+
+                # verify authenticated attributes
+                attributes = bss.AuthenticatedAttributes()
+                attributes["target"] = vbc.OPTIONS.target
+                attributes["length"] = targetlen
+                if attributes != sig_struct['attributes']:
+                    if vbc.OPTIONS.verbose:
+                        print "Signature Attributes\n", sig_struct['attributes'].prettyPrint()
+                        print "Image Attributes\n", attributes.prettyPrint()
+                    raise vbc.BootimgFormatException("Verified attributes mismatch")
+
+                # Get digest name from signature algorithm
+                if sig_struct['algorithmId']['algorithm'] == bss.sha1WithRSAEncryptionOID:
+                    digest_name = "sha1"
+                elif sig_struct['algorithmId']['algorithm'] == bss.sha256WithRSAEncryptionOID:
+                    digest_name = "sha256"
+
+                # Add authenticated attributes to candidate file
+                data = der_encoder.encode(attributes)
+                interfile.write(data)
+
+                # Extract bytes of the signature.
+                sigblock = sig_struct['signature'].asOctets()
+
+            interfile.flush()
+            with tempfile.NamedTemporaryFile(delete=False) as sigfile:
+                sigfile.write(sigblock);
+                sigfile.flush()
+
+                # Sign the cadidate blob
+                if vbc.DoVerify(interfile.name, sigfile.name, digest_name, vbc.OPTIONS.cert):
+                    print "Verification succeeded"
+                    return 0
+                else:
+                    print "Verification failed"
+                    return -1
+    except Exception as e:
+        print "Error: %s" % e.msg
+        return -1
+
+
+if __name__ == "__main__":
+    main()
