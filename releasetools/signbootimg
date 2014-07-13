@@ -1,0 +1,128 @@
+#!/usr/bin/python
+
+import tempfile
+import argparse
+import sys
+
+import verified_boot_common as vbc
+import bootimg_sig_struct as bss
+from pyasn1.type import univ
+from pyasn1.codec.der import encoder as der_encoder
+from pyasn1_modules import rfc2459 as x509
+
+
+DIGEST_SIG_OID_MAP = {
+    "sha1": bss.sha1WithRSAEncryptionOID,
+    "sha256": bss.sha256WithRSAEncryptionOID
+}
+
+class A(Exception):
+    pass
+
+def main():
+    argparser = argparse.ArgumentParser(
+                    description='Sign an Android boot image.')
+    argparser.add_argument("input_image", help="Boot image file to sign.")
+    argparser.add_argument("output_image", help="Signed image file.")
+    arggroup = argparser.add_mutually_exclusive_group(required=True)
+    arggroup.add_argument("--legacy", action="store_true",
+                          help="Sign using legacy method.")
+    arggroup.add_argument("-t", "--target",
+                          help="Partition where the image should be found.")
+    argparser.add_argument("--legacy-siglen", type=int,
+                           choices=[1024, 2048, 4096], default=2048,
+                           help="Length of legacy signature")
+    argparser.add_argument("--ignore-legacy", action="store_true",
+                           help="Override existing legacy signature; modifying header, if necessary.")
+    argparser.add_argument("--digest",
+                           choices=["sha1", "sha256"], default="sha256",
+                           help="Digest algorithm to use for signture.")
+    arggroup = argparser.add_mutually_exclusive_group(required=True)
+    arggroup.add_argument("--candidate-only", action="store_true",
+                          help="Format the content to sign into output_image and stop.")
+    arggroup.add_argument("--privkey",
+                          help="Private key to use for signing.")
+    argparser.add_argument("--haspass", action="store_true",
+                           help="Private key has password supplied on stdin")
+    argparser.add_argument("-v", "--verbose", action="store_true",
+                           help="Show debug info and commands being run.")
+    argparser.parse_args(namespace=vbc.OPTIONS)
+    if vbc.OPTIONS.legacy and vbc.OPTIONS.ignore_legacy:
+        argparser.print_help()
+        return -1
+
+    try:
+        infile = open(vbc.OPTIONS.input_image, "rb")
+        header = vbc.BootimgHeader(infile, vbc.OPTIONS)
+        if vbc.OPTIONS.verbose:
+            print header
+
+        if vbc.OPTIONS.candidate_only:
+            interfile = open(vbc.OPTIONS.output_image, "wb")
+        else:
+            interfile = tempfile.NamedTemporaryFile()
+
+        # Process all sections of the input file, padding as necessary. 'targetlen'
+        # will contain the length of the content prior to signature block.
+        targetlen = 0
+        targetlen = vbc.process_page_buffer(header.header_buf, header.page_size,
+                                            infile, interfile)
+        targetlen += vbc.process_page_file(header.kernel_size, header.page_size,
+                                           infile, interfile)
+        targetlen += vbc.process_page_file(header.ramdisk_size, header.page_size,
+                                           infile, interfile)
+        if header.second_size > 0:
+            targetlen += vbc.process_page_file(header.second_size, header.page_size,
+                                               infile, interfile)
+
+        # Legacy signature format does not include AuthenticatedAttributes
+        if not vbc.OPTIONS.legacy:
+            attributes = bss.AuthenticatedAttributes()
+            attributes["target"] = vbc.OPTIONS.target
+            attributes["length"] = targetlen
+            data = der_encoder.encode(attributes)
+            interfile.write(data)
+
+        infile.close()
+        if vbc.OPTIONS.candidate_only:
+            interfile.close()
+            return
+        else:
+            interfile.flush()
+
+        password = None
+        if vbc.OPTIONS.haspass:
+            password = sys.stdin.readline().strip()
+
+        # Sign the candidate blob
+        sigval = vbc.DoSign(interfile.name, vbc.OPTIONS.privkey, vbc.OPTIONS.digest, password)
+        #print len(sigval)
+
+        # copy first 'targetlen' bytes of intermediate file to output
+        interfile.seek(0)
+        outfile = open(vbc.OPTIONS.output_image, "wb")
+        vbc.copy_file_bytes(interfile, outfile, targetlen)
+
+        # append signature to end of file
+        if vbc.OPTIONS.legacy:
+            vbc.process_page_buffer(sigval, header.page_size, None, outfile)
+        else:
+            algorithmIdentifier = x509.AlgorithmIdentifier()
+            algorithmIdentifier["algorithm"] = DIGEST_SIG_OID_MAP[vbc.OPTIONS.digest]
+            bootSignature = bss.AndroidVerifiedBootSignature()
+            bootSignature["formatVersion"] = 1
+            bootSignature["algorithmId"] = algorithmIdentifier
+            bootSignature["attributes"] = attributes
+            bootSignature["signature"] = univ.OctetString(sigval)
+            data = der_encoder.encode(bootSignature)
+            outfile.write(data)
+
+        interfile.close()
+        outfile.close()
+    except A as e:
+        print "Error: %s" % e.msg
+        return -1
+
+
+if __name__ == "__main__":
+    main()
