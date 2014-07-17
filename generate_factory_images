@@ -255,6 +255,8 @@ def main():
     parser.add_argument('-k', '--unlock',
                         action="store_true", default=False,
                         help="Unlock the bootloader before doing anything else")
+    parser.add_argument('-m', '--mbr',
+                        help="MBR boot block")
     args = parser.parse_args()
 
     commands = []
@@ -266,6 +268,11 @@ def main():
 
     if args.unlock:
         commands.append(OEMCommand("unlock", 0))
+
+    if args.mbr:
+        fn = buildprefix + "mbr.bin"
+        files.append((args.mbr, fn))
+        commands.append(FlashCommand("mbr", fn))
 
     if args.gpt:
         fn = buildprefix + "gpt.ini"

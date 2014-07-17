@@ -9,9 +9,32 @@ FACTORY_SCRIPTS_BOOTLOADER_IMAGE := $(intermediates)/bootloader-$(TARGET_PRODUCT
 FACTORY_SCRIPTS_FASTBOOT_IMAGE := $(intermediates)/fastboot-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).img
 FACTORY_SCRIPTS_FASTBOOT_USB := $(intermediates)/fastboot-usb-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).img
 
+# For legacy boot, we need to include the MBR boot block
+ifeq ($(TARGET_USE_SYSLINUX),true)
+	factory_scripts_mbr_boot_block = $(BOARD_MBR_BLOCK_BIN)
+	factory_scripts_mbr_boot_block_option = --mbr $(BOARD_MBR_BLOCK_BIN)
+else
+	factory_scripts_mbr_boot_block :=
+	factory_scripts_mbr_boot_block_option :=
+endif
+
 # We could just get the fastboot.img and bootloader blobs from the $OUT
 # directory, but let's make sure these scripts don't bit-rot as they are
 # critical for release workflow.
+
+ifeq ($(TARGET_USE_SYSLINUX),true)
+
+# legacy boot requires a premade bootloader using syslinux
+# and cannot be generated from target files.
+# hence this "special" treatment.
+$(FACTORY_SCRIPTS_BOOTLOADER_IMAGE): \
+		$(PRODUCT_OUT)/bootloader \
+		| $(ACP) \
+
+	mkdir -p $(dir $@)
+	$(hide) $(ACP) -f $(PRODUCT_OUT)/bootloader $(FACTORY_SCRIPTS_BOOTLOADER_IMAGE)
+
+else
 
 $(FACTORY_SCRIPTS_BOOTLOADER_IMAGE): \
 		$(BUILT_TARGET_FILES_PACKAGE) \
@@ -20,6 +43,8 @@ $(FACTORY_SCRIPTS_BOOTLOADER_IMAGE): \
 	mkdir -p $(dir $@)
 	$(hide) device/intel/build/releasetools/bootloader_from_target_files \
 		--verbose $(BUILT_TARGET_FILES_PACKAGE) $@
+
+endif
 
 $(FACTORY_SCRIPTS_FASTBOOT_IMAGE): \
 		$(BUILT_TARGET_FILES_PACKAGE) \
@@ -48,6 +73,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		$(DISTTOOLS) $(SELINUX_DEPENDS) \
 		$(BOARD_SFU_UPDATE) \
 		$(BOARD_GPT_INI) \
+		$(factory_scripts_mbr_boot_block) \
 
 	@echo "Package: $@"
 	# Generate Package
@@ -57,6 +83,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--fastboot $(FACTORY_SCRIPTS_FASTBOOT_IMAGE) \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		--gpt $(BOARD_GPT_INI) \
+		$(factory_scripts_mbr_boot_block_option) \
 		--unlock --erase \
 		--sleeptime 45 \
 		--input $(FACTORY_SCRIPTS_FASTBOOT_USB)=fastboot-usb.img \
