@@ -17,7 +17,7 @@ $(flashfiles_zip): \
 	$(hide) rm -f $@
 	$(hide) rm -rf $(ff_intermediates)
 	$(hide) mkdir -p $(ff_intermediates)
-	$(hide) $(ACP) -f $(INTERNAL_UPDATE_PACKAGE_TARGET) $(ff_intermediates)/update.zip
+	$(hide) cd $(ff_intermediates) && unzip -q $(ANDROID_BUILD_TOP)/$(INTERNAL_UPDATE_PACKAGE_TARGET)
 	$(hide) $(ACP) -f $(BOARD_FLASHFILES_XML) $(ff_intermediates)
 	$(foreach pair,$(BOARD_FLASHFILES), \
 		$(call copy-flashfile,$(call word-colon,1,$(pair)),$(ff_intermediates)/$(call word-colon,2,$(pair))))
