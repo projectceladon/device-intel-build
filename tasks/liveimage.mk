@@ -69,38 +69,31 @@ $(live_bootimage): \
 			$(BOARD_MKBOOTIMG_ARGS) \
 			--output $@
 
-live_loader_config := device/intel/common/boot/loader-live/loader.conf
-live_loader_entries := $(wildcard device/intel/common/boot/loader-live/entries/*)
-
 $(liveimage_zip): \
 		device/intel/build/tasks/liveimage.mk \
-		$(live_bootimage) \
 		$(live_sfs) \
-		$(live_loader_config) \
-		$(live_loader_entries) \
+		$(BOARD_FIRST_STAGE_LOADER) \
 		$(BOARD_EFI_MODULES) \
 
 	$(hide) mkdir -p $(dir $@)
 	$(hide) rm -rf $(disk_dir)
 	$(hide) mkdir -p $(disk_dir)
-	$(hide) $(ACP) -f $(live_bootimage) $(disk_dir)/liveboot.img
-	$(hide) mkdir -p $(disk_dir)/loader/entries
-	$(hide) $(ACP) -f $(live_loader_config) $(disk_dir)/loader/loader.conf
-	$(hide) $(ACP) -f $(live_loader_entries) $(disk_dir)/loader/entries
-	$(hide) touch $(disk_dir)/iago-cookie
 	$(hide) $(ACP) -f $(live_sfs) $(disk_dir)/images.sfs
 	$(hide) mkdir -p $(disk_dir)/images
-	$(hide) $(ACP) -f $(BOARD_EFI_MODULES) $(disk_dir)
 	$(hide) mkdir -p $(disk_dir)/EFI/BOOT
-	$(hide) $(ACP) $(disk_dir)/shim.efi $(disk_dir)/EFI/BOOT/$(efi_default_name)
+ifneq ($(BOARD_EXTRA_EFI_MODULES),)
+	$(hide) $(ACP) $(BOARD_EXTRA_EFI_MODULES) $(efi_root)/
+endif
+	$(hide) $(ACP) $(BOARD_FIRST_STAGE_LOADER) $(efi_root)/EFI/BOOT/$(efi_default_name)
 	$(hide) (cd $(disk_dir) && zip -qry ../$(notdir $@) .)
 
 $(liveimage): \
 		device/intel/build/tasks/liveimage.mk \
 		$(liveimage_zip) \
-		device/intel/build/fastboot_usb_from_zip \
+		device/intel/build/bootable_usb_from_zip \
 
-	$(hide) device/intel/build/fastboot_usb_from_zip \
+	$(hide) device/intel/build/bootable_usb_from_zip \
+		--bootimage $(live_bootimage) \
 		--zipfile $(liveimage_zip) $@
 
 .PHONY: liveimage
