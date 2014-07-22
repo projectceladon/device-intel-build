@@ -40,8 +40,8 @@ OPTIONS = common.OPTIONS
 def main(argv):
 
     def option_handler(o, a):
-        if o in ("-f", "--fastboot"):
-            OPTIONS.fastboot = a
+        if o in ("-b", "--bootimage"):
+            OPTIONS.bootimage = a
         elif o in ("-z", "--zipfile"):
             OPTIONS.zipfile = a
         else:
@@ -49,8 +49,8 @@ def main(argv):
         return True
 
     args = common.ParseOptions(argv, __doc__,
-                            extra_opts="f:z:",
-                            extra_long_opts=["fastboot=", "zipfile="],
+                            extra_opts="b:z:",
+                            extra_long_opts=["bootimage=", "zipfile="],
                             extra_option_handler=option_handler)
 
     if (len(args) != 1):
@@ -69,8 +69,8 @@ def main(argv):
     tf.close()
     shutil.copyfile(OPTIONS.zipfile, z)
     rootzip = zipfile.ZipFile(z, "a")
-    if hasattr(OPTIONS, 'fastboot'):
-        rootzip.write(OPTIONS.fastboot, "fastboot.img")
+    if hasattr(OPTIONS, 'bootimage'):
+        rootzip.write(OPTIONS.bootimage, "espboot.img")
     rootzip.close()
 
     intel_common.MakeVFATFilesystem(z, args[0], extra_size=10*1024*1024)
