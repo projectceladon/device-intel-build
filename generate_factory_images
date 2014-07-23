@@ -26,6 +26,7 @@ from hashlib import sha1
 from os import path, chmod, rename, remove
 from time import time
 from subprocess import check_call
+import re
 import tempfile
 import os
 
@@ -257,6 +258,8 @@ def main():
                         help="Unlock the bootloader before doing anything else")
     parser.add_argument('-m', '--mbr',
                         help="MBR boot block")
+    parser.add_argument('-v', '--oemvars',
+                        help="OEM variable configuration file")
     args = parser.parse_args()
 
     commands = []
@@ -273,6 +276,11 @@ def main():
         fn = buildprefix + "mbr.bin"
         files.append((args.mbr, fn))
         commands.append(FlashCommand("mbr", fn))
+
+    if args.oemvars:
+        fn = buildprefix + "oemvars.txt"
+        files.append((args.oemvars, fn))
+        commands.append(FlashCommand("oemvars", fn))
 
     if args.gpt:
         fn = buildprefix + "gpt.ini"
