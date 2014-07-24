@@ -8,6 +8,7 @@ intermediates := $(call intermediates-dir-for,PACKAGING,factory_scripts)
 FACTORY_SCRIPTS_BOOTLOADER_IMAGE := $(intermediates)/bootloader-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).bin
 FACTORY_SCRIPTS_FASTBOOT_IMAGE := $(intermediates)/fastboot-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).img
 FACTORY_SCRIPTS_FASTBOOT_USB := $(intermediates)/fastboot-usb-$(TARGET_PRODUCT)-$(FILE_NAME_TAG).img
+FACTORY_SCRIPTS_OEMVARS := $(if $(BOARD_OEM_VARS_FILE),--oemvars $(BOARD_OEM_VARS_FILE))
 
 # For legacy boot, we need to include the MBR boot block
 ifeq ($(TARGET_USE_SYSLINUX),true)
@@ -82,6 +83,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--bootloader $(FACTORY_SCRIPTS_BOOTLOADER_IMAGE) \
 		--fastboot $(FACTORY_SCRIPTS_FASTBOOT_IMAGE) \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
+		$(FACTORY_SCRIPTS_OEMVARS) \
 		--gpt $(BOARD_GPT_INI) \
 		$(factory_scripts_mbr_boot_block_option) \
 		--unlock --erase \
