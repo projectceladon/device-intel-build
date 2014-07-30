@@ -1,34 +1,39 @@
-ifeq ($(TARGET_BUILD_INTEL_FACTORY_FLASHFILES),true)
+PUBLISH_SCRIPTS := device/intel/build
 
-flashfiles_zip := $(OUT)/flashfiles.zip
-ff_intermediates := $(call intermediates-dir-for,PACKAGING,flashfiles)
+FLASHFILES_CONFIG ?= $(TARGET_DEVICE_DIR)/flashfiles.json
 
-define copy-flashfile
-$(hide) $(ACP) $(1) $(2)
+ifneq ($(wildcard $(FLASHFILES_CONFIG)),)
 
-endef
+$(eval FLASHFILES_T2F := $(shell $(PUBLISH_SCRIPTS)/flashdep.py $(FLASHFILES_CONFIG)))
 
-$(flashfiles_zip): \
-		$(INSTALLED_SYSTEMIMAGE) \
-		$(INSTALLED_BOOTIMAGE_TARGET) \
-		$(INSTALLED_RECOVERYIMAGE_TARGET) \
-		$(foreach pair,$(BOARD_FLASHFILES),$(call word-colon,1,$(pair))) \
-		$(BOARD_FLASHFILES_XML) | $(ACP) \
+FLASHFILES_IMAGES := $(foreach dep,$(FLASHFILES_T2F),$(word 2,$(subst :, ,$(dep))))
 
-	$(hide) mkdir -p $(dir $@)
+FLASHFILES_XML := $(shell $(PUBLISH_SCRIPTS)/flashtarget.py $(FLASHFILES_CONFIG))
+FLASHFILES_XML := $(addprefix $(PRODUCT_OUT)/,$(FLASHFILES_XML))
+FIRST_FLASHFILES_XML := $(firstword $(FLASHFILES_XML))
+OTHER_FLASHFILES_XML := $(wordlist 2,99,$(FLASHFILES_XML))
+
+# Makefile cannot handle 1 command with multiple output, so use the first one
+$(FIRST_FLASHFILES_XML): $(FLASHFILES_CONFIG) $(FLASHFILES_IMAGES)
+	$(hide) ./$(PUBLISH_SCRIPTS)/flashxml.py $< -p $(TARGET_PRODUCT) -d $(@D) -t "$(FLASHFILES_T2F)"
+
+# Add dependency for other xmls
+$(OTHER_FLASHFILES_XML): $(FIRST_FLASHFILES_XML)
+
+.PHONY: flashfiles_nozip
+flashfiles_nozip: $(FLASHFILES_XML) $(FLASHFILES_IMAGES)
+
+FLASHFILES_ZIP := $(PRODUCT_OUT)/flashfiles.zip
+
+$(FLASHFILES_ZIP): $(FLASHFILES_IMAGES) $(FLASHFILES_XML)
+	$(hide) mkdir -p $(@D)
 	$(hide) rm -f $@
-	$(hide) rm -rf $(ff_intermediates)
-	$(hide) mkdir -p $(ff_intermediates)
-	$(hide) $(ACP) -f $(BOARD_FLASHFILES_XML) $(INSTALLED_SYSTEMIMAGE) \
-		$(INSTALLED_BOOTIMAGE_TARGET) $(INSTALLED_RECOVERYIMAGE_TARGET) \
-		$(ff_intermediates)
-	$(foreach pair,$(BOARD_FLASHFILES), \
-		$(call copy-flashfile,$(call word-colon,1,$(pair)),$(ff_intermediates)/$(call word-colon,2,$(pair))))
-	$(hide) zip -qj $@ $(ff_intermediates)/*
+	@echo generating $@
+	$(hide) zip -1 -j $@ $^
 
+$(call dist-for-goals,droidcore,$(FLASHFILES_ZIP):$(TARGET_PRODUCT)-flashfiles-$(FILE_NAME_TAG).zip)
 
-$(call dist-for-goals,droidcore,$(flashfiles_zip):$(TARGET_PRODUCT)-flashfiles-$(FILE_NAME_TAG).zip)
 .PHONY: flashfiles
-flashfiles: $(flashfiles_zip)
+flashfiles: $(FLASHFILES_ZIP)
 
 endif
