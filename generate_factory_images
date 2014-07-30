@@ -294,7 +294,6 @@ def main():
 
     if args.fastboot:
         files.append((args.fastboot, fastboot_fn))
-        commands.append(FlashCommand("fastboot", fastboot_fn))
 
     if args.sfu_capsule:
         fn = buildprefix + "sfu.fv"
