@@ -81,20 +81,24 @@ $(liveimage_zip): \
 	$(hide) $(ACP) -f $(live_sfs) $(disk_dir)/images.sfs
 	$(hide) mkdir -p $(disk_dir)/images
 	$(hide) mkdir -p $(disk_dir)/EFI/BOOT
+	$(hide) touch $(disk_dir)/iago-cookie
 ifneq ($(BOARD_EXTRA_EFI_MODULES),)
-	$(hide) $(ACP) $(BOARD_EXTRA_EFI_MODULES) $(efi_root)/
+	$(hide) $(ACP) $(BOARD_EXTRA_EFI_MODULES) $(disk_dir)/
 endif
-	$(hide) $(ACP) $(BOARD_FIRST_STAGE_LOADER) $(efi_root)/EFI/BOOT/$(efi_default_name)
+	$(hide) $(ACP) $(BOARD_FIRST_STAGE_LOADER) $(disk_dir)/EFI/BOOT/$(efi_default_name)
 	$(hide) (cd $(disk_dir) && zip -qry ../$(notdir $@) .)
 
 $(liveimage): \
 		device/intel/build/tasks/liveimage.mk \
 		$(liveimage_zip) \
-		device/intel/build/bootable_usb_from_zip \
+                $(live_bootimage) \
+		device/intel/build/bootloader_from_zip \
 
-	$(hide) device/intel/build/bootable_usb_from_zip \
-		--bootimage $(live_bootimage) \
-		--zipfile $(liveimage_zip) $@
+	$(hide) device/intel/build/bootloader_from_zip \
+		--fastboot $(live_bootimage) \
+		--zipfile $(liveimage_zip) \
+                --bootable \
+                $@
 
 .PHONY: liveimage
 liveimage: $(liveimage)
