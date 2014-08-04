@@ -110,7 +110,7 @@ def main():
             algorithmIdentifier = x509.AlgorithmIdentifier()
             algorithmIdentifier["algorithm"] = DIGEST_SIG_OID_MAP[vbc.OPTIONS.digest]
             bootSignature = bss.AndroidVerifiedBootSignature()
-            bootSignature["formatVersion"] = 1
+            bootSignature["formatVersion"] = 0
             bootSignature["algorithmId"] = algorithmIdentifier
             bootSignature["attributes"] = attributes
             bootSignature["signature"] = univ.OctetString(sigval)
