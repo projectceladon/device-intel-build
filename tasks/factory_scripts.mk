@@ -23,7 +23,6 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		$(PRODUCT_OUT)/fastboot-usb.img \
 		$(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		$(DISTTOOLS) $(SELINUX_DEPENDS) \
-		$(BOARD_SFU_UPDATE) \
 		$(BOARD_GPT_INI) \
 		$(factory_scripts_mbr_boot_block) \
 
@@ -40,7 +39,6 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--unlock --erase \
 		--sleeptime 45 \
 		--input $(PRODUCT_OUT)/fastboot-usb.img=fastboot-usb.img \
-		$(patsubst %,--sfu-capsule %,$(BOARD_SFU_UPDATE)) \
 		--output $@
 
 .PHONY: factoryscripts
