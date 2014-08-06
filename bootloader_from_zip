@@ -17,9 +17,19 @@
 """
 Generates a VFAT EFI System partition image from a provided
 zip file containing its contents relative to the root directory
+
+-i, --size      Size of partition in bytes (required)
+-z, --zipfile   Source zipfile containing root contents (required)
+-f, --fastboot  Path to Fastboot boot image (required)
+-u, --bootable  Flag indicating this is bootable USB image,
+                creates sentinel file for loader
 """
 
 import sys
+import tempfile
+import zipfile
+import os
+import shutil
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -33,6 +43,11 @@ sys.path.append("device/intel/build/releasetools")
 import intel_common
 
 OPTIONS = common.OPTIONS
+OPTIONS.bootable = False
+OPTIONS.zipfile = None
+OPTIONS.fastboot = None
+OPTIONS.size = 0;
+OPTIONS.extra_size = 0;
 
 def main(argv):
 
@@ -41,20 +56,45 @@ def main(argv):
             OPTIONS.size = int(a)
         elif o in ("-z", "--zipfile"):
             OPTIONS.zipfile = a
+	elif o in ("-b", "--fastboot"):
+            OPTIONS.fastboot = a
+        elif o in ("-u", "--bootable"):
+            OPTIONS.bootable = True
+        elif o in ("-e", "--extra-size"):
+            OPTIONS.extra_size = int(a)
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-                            extra_opts="i:z:",
-                            extra_long_opts=["size=", "zipfile="],
+                            extra_opts="i:z:b:ue:",
+                            extra_long_opts=["size=", "zipfile=", "fastboot=",
+                                             "bootable", "extra-size="],
                             extra_option_handler=option_handler)
-
-    if (len(args) != 1):
+    if len(args) != 1:
         common.Usage(__doc__)
         sys.exit(1)
 
-    intel_common.MakeVFATFilesystem(OPTIONS.zipfile, args[0], size=OPTIONS.size)
+    if not OPTIONS.zipfile:
+        print "--zipfile is required"
+        common.Usage(__doc__)
+        sys.exit(1)
+    if not OPTIONS.fastboot:
+        print "--fastboot is required"
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    tf = tempfile.NamedTemporaryFile()
+    tf.write("foo")
+    tf.flush()
+
+    extra_files = [(OPTIONS.fastboot, "fastboot.img")]
+    if OPTIONS.bootable:
+        extra_files.append((tf.name, "force_fastboot"))
+
+    intel_common.MakeVFATFilesystem(OPTIONS.zipfile, args[0], size=OPTIONS.size,
+            extra_files=extra_files, extra_size=OPTIONS.extra_size)
+    tf.close()
     common.Cleanup()
 
 if __name__ == '__main__':

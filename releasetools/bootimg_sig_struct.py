@@ -39,7 +39,7 @@ from pyasn1_modules import rfc2437 as pkcs1
 #   END
 #
 # ==========================================================================
-# As Implemented (valid ASN.1)
+# As Implemented and Confirmed Against L Source (valid ASN.1)
 # ==========================================================================
 #
 # AndroidVerifiedBoot DEFINITIONS ::= BEGIN
@@ -71,6 +71,11 @@ from pyasn1_modules import rfc2437 as pkcs1
 #   KeyInfo ::= SEQUENCE {
 #       algorithm AlgorithmIdentifier,
 #       keyMaterial RSAPublicKey
+#   }
+#
+#   InnerKeystore ::= SEQUENCE {
+#       formatVersion INTEGER,
+#       bag KeyBag
 #   }
 #
 #   AndroidVerifiedBootKeystore ::= SEQUENCE {
@@ -108,6 +113,13 @@ class KeyInfo(univ.Sequence):
 
 class KeyBag(univ.SequenceOf):
     componentType = KeyInfo()
+
+
+class InnerKeystore(univ.Sequence):
+    componentType = namedtype.NamedTypes(
+        namedtype.NamedType('formatVersion', univ.Integer()),
+        namedtype.NamedType('bag', KeyBag()),
+    )
 
 
 class AndroidVerifiedBootKeystore(univ.Sequence):
