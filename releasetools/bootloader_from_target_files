@@ -42,13 +42,16 @@ OPTIONS.bootable = False
 def main(argv):
 
     def option_handler(o, a):
+        print o
         if o in ("-u", "--bootable"):
             OPTIONS.bootable = True
         else:
             return False
+        return True
 
     args = common.ParseOptions(argv, __doc__, extra_opts="u",
-            extra_long_opts=["bootable"])
+            extra_long_opts=["bootable"],
+            extra_option_handler=option_handler)
 
     if len(args) != 2:
         common.Usage(__doc__)
@@ -64,7 +67,7 @@ def main(argv):
         tf.write("foo")
         tf.flush()
         data = intel_common.GetBootloaderImageFromTFP(OPTIONS.input_tmp,
-                extra_files=[tf.name,"force_fastboot"], autosize=True)
+                extra_files=[(tf.name,"force_fastboot")], autosize=True)
         tf.close()
     else:
         data = intel_common.GetBootloaderImageFromTFP(OPTIONS.input_tmp)
