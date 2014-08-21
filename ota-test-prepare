@@ -10,8 +10,6 @@ export PROD_KEY_DIR=device/intel/build/testkeys/production-test
 export NEW_DB_KEY=$PROD_KEY_DIR/DB
 export ANDROID_PW_FILE=$PROD_KEY_DIR/pwfile
 
-export MKBOOTIMG=out/host/linux-x86/bin/mkbootimg_secure
-
 while getopts "qst:" opt; do
     case $opt in
         s)
@@ -70,18 +68,13 @@ function sign_tfp {
 }
 
 function build_provimg {
-    t1=`mktemp tmp.fastboot.XXXXXXXX`
     t2=`mktemp tmp.fastboot-usb.XXXXXXXX`
     t3=`mktemp tmp.bootloader.XXXXXXXX`
     t4=`mktemp tmp.img.XXXXXXXX`
     t5=`mktemp tmp.gpt.XXXXXXXX`
-    t6=`mktemp tmp.sfu.XXXXXXXX`
 
-    ./device/intel/build/releasetools/fastboot_from_target_files \
-            --verbose $1 $t1
-
-    ./device/intel/build/releasetools/fastboot_usb_from_target_files \
-            --verbose $1 $t2
+    ./device/intel/build/releasetools/bootloader_from_target_files \
+            --bootable --verbose $1 $t2
 
     ./device/intel/build/releasetools/bootloader_from_target_files \
             --verbose $1 $t3
@@ -91,25 +84,17 @@ function build_provimg {
 
     unzip -p $1 RADIO/gpt.ini > $t5
 
-    if unzip -p $1 SYSTEM/etc/firmware/BIOSUPDATE.fv > $t6; then
-        sfu_cmd="--sfu-capsule $t6"
-    else
-        sfu_cmd=
-    fi
-
     ./device/intel/build/generate_factory_images \
 	    --product $TARGET_PRODUCT --release otatest \
             --bootloader $t3 \
-            --fastboot $t1 \
             --update-archive $t4 \
             --gpt $t5 \
             --unlock --erase \
             --sleeptime 45 \
             --input $t2=fastboot-usb.img \
-            $sfu_cmd \
             --output $2
 
-    rm -f $t1 $t2 $t3 $t4 $t5 $t6
+    rm -f $t2 $t3 $t4 $t5
 }
 
 if [[ -n "$TFP" ]]; then
@@ -143,30 +128,31 @@ make installclean &> /dev/null
 # the OTA update. Otherwise they come up identical and are skipped.
 
 echo "Building source software version A"
-ANDROID_CONSOLE= make -j12 target-files-package otatools &> ota/make-A.log
+ANDROID_CONSOLE= make -j12 target-files-package otatools keystore_signer &> ota/make-A.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
 
 # Not sure why rebuilds of the EFI binaries don't come out exactly the same, probably
 # embedded date stamps or something. Whatever...
 
 echo "Regenerating UEFI Binaries to create artificial deltas"
-cd external/gummiboot
-./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/gummiboot.log
-cd $ANDROID_BUILD_TOP
 
 cd external/uefi_shim
 ./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/shim.log
+cd $ANDROID_BUILD_TOP
+
+cd hardware/intel/kernelflinger
+./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/kernelflinger.log
 cd $ANDROID_BUILD_TOP
 
 echo "Cleaning source tree"
 make installclean &> /dev/null
 
 echo "Building target software version B"
-ANDROID_CONSOLE=usb make -j12 target-files-package otatools &> ota/make-B.log
+ANDROID_CONSOLE=usb make -j12 target-files-package otatools keystore_signer &> ota/make-B.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
 
 # Clean up the changed EFI binaries from the rebuild
-cd hardware/intel/efi_prebuilts/gummiboot
+cd hardware/intel/efi_prebuilts/kernelflinger
 git reset --hard
 cd $ANDROID_BUILD_TOP
 
