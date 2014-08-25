@@ -38,15 +38,23 @@ Usage: sign_target_files_efiss <options> <input_target_files_zip> <output_file>
       Replace existing EFI binary with one supplied on the command line. Intended
       for situations where we want to use a first stage loader signed by Microsoft.
 
-  -V  (--vendor-cert-replace) <path to old cert>=<path to new cert>
-      Replace the public vendor cert inside the shim with a certificate provided
-      on the command line. Specify the path to the shim with --first-stage. Expects
-      the keys to be in PEM format (like the Android x509.pem keys).
+  -O  (--oem-keystore) <path to new keypair>
+      Replace the OEM keystore inside kernelflinger with the replacement copy.
+      Expects a verity private key created by AOSP generate_verity_key
+
+  -K  (--oem-key) <path to new keypair>
+      Replace the OEM key inside kernelflinger with the replacement copy.
+      The OEM keystore must be signed with this key.
+      Expects a key pair assuming private key ends in .pk8 and public key
+      with .x509.pem
+
+  -L  (--kernelflinger) <path>
+      Path inside ESP to kernelflinger binary. Defaults to the first-stage loader.
 
   -F  (--first-stage) <path inside archive>
       Indicate the name of the first-stage loader. Put a copy of it in
       EFI/BOOT/bootx64.efi or EFI/BOOT/bootia32.efi (depending on the type of
-      PE/COFF executable it is.
+      PE/COFF executable it is. Defaults to "loader.efi"
 """
 
 import sys
@@ -56,6 +64,7 @@ import os
 import shlex
 import tempfile
 import subprocess
+import struct
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -70,10 +79,24 @@ import intel_common
 
 OPTIONS = common.OPTIONS
 OPTIONS.key_map = {}
-OPTIONS.vendor_key = None
-OPTIONS.first_stage = None
+OPTIONS.first_stage = "loader.efi"
+OPTIONS.kernelflinger = None  # if None, use OPTIONS.first_stage
 OPTIONS.replace = {}
 OPTIONS.all_keys = set()
+OPTIONS.verity_keys = []
+OPTIONS.oem_key = None
+
+
+def to_der_from_priv(priv_path):
+    tf = tempfile.NamedTemporaryFile(prefix="to_der_from_priv")
+
+    cmd = ["openssl", "rsa", "-pubout", "-inform", "PEM", "-outform", "DER",
+        "-in", priv_path, "-out", tf.name]
+    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+    assert p.returncode == 0, "verity cert conversion failed"
+    tf.seek(os.SEEK_SET, 0)
+    return tf
 
 
 def to_der(pem_cert_path):
@@ -81,15 +104,12 @@ def to_der(pem_cert_path):
 
     cmd = ["openssl", "x509", "-inform", "PEM", "-outform", "DER",
         "-in", pem_cert_path, "-out", tf.name]
-    if OPTIONS.verbose:
-        print "  running: ", " ".join(cmd)
     p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
     assert p.returncode == 0, "openssl cert conversion failed"
     tf.seek(os.SEEK_SET, 0)
-    data = tf.read()
-    tf.close()
-    return data
+    return tf
+
 
 def to_pem(der_key_path, password=None):
     # Defaults to 0600 permissions which is defintitely what we want!
@@ -122,7 +142,7 @@ def is_32bit_efi(data):
 
 
 def sign_efi(src_path, dest_path, priv_path, cert_path):
-    cmd = ["sbsign", "--key", priv_path, "--cert", cert_path, 
+    cmd = ["sbsign", "--key", priv_path, "--cert", cert_path,
             "--output", dest_path, src_path,]
     p = common.Run(cmd)
     p.communicate()
@@ -135,6 +155,7 @@ def get_named_temp(prefix=None):
     f.close()
     return f.name
 
+
 def extract_to_temp(input_zip, path, prefix=None):
     f = tempfile.NamedTemporaryFile(prefix=prefix, delete=False)
     OPTIONS.tempfiles.append(f.name)
@@ -142,24 +163,73 @@ def extract_to_temp(input_zip, path, prefix=None):
     f.close()
     return f.name
 
-def replace_vendor(data, old_cert_path, new_cert_path):
-    old_cert_data = to_der(old_cert_path)
-    new_cert_data = to_der(new_cert_path)
 
-    # Replace data
-    if old_cert_data not in data:
-        raise common.ExternalError("Old cert not found in binary. Cannot replace.");
+def zero_pad(data, size):
+    if len(data) > size:
+        raise common.ExternalError("Binary is already larger than pad size")
 
-    # cannot overwrite other data
-    if (len(new_cert_data) > len(old_cert_data)):
-        raise common.ExternalError("length of new cert data is larger than the old cert")
+    return data + (b'\x00' * (size - len(data)))
 
-    # need to make sure the replacement is of same size
-    # or else the binary will be smaller!!
-    while (len(new_cert_data) < len(old_cert_data)):
-        new_cert_data = new_cert_data + b'\x00'
 
-    return data.replace(old_cert_data, new_cert_data)
+# Useful: http://bbs.pediy.com/upload/bbs/unpackfaq/ARTeam%20PE_appendix1_offsets.htm
+def get_section_offset(data, name):
+    pe_header_offset = struct.unpack_from("<I", data, 0x3c)[0]
+    num_sections = struct.unpack_from("<H", data, pe_header_offset + 0x6)[0]
+    opt_header_size = struct.unpack_from("<H", data, pe_header_offset +0x14)[0]
+    section_table_offset = pe_header_offset + 0x18 + opt_header_size
+
+    for i in range(num_sections):
+        section_offset = section_table_offset + (i * 0x28)
+        section_table_data = struct.unpack_from("<8sIIIIIIHHI", data, section_offset)
+
+        section_name, _, _, _, section_offset, _, _, _, _, _ = section_table_data
+        if section_name != name:
+            continue
+        print "Found", section_name, "at offset", hex(section_offset)
+        return section_offset
+
+    raise common.ExternalError("Section not found")
+
+
+def generate_keystore(oem_key_pair, verity_keys, password):
+    oem_key_private_pem = to_pem(oem_key_pair + OPTIONS.private_key_suffix, password)
+    verity_keys_der = [to_der_from_priv(i) for i in verity_keys]
+    tf = tempfile.NamedTemporaryFile(prefix="keystore")
+    cmd = ["keystore_signer", oem_key_private_pem.name, tf.name]
+    cmd.extend([i.name for i in verity_keys_der])
+    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+    oem_key_private_pem.close()
+    [i.close() for i in verity_keys_der]
+    assert p.returncode == 0, "keystore generation failed"
+    tf.seek(os.SEEK_SET, 0)
+    data = tf.read()
+    tf.close()
+    return data
+
+
+def replace_keys(data, oem_key_pair, verity_keys, password):
+    off = get_section_offset(data, ".oemkeys")
+    oem_keystore_table = struct.unpack_from("<IIII", data, off)
+    oem_keystore_size, oem_key_size, oem_keystore_offset, oem_key_offset = oem_keystore_table
+
+    # Turn relative offsets into offsets from beginning of data
+    oem_keystore_offset = oem_keystore_offset + off
+    oem_key_offset = oem_key_offset + off
+
+    oem_key_data_der_file = to_der(oem_key_pair + OPTIONS.public_key_suffix)
+    oem_key_data = zero_pad(oem_key_data_der_file.read(), oem_key_size)
+    oem_key_data_der_file.close()
+    oem_keystore_data = zero_pad(generate_keystore(oem_key_pair,
+                verity_keys, password), oem_keystore_size)
+
+    print "OEM key and keystore sizes:", oem_key_size, oem_keystore_size
+
+    data = (data[:oem_keystore_offset] + oem_keystore_data +
+            data[oem_keystore_offset + oem_keystore_size:])
+    data = (data[:oem_key_offset] + oem_key_data +
+            data[oem_key_offset + oem_key_size:])
+    return data
 
 
 def process_bootzip(input_bootzip, output_bootzip, passwords):
@@ -170,14 +240,17 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
         if OPTIONS.verbose:
             print "Processing",path
 
-        # Don't bother, copying these over
-        if path.startswith("EFI/BOOT/boot") and OPTIONS.first_stage:
+        # Don't bother copying these over
+        if path.startswith("EFI/BOOT/boot"):
             continue
 
-        # Shim will now have the new vendor key in it
-        if OPTIONS.vendor_key and path == OPTIONS.first_stage:
-            print "Replacing key inside", path
-            data = replace_vendor(data, OPTIONS.old_vendor_key, OPTIONS.vendor_key)
+        if OPTIONS.oem_key and path == OPTIONS.kernelflinger:
+            print "Replacing keys inside", path
+            password = None
+            if OPTIONS.oem_key in passwords:
+                password = passwords[OPTIONS.oem_key]
+            data = replace_keys(data, OPTIONS.oem_key,
+                    OPTIONS.verity_keys, password)
 
         if path in OPTIONS.key_map:
             print "Re-signing", path
@@ -238,29 +311,38 @@ def main(argv):
         elif o in ("-R", "--replace"):
             k,v = a.split("=")
             OPTIONS.replace[k] = v
-        elif o in ("-V", "--vendor-cert-replace"):
-            OPTIONS.old_vendor_key,OPTIONS.vendor_key = a.split("=")
         elif o in ("-F", "--first-stage"):
             OPTIONS.first_stage = a
+        elif o in ("-K", "--oem-key"):
+            OPTIONS.oem_key = a
+            OPTIONS.all_keys.add(a)
+        elif o in ("-O", "--oem-keystore"):
+            OPTIONS.verity_keys.append(a)
+        elif o in ("-L", "--kernelflinger"):
+            OPTIONS.kernelflinger = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "k:R:V:F:",
+            extra_opts = "k:R:F:O:K:L:",
             extra_long_opts = ["key-mapping=",
-                "replace=", "vendor-cert-replace=", "first-stage="],
+                "replace=", "first-stage=", "oem-key=", "oem-keystore=",
+                "kernelflinger="],
             extra_option_handler = option_handler)
+
+    if not OPTIONS.kernelflinger:
+        OPTIONS.kernelflinger = OPTIONS.first_stage
 
     # Do some sanity checks on provided options
     if set(OPTIONS.key_map.keys()) & set(OPTIONS.replace.keys()):
         raise common.ExternalError("The same loaders can't be in --replace and --key_mapping\n")
 
-    if OPTIONS.vendor_key and not OPTIONS.first_stage:
-        raise common.ExternalError("Vendor key supplied, but --first-stage not provided\n")
+    if bool(OPTIONS.oem_key) != bool(OPTIONS.verity_keys):
+        raise common.ExternalError("--oem-key and --oem-keystore need to be used together\n");
 
-    if OPTIONS.vendor_key and OPTIONS.first_stage not in OPTIONS.key_map:
-        raise common.ExternalError("Vendor key supplied, but no key mapping for first stage supplied\n")
+    if OPTIONS.oem_key and OPTIONS.kernelflinger not in OPTIONS.key_map:
+        raise common.ExternalError("Replacement kernelflinger keys supplied, but no key mapping for kernelflinger supplied\n")
 
     if len(args) != 2:
         common.Usage(__doc__)
@@ -272,29 +354,21 @@ def main(argv):
 
     input_bootzip = get_input_bootzip(input_zip,
             os.path.join("RADIO", "bootloader.zip"))
-    usb_input_bootzip = get_input_bootzip(input_zip,
-            os.path.join("RADIO", "loader_usb.zip"))
 
     print "Processing private keys"
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
     passwords = common.GetKeyPasswords(OPTIONS.all_keys)
 
     output_bootzip, output_bz_file = get_output_bootzip()
-    usb_output_bootzip, usb_output_bz_file = get_output_bootzip()
 
     process_bootzip(input_bootzip, output_bootzip, passwords)
     output_bootzip.close()
-
-    process_bootzip(usb_input_bootzip, usb_output_bootzip, passwords)
-    usb_output_bootzip.close()
 
     print "Building destination target-files-package"
     output_zip = zipfile.ZipFile(args[1], "w")
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             output_zip.write(output_bz_file, zi.filename)
-        elif zi.filename == "RADIO/loader_usb.zip":
-            output_zip.write(usb_output_bz_file, zi.filename)
         else:
             output_zip.writestr(zi, input_zip.read(zi))
 
