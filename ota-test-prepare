@@ -6,9 +6,9 @@ set -e
 # Allow job control
 set -m
 
-export PROD_KEY_DIR=device/intel/build/testkeys/production-test
-export NEW_DB_KEY=$PROD_KEY_DIR/DB
-export ANDROID_PW_FILE=$PROD_KEY_DIR/pwfile
+export TESTKEYS=device/intel/build/testkeys
+export PRODKEYS=device/intel/build/testkeys/production-test
+export ANDROID_PW_FILE=$PRODKEYS/pwfile
 
 while getopts "qst:" opt; do
     case $opt in
@@ -48,22 +48,25 @@ shift $((OPTIND-1))
 function sign_tfp {
     t1=`mktemp tmp.tfp1.XXXXXXXX`
     t2=`mktemp tmp.tfp2.XXXXXXXX`
+
     ./build/tools/releasetools/sign_target_files_apks  \
             --verbose \
-            --default_key_mappings $PROD_KEY_DIR $1 $t1
+            --replace_verity_public_key $PRODKEYS/verity.pub \
+            --replace_verity_private_key $PRODKEYS/verity \
+            --default_key_mappings $PRODKEYS $1 $t1
+
     ./device/intel/build/releasetools/sign_target_files_efis \
             --verbose \
-            --first-stage shim.efi \
-            --vendor-cert-replace device/intel/build/testkeys/vendor.x509.pem=device/intel/build/testkeys/production-test/vendor.x509.pem \
-            --key-mapping shim.efi=device/intel/build/testkeys/production-test/DB \
-            --key-mapping gummiboot.efi=device/intel/build/testkeys/production-test/vendor \
-            $t1 $t2
+            --oem-key $PRODKEYS/oem \
+            --oem-keystore $PRODKEYS/verity \
+            --key-mapping loader.efi=$PRODKEYS/DB \
+            $t1 $2
     rm $t1
-    ./device/intel/build/releasetools/sign_target_files_bootimages \
-            --verbose \
-            --signpair device/intel/build/testkeys/production-test/vendor \
-            --fastboot \
-            $t2 $2
+    #./device/intel/build/releasetools/sign_target_files_bootimages \
+    #        --verbose \
+    #        --signpair device/intel/build/testkeys/production-test/vendor \
+    #        --fastboot \
+    #        $t2 $2
     rm $t2
 }
 
@@ -102,7 +105,6 @@ if [[ -n "$TFP" ]]; then
         echo "No build name provided!"
         exit 1
     fi
-
     mkdir -p ota/
     sign_tfp $TFP ota/tfp-${1}.zip
     build_provimg ota/tfp-${1}.zip ota/factory-${1}.tgz
