@@ -9,7 +9,9 @@ $(hide) $(ACP) $(1) $(2)
 endef
 
 $(flashfiles_zip): \
-		$(INTERNAL_UPDATE_PACKAGE_TARGET) \
+		$(INSTALLED_SYSTEMIMAGE) \
+		$(INSTALLED_BOOTIMAGE_TARGET) \
+		$(INSTALLED_RECOVERYIMAGE_TARGET) \
 		$(foreach pair,$(BOARD_FLASHFILES),$(call word-colon,1,$(pair))) \
 		$(BOARD_FLASHFILES_XML) | $(ACP) \
 
@@ -17,8 +19,9 @@ $(flashfiles_zip): \
 	$(hide) rm -f $@
 	$(hide) rm -rf $(ff_intermediates)
 	$(hide) mkdir -p $(ff_intermediates)
-	$(hide) cd $(ff_intermediates) && unzip -q $(ANDROID_BUILD_TOP)/$(INTERNAL_UPDATE_PACKAGE_TARGET)
-	$(hide) $(ACP) -f $(BOARD_FLASHFILES_XML) $(ff_intermediates)
+	$(hide) $(ACP) -f $(BOARD_FLASHFILES_XML) $(INSTALLED_SYSTEMIMAGE) \
+		$(INSTALLED_BOOTIMAGE_TARGET) $(INSTALLED_RECOVERYIMAGE_TARGET) \
+		$(ff_intermediates)
 	$(foreach pair,$(BOARD_FLASHFILES), \
 		$(call copy-flashfile,$(call word-colon,1,$(pair)),$(ff_intermediates)/$(call word-colon,2,$(pair))))
 	$(hide) zip -qj $@ $(ff_intermediates)/*
