@@ -136,6 +136,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         p1 = common.Run(cmd1, stdout=subprocess.PIPE)
     except Exception as exc:
         print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        shutil.rmtree(ramdisk_tmp)
         raise exc
 
     cmd2 = ["minigzip"]
@@ -144,10 +145,12 @@ def GetFastbootImage(unpack_dir, info_dict=None):
             cmd2, stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
     except Exception as exc:
         print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        shutil.rmtree(ramdisk_tmp)
         raise exc
 
     p2.wait()
     p1.wait()
+    shutil.rmtree(ramdisk_tmp)
     assert p1.returncode == 0, "mkbootfs of fastboot ramdisk failed"
     assert p2.returncode == 0, "minigzip of fastboot ramdisk failed"
 
@@ -180,6 +183,19 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         raise exc
     p.communicate()
     assert p.returncode == 0, "mkbootimg of fastboot image failed"
+
+    # Sign the image using BOOT_SIGNER env variable, or "boot_signer" command
+    signing_key = info_dict.get("verity_key")
+    if info_dict.get("verity") == "true" and signing_key:
+            boot_signer = os.getenv('BOOT_SIGNER') or "boot_signer"
+            cmd = [boot_signer, "/boot", img.name, signing_key, img.name];
+            try:
+                p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            except Exception as exc:
+                    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+                    raise exc
+            p.communicate()
+            assert p.returncode == 0, "boot signing of fastboot image failed"
 
     img.seek(os.SEEK_SET, 0)
     data = img.read()
