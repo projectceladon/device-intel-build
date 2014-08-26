@@ -47,7 +47,6 @@ shift $((OPTIND-1))
 
 function sign_tfp {
     t1=`mktemp tmp.tfp1.XXXXXXXX`
-    t2=`mktemp tmp.tfp2.XXXXXXXX`
 
     ./build/tools/releasetools/sign_target_files_apks  \
             --verbose \
@@ -62,12 +61,6 @@ function sign_tfp {
             --key-mapping loader.efi=$PRODKEYS/DB \
             $t1 $2
     rm $t1
-    #./device/intel/build/releasetools/sign_target_files_bootimages \
-    #        --verbose \
-    #        --signpair device/intel/build/testkeys/production-test/vendor \
-    #        --fastboot \
-    #        $t2 $2
-    rm $t2
 }
 
 function build_provimg {
