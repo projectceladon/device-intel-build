@@ -80,6 +80,7 @@ function build_provimg {
 
     unzip -p $1 RADIO/gpt.ini > $t5
 
+    # FIXME build flashfiles.zip instead!
     ./device/intel/build/generate_factory_images \
 	    --product $TARGET_PRODUCT --release otatest \
             --bootloader $t3 \
@@ -116,14 +117,10 @@ pushd $ANDROID_BUILD_TOP &> /dev/null
 rm -rf ota/
 mkdir ota/
 
-make installclean &> /dev/null
-
-# NOTE: The difference in ANDROID_CONSOLE between the two builds is to force a binary
-# change in the boot images so that diffs are computed and we exercise that part of
-# the OTA update. Otherwise they come up identical and are skipped.
+# FIXME how to get the boot images to come out differently?
 
 echo "Building source software version A"
-ANDROID_CONSOLE= make -j12 target-files-package otatools keystore_signer &> ota/make-A.log
+make -j12 target-files-package otatools keystore_signer &> ota/make-A.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
 
 # Not sure why rebuilds of the EFI binaries don't come out exactly the same, probably
@@ -131,29 +128,21 @@ cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.z
 
 echo "Regenerating UEFI Binaries to create artificial deltas"
 
-cd external/uefi_shim
-./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/shim.log
-cd $ANDROID_BUILD_TOP
-
-cd hardware/intel/kernelflinger
+pushd hardware/intel/kernelflinger
 ./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/kernelflinger.log
-cd $ANDROID_BUILD_TOP
+popd
 
 echo "Cleaning source tree"
 make installclean &> /dev/null
 
 echo "Building target software version B"
-ANDROID_CONSOLE=usb make -j12 target-files-package otatools keystore_signer &> ota/make-B.log
+make -j12 target-files-package otatools keystore_signer &> ota/make-B.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
 
 # Clean up the changed EFI binaries from the rebuild
-cd hardware/intel/efi_prebuilts/kernelflinger
+pushd hardware/intel/efi_prebuilts/kernelflinger
 git reset --hard
-cd $ANDROID_BUILD_TOP
-
-cd hardware/intel/efi_prebuilts/uefi_shim
-git reset --hard
-cd $ANDROID_BUILD_TOP
+popd
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"
@@ -163,19 +152,26 @@ fi
 
 echo "Building OTA update packages"
 if [[ "$QUICK" != "1" ]]; then
-    ./build/tools/releasetools/ota_from_target_files --block --verbose ota/tfp-A.zip ota/ota-A.zip
-    ./build/tools/releasetools/ota_from_target_files --block --verbose ota/tfp-B.zip ota/ota-B.zip
-    ./build/tools/releasetools/ota_from_target_files --block --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
+    ./build/tools/releasetools/ota_from_target_files \
+            --block --verbose ota/tfp-A.zip ota/ota-A.zip
+    ./build/tools/releasetools/ota_from_target_files \
+            --block --verbose ota/tfp-B.zip ota/ota-B.zip
+    ./build/tools/releasetools/ota_from_target_files \
+            --block --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
+else
+    ./build/tools/releasetools/ota_from_target_files \
+            --block --verbose ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
+    ./build/tools/releasetools/ota_from_target_files \
+            --block --verbose -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
 fi
-./build/tools/releasetools/ota_from_target_files --block --verbose ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
-./build/tools/releasetools/ota_from_target_files --block --verbose -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
 
 echo "Building provisioning media"
 if [[ "$QUICK" != "1" ]]; then
     build_provimg ota/tfp-A.zip ota/factory-A.tgz
     build_provimg ota/tfp-B.zip ota/factory-B.tgz
+else
+    build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey.tgz
 fi
-build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey.tgz
 
 popd
 echo "OTA preparations complete!"
