@@ -187,7 +187,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     signing_key = info_dict.get("verity_key")
     if info_dict.get("verity") == "true" and signing_key:
             boot_signer = os.getenv('BOOT_SIGNER') or "boot_signer"
-            cmd = [boot_signer, "/boot", img.name, signing_key, img.name];
+            cmd = [boot_signer, "/fastboot", img.name, signing_key, img.name];
             try:
                 p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             except Exception as exc:
