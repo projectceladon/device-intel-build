@@ -15,6 +15,7 @@ import os
 import subprocess
 import zipfile
 import re
+import tempfile
 
 # Android Release Tools
 sys.path.append("build/tools/releasetools")
@@ -37,11 +38,17 @@ def get_hash_and_size(zip_archive, filename):
     s = len(data)
     return (h, s)
 
+def get_hash_and_size_from_file(filename):
+    fd = open(filename)
+    data = fd.read()
+    fd.close()
+    h = hashlib.sha1(data).hexdigest()
+    s = len(data)
+    return (h, s)
+
+
 def check_bootimage(name, unpack_dir):
-    if name == "fastboot":
-        img = intel_common.GetFastbootImage(unpack_dir)
-    else:
-        img = intel_common.GetBootableImage(name, name+".img", unpack_dir,
+    img = common.GetBootableImage(name, name+".img", unpack_dir,
                 name.upper())
 
     h = hashlib.sha1(img.data).hexdigest()
@@ -83,21 +90,31 @@ def main(argv):
         sys.exit(1)
 
     print "Extracting bootloader archive..."
-    loader_unpack_dir, loader_zip = common.UnzipTemp(os.path.join(unpack_dir, "RADIO", "bootloader.zip"))
+    data = intel_common.GetBootloaderImageFromTFP(unpack_dir)
+    image = common.File("bootloader.img", data).WriteToTemp()
+    esp_root = tempfile.mkdtemp(prefix="bootloader-")
+    OPTIONS.tempfiles.append(esp_root)
+    intel_common.add_dir_to_path("/sbin")
+    subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
+    image.close();
 
-    for bootimage in ["boot", "recovery", "fastboot"]:
+    sys.stdout.write("Checking boot images...\n")
+    for bootimage in ["boot", "recovery"]:
         check_bootimage(bootimage, unpack_dir)
 
+    sys.stdout.write("Checking bootloader...\n")
+    for dpath, dname, fnames in os.walk(esp_root):
+        for fname in fnames:
+            # Capsule update file -- gets consumed and deleted by the firmware
+            # at first boot, shouldn't try to check it
+            if (fname == "BIOSUPDATE.fv"):
+                continue
+            abspath = os.path.join(dpath, fname)
+            relpath = os.path.relpath(abspath, esp_root)
 
-    for zi in loader_zip.infolist():
-        fn = zi.filename
-
-        if not (zi.external_attr & regfile_attr == regfile_attr):
-            continue
-
-        print "Checking", fn
-        h, s = get_hash_and_size(loader_zip, fn)
-        adb_shell_command("applypatch -c /mnt/bootloader/%s %s" % (fn, h))
+            print "Checking", relpath
+            h, s = get_hash_and_size_from_file(abspath)
+            adb_shell_command("applypatch -c /mnt/bootloader/%s %s" % (relpath, h))
 
 
     sys.stdout.write("Checking system partition..")
