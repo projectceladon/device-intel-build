@@ -5,6 +5,7 @@
 BUILD_ID_LC := $(shell echo $(BUILD_ID) | tr A-Z a-z)
 FACTORY_SCRIPTS_PACKAGE_TARGET := $(PRODUCT_OUT)/$(TARGET_PRODUCT)-$(BUILD_ID_LC)-factory.tgz
 FACTORY_SCRIPTS_OEMVARS := $(if $(BOARD_OEM_VARS_FILE),--oemvars $(BOARD_OEM_VARS_FILE))
+FACTORY_SCRIPTS_RADIO := $(if $(BOARD_RADIOIMAGE), --radio $(BOARD_RADIOIMAGE))
 
 # For legacy boot, we need to include the MBR boot block
 ifeq ($(TARGET_USE_SYSLINUX),true)
@@ -33,6 +34,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		--bootloader $(PRODUCT_OUT)/bootloader \
 		--fastboot $(PRODUCT_OUT)/fastboot.img \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
+		$(FACTORY_SCRIPTS_RADIO) \
 		$(FACTORY_SCRIPTS_OEMVARS) \
 		--gpt $(BOARD_GPT_INI) \
 		$(factory_scripts_mbr_boot_block_option) \

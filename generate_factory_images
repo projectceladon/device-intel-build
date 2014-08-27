@@ -193,6 +193,13 @@ class FlashCommand(Command):
     def get_command(self):
         return "flash {} {}\n".format(self.target, self.image)
 
+class FormatCommand(Command):
+    def __init__(self, partition):
+        self.partition = partition
+
+    def get_command(self):
+        return "format {}\n".format(self.partition)
+
 class UpdateCommand(Command):
     def __init__(self, image, erase):
         self.image = path.basename(image)
@@ -251,6 +258,8 @@ def main():
                         help="Output file for archived factory scripts")
     parser.add_argument('-g', '--gpt',
                         help="GPT configuration file")
+    parser.add_argument('-r', '--radio',
+                        help="Radio image")
     parser.add_argument('-c', "--sfu-capsule",
                         help="SFU Capsule update")
     parser.add_argument('-k', '--unlock',
@@ -291,6 +300,12 @@ def main():
         fn = buildprefix + "bootloader"
         files.append((args.bootloader, fn))
         commands.append(FlashCommand("bootloader", fn))
+
+    if args.radio:
+        fn = buildprefix + "radio.img"
+        files.append((args.radio, fn))
+        commands.append(FlashCommand("radio", fn))
+        commands.append(FormatCommand("config"))
 
     if args.fastboot:
         files.append((args.fastboot, fastboot_fn))
