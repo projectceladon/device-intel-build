@@ -64,34 +64,24 @@ function sign_tfp {
 }
 
 function build_provimg {
-    t2=`mktemp tmp.fastboot-usb.XXXXXXXX`
-    t3=`mktemp tmp.bootloader.XXXXXXXX`
-    t4=`mktemp tmp.img.XXXXXXXX`
-    t5=`mktemp tmp.gpt.XXXXXXXX`
+    t1=`mktemp tmp.bootloader.XXXXXXXX`
+    t2=`mktemp tmp.img.XXXXXXXX`
 
     ./device/intel/build/releasetools/bootloader_from_target_files \
-            --bootable --verbose $1 $t2
-
-    ./device/intel/build/releasetools/bootloader_from_target_files \
-            --verbose $1 $t3
+            --verbose $1 $t1
 
     ./build/tools/releasetools/img_from_target_files \
-            --verbose $1 $t4
-
-    unzip -p $1 RADIO/gpt.ini > $t5
+            --verbose $1 $t2
 
     # FIXME build flashfiles.zip instead!
     ./device/intel/build/generate_factory_images \
 	    --product $TARGET_PRODUCT --release otatest \
-            --bootloader $t3 \
-            --update-archive $t4 \
-            --gpt $t5 \
-            --unlock --erase \
+            --bootloader $t1 \
+            --update-archive $t2 \
             --sleeptime 45 \
-            --input $t2=fastboot-usb.img \
             --output $2
 
-    rm -f $t2 $t3 $t4 $t5
+    rm -f $t1 $t2
 }
 
 if [[ -n "$TFP" ]]; then
