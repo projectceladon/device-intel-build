@@ -289,11 +289,6 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
                 output_bootzip.writestr("EFI/BOOT/bootx64.efi", data)
 
 
-def get_input_bootzip(input_zip, path):
-    outfn = extract_to_temp(input_zip, path, "input_bootzip")
-    input_bootzip = zipfile.ZipFile(outfn, "r")
-    return input_bootzip
-
 
 def get_output_bootzip():
     of_file = get_named_temp("output_bootzip")
@@ -350,10 +345,9 @@ def main(argv):
 
 
     print "Extracting bootloader.zip"
-    input_zip = zipfile.ZipFile(args[0], "r")
-
-    input_bootzip = get_input_bootzip(input_zip,
-            os.path.join("RADIO", "bootloader.zip"))
+    unpack_dir, input_zip = common.UnzipTemp(args[0])
+    input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
+                "RADIO", "bootloader.zip"), "r")
 
     print "Processing private keys"
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
@@ -364,8 +358,14 @@ def main(argv):
     process_bootzip(input_bootzip, output_bootzip, passwords)
     output_bootzip.close()
 
+    print "Creating Fastboot image"
+    if os.path.exists(os.path.join(unpack_dir, "IMAGES", "fastboot.img")):
+        os.unlink(os.path.join(unpack_dir, "IMAGES", "fastboot.img"))
+    fastboot = intel_common.GetFastbootImage(unpack_dir)
+
     print "Building destination target-files-package"
     output_zip = zipfile.ZipFile(args[1], "w")
+    common.ZipWriteStr(output_zip, "IMAGES/fastboot.img", fastboot.data)
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             output_zip.write(output_bz_file, zi.filename)
