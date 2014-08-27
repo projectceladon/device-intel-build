@@ -119,7 +119,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     if info_dict is None:
         info_dict = common.OPTIONS.info_dict
 
-    prebuilt_path = os.path.join(unpack_dir, "BOOTABLE_IMAGES", "fastboot.img")
+    prebuilt_path = os.path.join(unpack_dir, "IMAGES", "fastboot.img")
     if (os.path.exists(prebuilt_path)):
         print "using prebuilt fastboot.img"
         return common.File.FromLocalFile("fastboot.img", prebuilt_path)
@@ -135,7 +135,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     try:
         p1 = common.Run(cmd1, stdout=subprocess.PIPE)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print "Error: Unable to execute command: {}".format(' '.join(cmd1))
         shutil.rmtree(ramdisk_tmp)
         raise exc
 
@@ -144,7 +144,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         p2 = common.Run(
             cmd2, stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print "Error: Unable to execute command: {}".format(' '.join(cmd2))
         shutil.rmtree(ramdisk_tmp)
         raise exc
 
