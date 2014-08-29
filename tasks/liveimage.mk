@@ -46,7 +46,7 @@ $(live_ramdisk): \
 	$(hide) mkdir -p $(dir $@)
 	$(hide) rm -rf $(ramdisk_dir)
 	$(hide) mkdir -p $(ramdisk_dir)
-	$(hide) $(ACP) -rf $(TARGET_ROOT_OUT)/* $(ramdisk_dir)
+	$(hide) $(ACP) -rfd $(TARGET_ROOT_OUT)/* $(ramdisk_dir)
 	$(hide) mv $(ramdisk_dir)/init $(ramdisk_dir)/init2
 	$(hide) $(ACP) -p $(PRODUCT_OUT)/preinit/preinit $(ramdisk_dir)/init
 	$(hide) mkdir -p $(ramdisk_dir)/installmedia
