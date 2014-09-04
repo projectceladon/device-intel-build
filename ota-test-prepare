@@ -66,6 +66,7 @@ function sign_tfp {
 function build_provimg {
     t1=`mktemp tmp.bootloader.XXXXXXXX`
     t2=`mktemp tmp.img.XXXXXXXX`
+    t3=`mktemp tmp.factory.XXXXXXXXX`
 
     ./device/intel/build/releasetools/bootloader_from_target_files \
             --verbose $1 $t1
@@ -79,9 +80,11 @@ function build_provimg {
             --bootloader $t1 \
             --update-archive $t2 \
             --sleeptime 45 \
-            --output $2
+            --output $t3
 
-    rm -f $t1 $t2
+    mkdir -p $2
+    tar -C $2 -xf $t3
+    rm -f $t1 $t2 $t3
 }
 
 if [[ -n "$TFP" ]]; then
@@ -91,7 +94,7 @@ if [[ -n "$TFP" ]]; then
     fi
     mkdir -p ota/
     sign_tfp $TFP ota/tfp-${1}.zip
-    build_provimg ota/tfp-${1}.zip ota/factory-${1}.tgz
+    build_provimg ota/tfp-${1}.zip ota/factory-A
     ./build/tools/releasetools/ota_from_target_files --block --verbose ota/tfp-${1}.zip ota/ota-${1}.zip
     echo "All done!"
     exit
@@ -157,10 +160,10 @@ fi
 
 echo "Building provisioning media"
 if [[ "$QUICK" != "1" ]]; then
-    build_provimg ota/tfp-A.zip ota/factory-A.tgz
-    build_provimg ota/tfp-B.zip ota/factory-B.tgz
+    build_provimg ota/tfp-A.zip ota/factory-A
+    build_provimg ota/tfp-B.zip ota/factory-B
 else
-    build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey.tgz
+    build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey
 fi
 
 popd
