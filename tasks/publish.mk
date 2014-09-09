@@ -26,35 +26,12 @@ PUBLISH_SDK := $(strip $(filter sdk sdk_x86,$(TARGET_PRODUCT)))
 
 ifndef PUBLISH_SDK
 
-# Do we have the file we need to add the flash.json to
-ifdef INTERNAL_UPDATE_PACKAGE_TARGET
-# This makefile process depends on flash.json, which can be located in either:
-#    vendor/intel/build/flash.json
-#    device/intel/build/flash.json
-# Figure out where this makefile (publish.mk) is located and calculate the path
-# to flash.json, which is located in the parent directory of our makefile
-publish_flash_json := $(abspath $(lastword $(MAKEFILE_LIST)))
-publish_flash_json := $(abspath $(dir $(publish_flash_json))/../flash.json)
-define publish_zip_flash
-zip --junk-paths $(publish_dest)/$(notdir $(INTERNAL_UPDATE_PACKAGE_TARGET)) $(publish_flash_json)
-endef
-
-else  # !INTERNAL_UPDATE_PACKAGE_TARGET
-
-# empty definition if we don't have the package file needed to add the
-# flash.json to
-define publish_zip_flash
-endef
-
-endif # !INTERNAL_UPDATE_PACKAGE_TARGET
-
 
 .PHONY: publish_update_target
 # Can we build our publish_update_target file?
 ifdef INTERNAL_UPDATE_PACKAGE_TARGET
 publish_update_target: publish_mkdir_dest $(INTERNAL_UPDATE_PACKAGE_TARGET)
 	@$(ACP) $(INTERNAL_UPDATE_PACKAGE_TARGET) $(publish_dest)
-	$(publish_zip_flash)
 else  # !INTERNAL_UPDATE_PACKAGE_TARGET
 publish_update_target:
 	@echo "Warning: Unable to fulfill publish_update_target makefile request"
@@ -118,4 +95,3 @@ endif
 .PHONY: publish
 publish: publish_mkdir_dest $(PUBLISH_GOALS)
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
-	$(publish_zip_flash)
