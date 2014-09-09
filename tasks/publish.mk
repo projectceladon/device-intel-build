@@ -71,10 +71,19 @@ publish_factory_target:
 	@echo "Warning: Unable to fulfill publish_factory_target makefile request"
 endif # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
 
+.PHONY: publish_flashfiles
+ifdef INTEL_FACTORY_FLASHFILES_TARGET
+publish_flashfiles: publish_mkdir_dest $(INTEL_FACTORY_FLASHFILES_TARGET)
+	@$(ACP) $(INTEL_FACTORY_FLASHFILES_TARGET) $(publish_dest)
+else
+publish_flashfiles:
+	@echo "Warning: Unable to fulfill publish_flashfiles makefile request"
+endif
+
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_update_target publish_factory_target
+publish_ci: publish_update_target publish_factory_target publish_flashfiles
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)

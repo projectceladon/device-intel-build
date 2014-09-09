@@ -23,17 +23,23 @@ $(OTHER_FLASHFILES_XML): $(FIRST_FLASHFILES_XML)
 .PHONY: flashfiles_nozip
 flashfiles_nozip: $(FLASHFILES_XML) $(FLASHFILES_IMAGES)
 
-FLASHFILES_ZIP := $(PRODUCT_OUT)/flashfiles.zip
+name := $(TARGET_PRODUCT)
+ifeq ($(TARGET_BUILD_TYPE),debug)
+  name := $(name)_debug
+endif
+name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
-$(FLASHFILES_ZIP): $(FLASHFILES_IMAGES) $(FLASHFILES_XML)
+INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
+
+$(INTEL_FACTORY_FLASHFILES_TARGET): $(FLASHFILES_IMAGES) $(FLASHFILES_XML)
 	$(hide) mkdir -p $(@D)
 	$(hide) rm -f $@
 	@echo generating $@
 	$(hide) zip -1 -j $@ $^
 
-$(call dist-for-goals,droidcore,$(FLASHFILES_ZIP):$(TARGET_PRODUCT)-flashfiles-$(FILE_NAME_TAG).zip)
+$(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
 
 .PHONY: flashfiles
-flashfiles: $(FLASHFILES_ZIP)
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
 
 endif
