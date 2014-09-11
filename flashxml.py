@@ -121,6 +121,10 @@ class FlashFileJson:
             new['retry'] = cmd.get('retry', 2)
             new['mandatory'] = cmd.get('mandatory', True)
 
+            if 'variant' in cmd:
+                if not variant in cmd['variant']:
+                    continue
+
             if cmd['type'] == 'fastboot':
                 new['description'] = cmd.get('desc', cmd['args'])
                 new['tool'] = 'fastboot'
@@ -167,6 +171,7 @@ def parse_config(conf):
 
         commands = conf['commands'][c['commands']]
         commands = [cmd for cmd in commands if not 'target' in cmd or cmd['target'] in t2f]
+        commands = [cmd for cmd in commands if not 'variant' in cmd or variant in cmd['variant']]
         commands = [cmd for cmd in commands if not 'restrict' in cmd or c['subgroup'] in cmd['restrict']]
 
         f.parse_command(commands)
@@ -183,9 +188,16 @@ def init_t2f_dict():
         d[target] = fname
     return d
 
+def get_env(key, default=None):
+    if key in os.environ:
+        return os.environ[key]
+    return default
+
 def main():
     global options
     global t2f
+    global variant
+
     usage = "usage: %prog [options] flash.xml"
     description = "Tools to generate flash.xml"
     parser = OptionParser(usage, description=description)
@@ -202,6 +214,7 @@ def main():
         conf = json.loads(f.read())
 
     t2f = init_t2f_dict()
+    variant = get_env('TARGET_BUILD_VARIANT', 'eng')
 
     parse_config(conf)
 
