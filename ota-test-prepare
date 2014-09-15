@@ -151,20 +151,19 @@ if [[ "$QUICK" != "1" ]]; then
             --block --verbose ota/tfp-B.zip ota/ota-B.zip
     ./build/tools/releasetools/ota_from_target_files \
             --block --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
-else
-    ./build/tools/releasetools/ota_from_target_files \
-            --block --verbose ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
-    ./build/tools/releasetools/ota_from_target_files \
-            --block --verbose -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
 fi
+./build/tools/releasetools/ota_from_target_files \
+            --block --verbose ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
+./build/tools/releasetools/ota_from_target_files \
+            --block --verbose -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
 
 echo "Building provisioning media"
 if [[ "$QUICK" != "1" ]]; then
     build_provimg ota/tfp-A.zip ota/factory-A
     build_provimg ota/tfp-B.zip ota/factory-B
-else
-    build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey
 fi
+
+build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey
 
 popd
 echo "OTA preparations complete!"
