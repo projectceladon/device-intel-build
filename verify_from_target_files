@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 """
-Given a target-files zipfile, connect to the device over ADB and verify that
+Given a target-files zipfile, connect to the device over Fastboot and verify that
 the installed system exactly matches that build.
 
 Usage: verify_from_target_files <target-files-package>
-
-You need to have ADB connected with root access; use "adb root" on userdebug
-builds before running this script
 """
 
 import sys
@@ -25,18 +22,6 @@ sys.path.append("device/intel/build/releasetools")
 import intel_common
 
 OPTIONS = common.OPTIONS
-exp = "RETURN=([0-9]+)"
-regex_ret = re.compile(exp, re.MULTILINE)
-symlink_attr = (0120000 << 16L)
-regfile_attr = (0100000 << 16L)
-
-def get_hash_and_size(zip_archive, filename):
-    fd = zip_archive.open(filename)
-    data = fd.read()
-    fd.close()
-    h = hashlib.sha1(data).hexdigest()
-    s = len(data)
-    return (h, s)
 
 def get_hash_and_size_from_file(filename):
     fd = open(filename)
@@ -47,29 +32,90 @@ def get_hash_and_size_from_file(filename):
     return (h, s)
 
 
-def check_bootimage(name, unpack_dir):
+def hash_sparse_ext4_image(unpack_dir, image_name):
+    img_path = os.path.join(unpack_dir, "IMAGES", image_name)
+    print "Hashing TFP", image_name
+    t = tempfile.NamedTemporaryFile(delete=False)
+    OPTIONS.tempfiles.append(t.name)
+    t.close()
+
+    subprocess.check_call(["simg2img", img_path, t.name])
+
+    remain = os.path.getsize(t.name)
+    fd = open(t.name)
+    hc = hashlib.sha1()
+
+    while (remain):
+        data = fd.read(1024 * 1024)
+        hc.update(data)
+        remain = remain - len(data)
+
+    fd.close()
+    return hc.hexdigest()
+
+
+def check_bootimage(name, unpack_dir, hashdict):
     img = common.GetBootableImage(name, name+".img", unpack_dir,
                 name.upper())
 
     h = hashlib.sha1(img.data).hexdigest()
-    s = len(img.data)
-    print "Checking", name, "image"
-    adb_shell_command("applypatch -c EMMC:%s:%s:%s" % (OPTIONS.info_dict["fstab"]["/" + name].device,s,h))
+    if "/"+name not in hashdict:
+        print "FAILED: Hash for", name, " image not reported by device"
+        return False
+
+    if (h != hashdict["/"+name]):
+        print "FAILED: Hash mismatch for", name, "image"
+        print "got",hashdict["/"+name],"expected",h
+        return False
+
+    print name, "image OK"
+    return True
 
 
-# ADB is dumb and doesn't propagate failed shell commands back to the caller.
-# https://code.google.com/p/android/issues/detail?id=3254
-def adb_shell_command(cmd, fail_ok=False):
-    global success
-    out = subprocess.check_output(['out/host/linux-x86/bin/adb','shell', cmd + '; echo RETURN=$?']).strip()
-    m = regex_ret.split(out)
-    retval = int(m[1])
-    output = m[0].strip()
-    if retval and fail_ok != True:
-        success = False
-        print "FAILED 'adb shell %s' returned %d\n%s" % (cmd, retval, output)
-        return None
-    return output
+"""
+Sample output:
+
+...
+(bootloader) target: /boot
+(bootloader) hash: d0448a1e91030e5c37277e4a77eabefc36fc8e6c
+(bootloader) target: /recovery
+(bootloader) hash: 411c61de23f6f73934b79eda4f64779706c220f4
+(bootloader) target: /bootloader/EFI/BOOT/bootx64.efi
+(bootloader) hash: 2773c4c039dc37b96171f6ef131f04dd8faf73e1
+(bootloader) target: /bootloader/loader.efi
+(bootloader) hash: 2773c4c039dc37b96171f6ef131f04dd8faf73e1
+(bootloader) target: /bootloader/fastboot.img
+(bootloader) hash: b0b3d122c4dca255ed2a75268ef30f6cbbc11085
+(bootloader) target: /system
+(bootloader) hash: d417239a25df718d73b6326e6c93a7fc1b00afb2
+OKAY [134.307s]
+finished. total time: 134.307s
+"""
+
+_TARGET_LINE_PREFIX = "(bootloader) target: "
+_HASH_LINE_PREFIX = "(bootloader) hash: "
+
+
+def process_fastboot_data(data):
+    hashes = {}
+    lines = data.split("\n")
+    index = 0
+
+    for i in range(len(lines)):
+        line = lines[i]
+        if not line.startswith(_TARGET_LINE_PREFIX):
+            continue
+
+        target = line[len(_TARGET_LINE_PREFIX):]
+        i = i + 1
+        line = lines[i]
+        if not line.startswith(_HASH_LINE_PREFIX):
+            raise Exception("unexpected Fastboot output")
+
+        hashdata = line[len(_HASH_LINE_PREFIX):]
+        print "DUT reported", target, hashdata
+        hashes[target] = hashdata
+    return hashes
 
 
 def main(argv):
@@ -78,16 +124,15 @@ def main(argv):
         print __doc__
         sys.exit(1)
 
+    print "Running 'fastboot oem get-hashes'..."
+    fastboot_data = subprocess.check_output(["out/host/linux-x86/bin/fastboot", "oem", "get-hashes"],
+            stderr=subprocess.STDOUT)
+    hashdict = process_fastboot_data(fastboot_data)
+
     print "Extracting target files package..."
     unpack_dir, tfp = common.UnzipTemp(argv[0])
     success = True
     OPTIONS.info_dict = common.LoadInfoDict(tfp)
-
-    if (adb_shell_command("echo otasums > /sys/power/wake_lock") == None or
-            adb_shell_command("mount -o remount,rw /") == None or
-            adb_shell_command("mkdir /mnt/bootloader") == None or
-            adb_shell_command("mount -t vfat %s /mnt/bootloader" % (OPTIONS.info_dict["fstab"]["/bootloader"].device,)) == None):
-        sys.exit(1)
 
     print "Extracting bootloader archive..."
     data = intel_common.GetBootloaderImageFromTFP(unpack_dir)
@@ -98,9 +143,11 @@ def main(argv):
     subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
     image.close();
 
+
     sys.stdout.write("Checking boot images...\n")
     for bootimage in ["boot", "recovery"]:
-        check_bootimage(bootimage, unpack_dir)
+        if not check_bootimage(bootimage, unpack_dir, hashdict):
+            success = False
 
     sys.stdout.write("Checking bootloader...\n")
     for dpath, dname, fnames in os.walk(esp_root):
@@ -114,29 +161,36 @@ def main(argv):
 
             print "Checking", relpath
             h, s = get_hash_and_size_from_file(abspath)
-            adb_shell_command("applypatch -c /mnt/bootloader/%s %s" % (relpath, h))
+
+            devpath = "/bootloader/" + relpath
+            if devpath not in hashdict:
+                print "FAILED: no hash reported for", devpath
+                success = False
+                continue
+
+            if hashdict[devpath] != h:
+                print "FAILED: hash mismatch for", devpath
+                success = False
+                continue
+
+            print devpath,"OK"
 
 
-    sys.stdout.write("Checking system partition..")
-    for zi in tfp.infolist():
-        fn = zi.filename
+    sys.stdout.write("Checking system partition...\n")
+    if "/system" in hashdict:
+        syshash = hash_sparse_ext4_image(unpack_dir, "system.img")
+        if hashdict["/system"] != syshash:
+            print "FAILED: system image hash mismatch"
+            success = False
+        else:
+            print "System image OK"
+    else:
+        print "FAILED: system hash not reported"
+        success = False
 
-        # Skip anything that isn't a regular file
-        if not (zi.external_attr & regfile_attr == regfile_attr):
-            continue
 
-        # skip symlinks
-        if (zi.external_attr & symlink_attr == symlink_attr):
-            continue
-
-        sys.stdout.write(".")
-        sys.stdout.flush()
-        if fn.startswith("SYSTEM/") and not fn.endswith("/"):
-            h, s = get_hash_and_size(tfp, fn)
-            adb_shell_command("applypatch -c /system/%s %s" % (fn[7:], h))
-    print
     if success:
-        print "All tests completed"
+        print "All tests completed successfully"
     else:
         print "OTA Tests FAILED!"
         sys.exit(1)
@@ -146,8 +200,4 @@ if __name__ == '__main__':
     try:
         main(sys.argv[1:])
     finally:
-        adb_shell_command("echo otasums > /sys/power/wake_unlock", True);
-        adb_shell_command("umount /mnt/bootloader", True)
-        adb_shell_command("rm -r /mnt/bootloader", True)
-        adb_shell_command("mount -o remount,ro /", True)
         common.Cleanup()
