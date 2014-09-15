@@ -22,9 +22,9 @@ sleep 1
 wait_for_adb
 
 echo "Copying OTA image $(basename $PACKAGE) to device..."
-adb push $PACKAGE /data/update.zip
+adb push $PACKAGE /data/local/tmp/update.zip
 echo "Setting parameters and rebooting into recovery console..."
 adb shell "mkdir -p /cache/recovery"
-adb shell "echo \"--update_package=/data/update.zip\" > /cache/recovery/command"
+adb shell "echo \"--update_package=/data/local/tmp/update.zip\" > /cache/recovery/command"
 adb shell start pre-recovery
 
