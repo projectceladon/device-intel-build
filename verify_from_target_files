@@ -23,6 +23,9 @@ import intel_common
 
 OPTIONS = common.OPTIONS
 
+_SIMG2IMG = "out/host/linux-x86/bin/simg2img"
+_FASTBOOT = "out/host/linux-x86/bin/fastboot"
+
 def get_hash_and_size_from_file(filename):
     fd = open(filename)
     data = fd.read()
@@ -39,7 +42,7 @@ def hash_sparse_ext4_image(unpack_dir, image_name):
     OPTIONS.tempfiles.append(t.name)
     t.close()
 
-    subprocess.check_call(["simg2img", img_path, t.name])
+    subprocess.check_call([_SIMG2IMG, img_path, t.name])
 
     remain = os.path.getsize(t.name)
     fd = open(t.name)
@@ -124,8 +127,14 @@ def main(argv):
         print __doc__
         sys.exit(1)
 
+    for app in [_SIMG2IMG, _FASTBOOT]:
+        if not os.path.exists(app):
+            print "Can't find", app
+            print "Run lunch and 'm fastboot otatools'"
+            sys.exit(1)
+
     print "Running 'fastboot oem get-hashes'..."
-    fastboot_data = subprocess.check_output(["out/host/linux-x86/bin/fastboot", "oem", "get-hashes"],
+    fastboot_data = subprocess.check_output([_FASTBOOT, "oem", "get-hashes"],
             stderr=subprocess.STDOUT)
     hashdict = process_fastboot_data(fastboot_data)
 
@@ -159,7 +168,6 @@ def main(argv):
             abspath = os.path.join(dpath, fname)
             relpath = os.path.relpath(abspath, esp_root)
 
-            print "Checking", relpath
             h, s = get_hash_and_size_from_file(abspath)
 
             devpath = "/bootloader/" + relpath
