@@ -31,8 +31,6 @@ import tempfile
 import os
 
 _FLASHALL_FILENAME = "flash-all.sh"
-_FLASHBASE_FILENAME = "flash-base.sh"
-_FLASHCI_FILENAME = "flash-ci.sh"
 # chmod (octal) -rwxr-x--x
 _PERMS = 0751
 _FLASH_HEADER = """#!/bin/bash
@@ -57,8 +55,6 @@ set -e
 _FLASH_FOOTER = "\n"
 _FASTBOOT_REBOOT_COMMAND = "reboot-bootloader"
 _WIN_FLASHALL_FILENAME = "flash-all.bat"
-_WIN_FLASHBASE_FILENAME = "flash-base.bat"
-_WIN_FLASHCI_FILENAME = "flash-ci.bat"
 _WIN_FLASH_HEADER = """@ECHO OFF
 :: Copyright 2012 The Android Open Source Project
 ::
@@ -173,18 +169,6 @@ class RebootBootloaderCommand(Command):
         return '{} reboot-bootloader\nping -n {} 127.0.0.1 >nul\n'.format(_WINDOWS_PREAMBLE,
                 self.delay)
 
-class BootCommand(Command):
-    def __init__(self, delay, image):
-        self.delay = delay
-        self.image = path.basename(image)
-
-    def get_linux_command(self):
-        return '{} boot {}\nsleep {}\n'.format(_LINUX_PREAMBLE, self.image, self.delay)
-
-    def get_windows_command(self):
-        return '{} boot {}\nping -n {} 127.0.0.1 >nul\n'.format(_WINDOWS_PREAMBLE,
-                self.image, self.delay)
-
 class FlashCommand(Command):
     def __init__(self, target, image):
         self.target = target
@@ -192,13 +176,6 @@ class FlashCommand(Command):
 
     def get_command(self):
         return "flash {} {}\n".format(self.target, self.image)
-
-class FormatCommand(Command):
-    def __init__(self, partition):
-        self.partition = partition
-
-    def get_command(self):
-        return "format {}\n".format(self.partition)
 
 class UpdateCommand(Command):
     def __init__(self, image, erase):
@@ -210,28 +187,6 @@ class UpdateCommand(Command):
     def get_command(self):
         return "{} update {}\n".format(self.args, self.image)
 
-class OEMCommand(Command):
-    def __init__(self, cmd, delay):
-        self.cmd = cmd
-        self.delay = delay
-
-    def get_linux_command(self):
-        if self.delay:
-            return '{} oem {}\nsleep {}\n'.format(_LINUX_PREAMBLE, self.cmd, self.delay)
-        else:
-            return '{} oem {}\n'.format(_LINUX_PREAMBLE, self.cmd)
-
-
-    def get_windows_command(self):
-        if self.delay:
-            return '{} oem {}\nping -n {} 127.0.0.1 >nul\n'.format(_WINDOWS_PREAMBLE,
-                    self.cmd, self.delay)
-        else:
-            return '{} oem {}\n'.format(_WINDOWS_PREAMBLE, self.cmd)
-
-
-    def get_command(self):
-        return "oem {}\n".format(self.cmd)
 
 def main():
     """Main"""
@@ -240,83 +195,36 @@ def main():
                         help="Product name, e.g. hammerhead")
     parser.add_argument('--release', required=True,
                         help="Release name, e.g. krt16m")
-    parser.add_argument('-b', '--bootloader',
+    parser.add_argument('-b', '--bootloader', required=True,
                         help="Bootloader image for fastboot flash")
-    parser.add_argument('-f', '--fastboot',
-                        help="Fastboot image for fastboot flash")
-    parser.add_argument('-u', '--update-archive',
+    parser.add_argument('-u', '--update-archive', required=True,
                         help="Zipped images for fastboot update")
-    parser.add_argument('-i', '--input', nargs="+",
-                        help="Add additional files to archive, in the format <src>=<dest>")
-    parser.add_argument('-e', '--erase',
-                        action='store_true',
-                        help="Erase userdata/cache")
     parser.add_argument('-s', '--sleeptime',
                         type=int, default=5,
                         help="Sleep in seconds for fastboot reboot, default=5")
     parser.add_argument('-o', '--output',
                         help="Output file for archived factory scripts")
-    parser.add_argument('-g', '--gpt',
-                        help="GPT configuration file")
     parser.add_argument('-r', '--radio',
                         help="Radio image")
-    parser.add_argument('-c', "--sfu-capsule",
-                        help="SFU Capsule update")
-    parser.add_argument('-k', '--unlock',
-                        action="store_true", default=False,
-                        help="Unlock the bootloader before doing anything else")
-    parser.add_argument('-m', '--mbr',
-                        help="MBR boot block")
-    parser.add_argument('-v', '--oemvars',
-                        help="OEM variable configuration file")
     args = parser.parse_args()
 
     commands = []
     files = []
 
     buildprefix = args.product + "-" + args.release + "-"
-    fastboot_fn = buildprefix + "fastboot.img"
     update_fn = buildprefix + "img.zip"
 
-    if args.unlock:
-        commands.append(OEMCommand("unlock", 0))
+    fn = buildprefix + "bootloader"
+    files.append((args.bootloader, fn))
+    commands.append(FlashCommand("bootloader", fn))
 
-    if args.mbr:
-        fn = buildprefix + "mbr.bin"
-        files.append((args.mbr, fn))
-        commands.append(FlashCommand("mbr", fn))
-
-    if args.oemvars:
-        fn = buildprefix + "oemvars.txt"
-        files.append((args.oemvars, fn))
-        commands.append(FlashCommand("oemvars", fn))
-
-    if args.gpt:
-        fn = buildprefix + "gpt.ini"
-        files.append((args.gpt, fn))
-        commands.append(FlashCommand("gpt", fn))
-
-    if args.bootloader:
-        fn = buildprefix + "bootloader"
-        files.append((args.bootloader, fn))
-        commands.append(FlashCommand("bootloader", fn))
+    commands.append(RebootBootloaderCommand(args.sleeptime))
 
     if args.radio:
         fn = buildprefix + "radio.img"
         files.append((args.radio, fn))
         commands.append(FlashCommand("radio", fn))
-        commands.append(FormatCommand("config"))
-
-    if args.fastboot:
-        files.append((args.fastboot, fastboot_fn))
-
-    if args.sfu_capsule:
-        fn = buildprefix + "sfu.fv"
-        files.append((args.sfu_capsule, fn))
-        commands.append(FlashCommand("sfu", fn))
-
-    if not files and not args.update:
-        raise Usage("No flash images provided!")
+        commands.append(RebootBootloaderCommand(args.sleeptime))
 
     # Archive Name
     archive_name = args.output
@@ -325,40 +233,19 @@ def main():
     print "Creating archive: " + archive_name
     tar = TarOpen(archive_name, "w:gz")
 
-    if (args.input):
-        for i in args.input:
-            k, v = i.split("=")
-            files.append((k, buildprefix + v))
     for src_path, dst_path in files:
         print "Archiving " + src_path
         RequireFile(src_path)
         tar.add(src_path, arcname=dst_path)
 
-    # flash-base just sets up the non-AOSP parts of the system
-    AddFlashScript(_FLASHBASE_FILENAME, tar, commands, windows=False)
-    AddFlashScript(_WIN_FLASHBASE_FILENAME, tar, commands, windows=True)
-
     # 'fastboot update' covers the additional AOSP pieces, add this to the
     # command list now
-    if args.update_archive:
-        commands.append(UpdateCommand(update_fn, args.erase))
-        print "Archiving " + args.update_archive
-        RequireFile(args.update_archive)
-        tar.add(args.update_archive, update_fn)
-        AddFlashScript(_FLASHALL_FILENAME, tar, commands, windows=False)
-        AddFlashScript(_WIN_FLASHALL_FILENAME, tar, commands, windows=True)
-
-    # Special script for doing CI tests, boots into new Fastboot image and then
-    # just runs 'fastboot update'; bootloader, GPT, and installed fastboot image
-    # are untouched
-    if args.update_archive and args.fastboot:
-        ci_commands = [
-                BootCommand(args.sleeptime, fastboot_fn),
-                BootCommand(args.sleeptime, fastboot_fn),
-                UpdateCommand(update_fn, args.erase)
-                ]
-        AddFlashScript(_FLASHCI_FILENAME, tar, ci_commands, windows=False)
-        AddFlashScript(_WIN_FLASHCI_FILENAME, tar, ci_commands, windows=True)
+    commands.append(UpdateCommand(update_fn, True))
+    print "Archiving " + args.update_archive
+    RequireFile(args.update_archive)
+    tar.add(args.update_archive, update_fn)
+    AddFlashScript(_FLASHALL_FILENAME, tar, commands, windows=False)
+    AddFlashScript(_WIN_FLASHALL_FILENAME, tar, commands, windows=True)
 
     tar.close()
 
