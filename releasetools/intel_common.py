@@ -148,7 +148,8 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         shutil.rmtree(ramdisk_tmp)
         raise exc
 
-    p2.wait()
+    p1.stdout.close()
+    p2.communicate()
     p1.wait()
     assert p1.returncode == 0, "mkbootfs of fastboot ramdisk failed"
     assert p2.returncode == 0, "minigzip of fastboot ramdisk failed"
