@@ -1,0 +1,135 @@
+#!/usr/bin/env python
+
+"""
+Fix-up the product information in an OTA package to match deployment
+fingerprints for individual devices. The meta-data pre-build, post-build, and
+pre-device fields are adjusted according the fingerprint parameters.
+
+Usage: ota_deployment_fixup <options> <input_ota_zip> <output_file>
+
+  -k  (--package_key) <key pair name>
+      Use the specified key pair to sign the output OTA package.
+  -M  (--pre_fish_name) Optional fish name on prior build.
+  -f  (--fish_name) The fish name that this is build for. 
+  -B  (--brand) <brand>
+  -P  (--product) <product>
+  -D  (--device) <device>
+      Replacement parameters for the brand, product, and device portions of
+      the deployment fingerprints. If a replacement parameter is not specified
+      the existing value is preserved. At least one of these parameters must
+      be specified.
+"""
+
+import sys
+import os
+import zipfile
+import tempfile
+
+if None == os.environ.get('ANDROID_BUILD_TOP'):
+    print "I'm hungry. Feed me lunch."
+    sys.exit(1)
+
+# Android Release Tools
+sys.path.append(os.environ['ANDROID_BUILD_TOP']+"/build/tools/releasetools")
+import common
+
+OPTIONS = common.OPTIONS
+
+def process_metadata(data):
+    lines = data.split("\n")
+    linesout = []
+    fingerprint_new = OPTIONS.brand+'/'+OPTIONS.product+'/'+OPTIONS.device
+    for line in lines:
+        if line == "":
+            linesout.append(line)
+            continue
+        k,v = line.split('=')
+        if k == "pre-build" or k == "post-build":
+            segments = v.split(':')
+            segments[0] = fingerprint_new
+            linesout.append('='.join([k,':'.join(segments)]))
+        elif k == "pre-device":
+            if OPTIONS.device:
+                linesout.append('='.join([k,OPTIONS.device]))
+        else:
+            linesout.append(line)
+    return '\n'.join(linesout)
+
+def process_updater_script(data):
+    lines = data.split("\n")
+    linesout = []
+    if OPTIONS.pre_fish_name:
+        fingerprint_pfx_old = 'intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name
+    fingerprint_pfx = 'intel/'+OPTIONS.fish_name+'/'+OPTIONS.fish_name
+    fingerprint_new = OPTIONS.brand+'/'+OPTIONS.product+'/'+OPTIONS.device
+    for line in lines:
+          if line.startswith('getprop("ro.product.device") =='):
+               linesout.append(line.replace(OPTIONS.fish_name, OPTIONS.device))
+          elif (OPTIONS.pre_fish_name != "") and (fingerprint_pfx_old in line):
+               linesout.append(line.replace(fingerprint_pfx_old, fingerprint_new)) 
+          elif fingerprint_pfx in line:
+               linesout.append(line.replace(fingerprint_pfx, fingerprint_new)) 
+          else:
+               linesout.append(line)
+    return '\n'.join(linesout)
+
+def main(argv):
+    def option_handler(o, a):
+        if o in ("-B", "--brand"):
+            OPTIONS.brand = a
+        elif o in ("-P", "--product"):
+            OPTIONS.product = a
+        elif o in ("-D", "--device"):
+            OPTIONS.device = a
+        elif o in ("-k", "--package_key"):
+            OPTIONS.package_key = a
+        elif o in ("-M", "--pre_fish_name"):
+            OPTIONS.pre_fish_name = a
+        elif o in ("-f", "--fish_name"):
+            OPTIONS.fish_name = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__,
+            extra_opts = "B:P:D:k:M:f:",
+            extra_long_opts = ["brand=","pre_fish_name","fish_name",
+                "product=", "device=", "package_key="],
+            extra_option_handler = option_handler)
+    if not OPTIONS.brand and not OPTIONS.product and not OPTIONS.device \
+           and not OPTIONS.fish_name:
+        print "Missing one of -B, -P, -D, -f"
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    if len(args) != 2:
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    print "Processing", args[0]
+    input_zip = zipfile.ZipFile(args[0], "r")
+    temp_zip = tempfile.NamedTemporaryFile()
+    output_zip = zipfile.ZipFile(temp_zip, "w")
+
+    for zi in input_zip.infolist():
+        if zi.filename == "META-INF/com/android/metadata":
+            output_zip.writestr(zi, process_metadata(input_zip.read(zi)))
+        elif zi.filename == "META-INF/com/google/android/updater-script":
+            output_zip.writestr(zi, process_updater_script(input_zip.read(zi)))
+        else:
+            output_zip.writestr(zi, input_zip.read(zi))
+    output_zip.close()
+
+    passwords = common.GetKeyPasswords([OPTIONS.package_key])
+    common.SignFile(temp_zip.name, args[1], OPTIONS.package_key, passwords[OPTIONS.package_key], whole_file=True)
+
+    print "All done."
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except common.ExternalError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
