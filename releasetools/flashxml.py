@@ -5,12 +5,13 @@ import json
 import copy
 from optparse import OptionParser
 from lxml import etree
+import tempfile
+import StringIO
 
 # main Class to generate xml file from json configuration file
 class FlashFileXml:
 
     def __init__(self, config, platform):
-        self.xmlfile = os.path.join(options.directory, config['filename'])
         self.flist = []
         flashtype = config['flashtype']
         self.xml = etree.Element('flashfile')
@@ -46,7 +47,7 @@ class FlashFileXml:
     def parse_command(self, commands):
         for cmd in commands:
             if 'target' in cmd:
-                fname = os.path.basename(t2f[cmd['target']])
+                fname = cmd['target']
                 shortname = fname.split('.')[0]
                 self.add_file(shortname, fname, 'unspecified')
                 cmd['pftname'] = '$' + shortname.lower() + '_file'
@@ -66,16 +67,17 @@ class FlashFileXml:
             self.add_command(command, desc, params)
 
     def finish(self):
-        print 'writing ', self.xmlfile
-
         tree = etree.ElementTree(self.xml)
-        tree.write(self.xmlfile, xml_declaration=True, encoding="utf-8", pretty_print=True)
+        tf = StringIO.StringIO()
+        tree.write(tf, xml_declaration=True, encoding="utf-8", pretty_print=True)
+        data = tf.getvalue()
+        tf.close()
+        return data
 
 # main Class to generate json file from json configuration file
 class FlashFileJson:
 
-    def __init__(self, filename, config):
-        self.jsonfile = os.path.join(options.directory, filename)
+    def __init__(self, config):
         self.flist = []
 
         self.configurations = config
@@ -95,22 +97,22 @@ class FlashFileJson:
         new = {'type': 'file', 'name': shortname, 'value': filename, 'description': filename}
         self.flash['parameters'][shortname] = new
 
-    def add_command(self, new, restrict):
+    def add_command(self, new, cmd):
 
         new['restrict'] = []
         for cfg_name, cfg in self.configurations.items():
             if cfg['commands'] != self.cmd_grp:
                 continue
-            if restrict and not cfg['subgroup'] in restrict:
+            if not filter_command(cmd, None, None, cfg['subgroup']):
                 continue
             new['restrict'].append(cfg_name)
         if len(new['restrict']):
             self.flash['commands'].append(new)
 
-    def parse_command(self, commands):
+    def parse_command(self, commands, variant, platform):
         for cmd in commands:
             if 'target' in cmd:
-                fname = os.path.basename(t2f[cmd['target']])
+                fname = cmd['target']
                 shortname = fname.split('.')[0].lower()
                 self.add_file(shortname, fname)
                 cmd['pftname'] = '${' + shortname + '}'
@@ -121,9 +123,8 @@ class FlashFileJson:
             new['retry'] = cmd.get('retry', 2)
             new['mandatory'] = cmd.get('mandatory', True)
 
-            if 'variant' in cmd:
-                if not variant in cmd['variant']:
-                    continue
+            if not filter_command(cmd, variant, platform, None):
+                continue
 
             if cmd['type'] == 'fastboot':
                 new['description'] = cmd.get('desc', cmd['args'])
@@ -141,82 +142,54 @@ class FlashFileJson:
                 new['duration'] = new['timeout']
             else:
                 continue
-            self.add_command(new, cmd.get('restrict', None))
+            self.add_command(new, cmd)
 
-    def parse_command_grp(self, cmd_groups):
+    def parse_command_grp(self, cmd_groups, variant, platform):
         for grp in cmd_groups:
             self.cmd_grp = grp
-            commands = [cmd for cmd in cmd_groups[grp] if not 'target' in cmd or cmd['target'] in t2f]
-            self.parse_command(commands)
+            self.parse_command(cmd_groups[grp], variant, platform)
 
     def finish(self):
-        print 'writing ', self.jsonfile
-        self.json = {'flash': self.flash}
-        with open(self.jsonfile, "w") as f:
-            json.dump(self.json, f, indent=4, sort_keys=True)
+        return json.dumps({'flash': self.flash}, indent=4, sort_keys=True)
 
-def parse_config(conf):
+def filter_command(cmd, variant, platform, subgroup):
+    # You can filter-out items by prefixing with !. So cmd["!platform"] matches all platforms
+    # except those in the list
+    for k, v in [('variant', variant), ('restrict', subgroup), ('platform', platform)]:
+        nk = "!" + k
+
+        if not v:
+            continue
+        if k in cmd and v not in cmd[k]:
+            return False
+        if nk in cmd and v in cmd[nk]:
+            return False
+    return True
+
+
+def parse_config(conf, variant, platform):
+    results = []
+
     for c in conf['config']:
+        print "Generating", c['filename']
+
         # Special case for json, because it can have multiple configurations
         if c['filename'][-5:] == '.json':
-            f = FlashFileJson(c['filename'], conf['configurations'])
-            f.parse_command_grp(conf['commands'])
-            f.finish()
+            f = FlashFileJson(conf['configurations'])
+            f.parse_command_grp(conf['commands'], variant, platform)
+            results.append((c['filename'], f.finish()))
             continue
 
         if c['filename'][-4:] == '.xml':
-            f = FlashFileXml(c, options.platform)
+            f = FlashFileXml(c, platform)
         elif c['filename'][-4:] == '.cmd':
             f = FlashFileCmd(c)
 
         commands = conf['commands'][c['commands']]
-        commands = [cmd for cmd in commands if not 'target' in cmd or cmd['target'] in t2f]
-        commands = [cmd for cmd in commands if not 'variant' in cmd or variant in cmd['variant']]
-        commands = [cmd for cmd in commands if not 'restrict' in cmd or c['subgroup'] in cmd['restrict']]
+        commands = [cmd for cmd in commands if
+                filter_command(cmd, variant, platform, c['subgroup'])]
 
         f.parse_command(commands)
-        f.finish()
+        results.append((c['filename'], f.finish()))
+    return results
 
-# dictionnary to translate Makefile "target" name to filename
-def init_t2f_dict():
-    d = {}
-    for l in options.t2f.split():
-        target, fname = l.split(':')
-        if fname == '':
-            print "warning: skip missing target %s" % target
-            continue
-        d[target] = fname
-    return d
-
-def get_env(key, default=None):
-    if key in os.environ:
-        return os.environ[key]
-    return default
-
-def main():
-    global options
-    global t2f
-    global variant
-
-    usage = "usage: %prog [options] flash.xml"
-    description = "Tools to generate flash.xml"
-    parser = OptionParser(usage, description=description)
-    parser.add_option("-p", "--platform", dest="platform", default='default', help="platform refproductname")
-    parser.add_option("-d", "--dir", dest="directory", default='.', help="directory to write generated files")
-    parser.add_option("-t", "--target2file", dest="t2f", default=None, help="dictionary to translate makefile target to filename")
-    (options, args) = parser.parse_args()
-
-    if len(args) != 1:
-        parser.print_help()
-        return
-
-    with open(args[0], 'rb') as f:
-        conf = json.loads(f.read())
-
-    t2f = init_t2f_dict()
-    variant = get_env('TARGET_BUILD_VARIANT', 'eng')
-
-    parse_config(conf)
-
-if __name__ == '__main__':
-    main()
