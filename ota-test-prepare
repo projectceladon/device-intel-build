@@ -64,27 +64,7 @@ function sign_tfp {
 }
 
 function build_provimg {
-    t1=`mktemp tmp.bootloader.XXXXXXXX`
-    t2=`mktemp tmp.img.XXXXXXXX`
-    t3=`mktemp tmp.factory.XXXXXXXXX`
-
-    ./device/intel/build/releasetools/bootloader_from_target_files \
-            --verbose $1 $t1
-
-    ./build/tools/releasetools/img_from_target_files \
-            --verbose $1 $t2
-
-    # FIXME build flashfiles.zip instead!
-    ./device/intel/build/generate_factory_images \
-	    --product $TARGET_PRODUCT --release otatest \
-            --bootloader $t1 \
-            --update-archive $t2 \
-            --sleeptime 45 \
-            --output $t3
-
-    mkdir -p $2
-    tar -C $2 -xf $t3
-    rm -f $t1 $t2 $t3
+    ./device/intel/build/releasetools/flashfiles_from_target_files $1 $2
 }
 
 if [[ -n "$TFP" ]]; then
@@ -94,7 +74,7 @@ if [[ -n "$TFP" ]]; then
     fi
     mkdir -p ota/
     sign_tfp $TFP ota/tfp-${1}.zip
-    build_provimg ota/tfp-${1}.zip ota/factory-A
+    build_provimg ota/tfp-${1}.zip ota/flashfiles-${1}.zip
     ./build/tools/releasetools/ota_from_target_files --block --verbose ota/tfp-${1}.zip ota/ota-${1}.zip
     echo "All done!"
     exit
@@ -159,11 +139,11 @@ fi
 
 echo "Building provisioning media"
 if [[ "$QUICK" != "1" ]]; then
-    build_provimg ota/tfp-A.zip ota/factory-A
-    build_provimg ota/tfp-B.zip ota/factory-B
+    build_provimg ota/tfp-A.zip ota/flashfiles-A.zip
+    build_provimg ota/tfp-B.zip ota/flashfiles-B.zip
 fi
 
-build_provimg ota/tfp-A-testkey.zip ota/factory-A-testkey
+build_provimg ota/tfp-A-testkey.zip ota/flashfiles-A-testkey.zip
 
 popd
 echo "OTA preparations complete!"
