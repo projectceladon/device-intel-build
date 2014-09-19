@@ -26,28 +26,6 @@ PUBLISH_SDK := $(strip $(filter sdk sdk_x86,$(TARGET_PRODUCT)))
 
 ifndef PUBLISH_SDK
 
-
-.PHONY: publish_update_target
-# Can we build our publish_update_target file?
-ifdef INTERNAL_UPDATE_PACKAGE_TARGET
-publish_update_target: publish_mkdir_dest $(INTERNAL_UPDATE_PACKAGE_TARGET)
-	@$(ACP) $(INTERNAL_UPDATE_PACKAGE_TARGET) $(publish_dest)
-else  # !INTERNAL_UPDATE_PACKAGE_TARGET
-publish_update_target:
-	@echo "Warning: Unable to fulfill publish_update_target makefile request"
-endif # !INTERNAL_UPDATE_PACKAGE_TARGET
-
-
-.PHONY: publish_factory_target
-# Can we build our publish_factory_target file?
-ifdef TARGET_BUILD_INTEL_FACTORY_SCRIPTS
-publish_factory_target: publish_mkdir_dest $(FACTORY_SCRIPTS_PACKAGE_TARGET)
-	@$(ACP) $(FACTORY_SCRIPTS_PACKAGE_TARGET) $(publish_dest)
-else  # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
-publish_factory_target:
-	@echo "Warning: Unable to fulfill publish_factory_target makefile request"
-endif # !TARGET_BUILD_INTEL_FACTORY_SCRIPTS
-
 .PHONY: publish_flashfiles
 ifdef INTEL_FACTORY_FLASHFILES_TARGET
 publish_flashfiles: publish_mkdir_dest $(INTEL_FACTORY_FLASHFILES_TARGET)
@@ -60,7 +38,7 @@ endif
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_update_target publish_factory_target publish_flashfiles
+publish_ci: publish_flashfiles
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
