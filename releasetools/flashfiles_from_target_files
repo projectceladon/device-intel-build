@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2008 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import json
+import sys
+import os
+import tempfile
+import zipfile
+import shutil
+import flashxml
+
+# Sources:
+# fastboot - build a Fastboot boot image
+# boot:xxxx - build an AOSP boot image xxxx (either "boot" or "recovery")
+# provdatazip: Pull a named file out of RADIO/flashfiles.zip
+# images - pull a named file out of tfp IMAGES/
+# bootloader - Build a bootloader image
+# bootloaderzip - Pull a named file out of RADIO/bootloader.zip
+
+# Android Release Tools
+sys.path.append("build/tools/releasetools")
+import common
+
+sys.path.append("device/intel/build/releasetools")
+import intel_common
+
+OPTIONS = common.OPTIONS
+
+def getBuildProp(unpack_dir, prop):
+    with open(os.path.join(unpack_dir, "SYSTEM", "build.prop"), "r") as fp:
+        for line in fp.readlines():
+            if line.startswith(prop):
+                return line.split("=")[1].strip()
+    raise Exception("property not found in build.prop: " + prop)
+
+def getFromZip(zip_path, filename):
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        data = zf.open(filename).read()
+    return common.File(filename, data)
+
+
+added_targets = []
+
+def process_image(unpack_dir, dest_zip, source, target):
+    if target in added_targets:
+        return
+
+    print "-- Adding", target
+    if source == "fastboot":
+        ifile = intel_common.GetFastbootImage(unpack_dir)
+    elif source == "bootloader":
+        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir)
+        ifile = common.File(target, bdata)
+    elif source == "images":
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
+    elif source == "provdatazip":
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata.zip"), target)
+    elif source == "bootloaderzip":
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
+    elif source.startswith("boot:"):
+        _, iname = source.split(":")
+        ifile = common.GetBootableImage(target, iname+".img", unpack_dir, iname.upper())
+    else:
+        raise Exception("unknown source image type " + source)
+
+    ifile.name = target
+    ifile.AddToZip(dest_zip)
+    added_targets.append(target)
+
+def main(argv):
+
+    args = common.ParseOptions(argv, __doc__)
+
+    if len(args) != 2:
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    print "Unzipping target-files..."
+    unpack_dir, input_zip = common.UnzipTemp(args[0])
+    OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+
+    print "Reading JSON configuration..."
+    with open(os.path.join(unpack_dir, "RADIO", "flashfiles.json"), "r") as f:
+        conf = json.loads(f.read())
+
+    with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
+        print "Generating XML/JSON flash configuration files..."
+        variant = getBuildProp(unpack_dir, "ro.build.type")
+        platform = getBuildProp(unpack_dir, "ro.product.name")
+        configs = flashxml.parse_config(conf, variant, platform)
+        for fn, data in configs:
+            ifile = common.File(fn, data)
+            ifile.AddToZip(dest_zip)
+
+        print "Adding required binaries..."
+        for config in conf["commands"].values():
+            for command in config:
+                if not flashxml.filter_command(command, variant, platform, None):
+                    continue
+                if "source" in command and "target" in command:
+                    process_image(unpack_dir, dest_zip, command["source"], command["target"])
+
+    print "All done."
+
+
+if __name__ == '__main__':
+    try:
+        common.CloseInheritedPipes()
+        main(sys.argv[1:])
+    except common.ExternalError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
+    finally:
+        common.Cleanup()
+
