@@ -67,11 +67,19 @@ function build_provimg {
     ./device/intel/build/releasetools/flashfiles_from_target_files $1 $2
 }
 
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
+
 if [[ -n "$TFP" ]]; then
     if [[ -z "$1" ]]; then
         echo "No build name provided!"
         exit 1
     fi
+    make -j12 otatools keystore_signer
     mkdir -p ota/
     sign_tfp $TFP ota/tfp-${1}.zip
     build_provimg ota/tfp-${1}.zip ota/flashfiles-${1}.zip
@@ -79,13 +87,6 @@ if [[ -n "$TFP" ]]; then
     echo "All done!"
     exit
 fi
-
-if [ -z "$ANDROID_BUILD_TOP" ]; then
-    echo "Run lunch first!"
-    exit 1
-fi
-
-pushd $ANDROID_BUILD_TOP &> /dev/null
 
 rm -rf ota/
 mkdir ota/
