@@ -35,10 +35,19 @@ publish_flashfiles:
 	@echo "Warning: Unable to fulfill publish_flashfiles makefile request"
 endif
 
+.PHONY: publish_liveimage
+ifdef INTEL_LIVEIMAGE_TARGET
+publish_liveimage: publish_mkdir_dest $(INTEL_LIVEIMAGE_TARGET)
+	@$(ACP) $(INTEL_LIVEIMAGE_TARGET) $(publish_dest)
+else
+publish_liveimage:
+	@echo "Warning: Unable to fulfill publish_liveimage makefile request"
+endif
+
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_flashfiles
+publish_ci: publish_flashfiles publish_liveimage
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
