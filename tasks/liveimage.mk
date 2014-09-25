@@ -1,11 +1,20 @@
+# Determine if we are doing a 'make liveimage'
+LIVEIMAGE_GOAL := $(strip $(filter liveimage,$(MAKECMDGOALS)))
+
+ifeq (liveimage,$(LIVEIMAGE_GOAL))
+name := $(TARGET_PRODUCT)
+ifeq ($(TARGET_BUILD_TYPE),debug)
+  name := $(name)_debug
+endif
+name := $(name)-liveimage-$(FILE_NAME_TAG)
+INTEL_LIVEIMAGE_TARGET := $(PRODUCT_OUT)/$(name).img
+$(call dist-for-goals,liveimage,$(INTEL_LIVEIMAGE_TARGET))
 
 ifeq ($(TARGET_UEFI_ARCH),i386)
 efi_default_name := bootia32.efi
 else
 efi_default_name := bootx64.efi
 endif
-
-liveimage := $(PRODUCT_OUT)/live.img
 
 ramdisk_dir := $(call intermediates-dir-for,PACKAGING,live-ramdisk)
 live_artifact_dir := $(call intermediates-dir-for,PACKAGING,live-image-items)
@@ -88,7 +97,8 @@ endif
 	$(hide) $(ACP) $(BOARD_FIRST_STAGE_LOADER) $(disk_dir)/EFI/BOOT/$(efi_default_name)
 	$(hide) (cd $(disk_dir) && zip -qry ../$(notdir $@) .)
 
-$(liveimage): \
+
+$(INTEL_LIVEIMAGE_TARGET): \
 		device/intel/build/tasks/liveimage.mk \
 		$(liveimage_zip) \
                 $(live_bootimage) \
@@ -101,6 +111,7 @@ $(liveimage): \
                 $@
 
 .PHONY: liveimage
-liveimage: $(liveimage)
+liveimage: $(INTEL_LIVEIMAGE_TARGET)
 	$(warning USE OF THE LIVE IMAGE IS UNSUPPORTED - YOU WILL NEED TO WORK THROUGH BUGS ON YOUR OWN!)
 
+endif # ifeq (liveimage,$(LIVEIMAGE_GOAL))
