@@ -113,13 +113,13 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size
 
 def GetFastbootImage(unpack_dir, info_dict=None):
     """Return a File object 'fastboot.img' with the Fastboot boot image.
-    It will either be fetched from BOOTABLE_IMAGES/fastboot.img or built
+    It will either be fetched from RADIO/fastboot.img or built
     using RADIO/ufb_ramdisk.zip, RADIO/ufb_cmdline, and BOOT/kernel"""
 
     if info_dict is None:
         info_dict = common.OPTIONS.info_dict
 
-    prebuilt_path = os.path.join(unpack_dir, "IMAGES", "fastboot.img")
+    prebuilt_path = os.path.join(unpack_dir, "RADIO", "fastboot.img")
     if (os.path.exists(prebuilt_path)):
         print "using prebuilt fastboot.img"
         return common.File.FromLocalFile("fastboot.img", prebuilt_path)
