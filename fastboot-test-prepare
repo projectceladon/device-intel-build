@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Bail on any errors
+set -e
+
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+
+if [[ -z "$1" ]]; then
+    echo "No target-files-package provided!"
+    exit 1
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
+
+rm -rf fastboot
+mkdir fastboot
+
+cp $1 fastboot/tfp.zip
+
+make clean
+make -j16 fastboot otatools keystore_signer
+
+./build/tools/releasetools/img_from_target_files --verbose fastboot/tfp.zip fastboot/update.zip
+./device/intel/build/releasetools/flashfiles_from_target_files --verbose fastboot/tfp.zip fastboot/flashfiles.zip
+unzip fastboot/flashfiles.zip -d fastboot/
+simg2img fastboot/system.img fastboot/unsparse.img
+./device/intel/build/releasetools/bootloader_from_target_files --bootable --verbose fastboot/tfp.zip fastboot/fastboot-usb.zip
+openssl pkcs8 -nocrypt -inform DER -outform PEM -in device/intel/build/testkeys/oem.pk8 -out fastboot/oem.key
+openssl rsa -pubout -inform PEM -outform DER -in device/intel/build/testkeys/production-test/verity -out fastboot/verity.pub
+keystore_signer fastboot/oem.key fastboot/keystore fastboot/verity.pub
+
+popd
