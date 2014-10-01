@@ -1,0 +1,66 @@
+#!/usr/bin/python
+
+import argparse
+import re
+import string
+
+def guid_string(p):
+    if re.match('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', p) is None:
+        raise argparse.ArgumentTypeError("Argument must be a GUID value")
+    return p
+
+def escaped_value(value):
+    result = ''
+    for char in value:
+        result += "%%%02x" % ord(char)
+    return result
+
+def main():
+    parser = argparse.ArgumentParser(epilog="""Common namespace/variable pairings:
+--global/PK,
+--global/KEK,
+--image-security/db
+""")
+    guid_group = parser.add_mutually_exclusive_group(required=True)
+    guid_group.add_argument('--guid',
+                            dest='namespace_guid',
+                            type=guid_string,
+                            help="namespace GUID of the variables")
+    guid_group.add_argument('--global',
+                            action='store_const',
+                            metavar='namespace-guid',
+                            const="8be4df61-93ca-11d2-aa0d-00e098032b8c",
+                            dest='namespace_guid',
+                            help='variables are in EFI global namespace')
+    guid_group.add_argument('--image-security',
+                            action='store_const',
+                            const="d719b2cb-3d3a-4596-a3bc-dad00e67656f",
+                            dest='namespace_guid',
+                            help='variables are in EFI image security namespace')
+    guid_group.add_argument('--fastboot',
+                            action='store_const',
+                            const="1ac80a82-4f0c-456b-9a99-debeb431fcc1",
+                            dest='namespace_guid',
+                            help='variables are in EFI fastboot namespace')
+    parser.add_argument('--var',
+                        nargs=2,
+                        metavar=('NAME', 'VALUE-FILENAME'),
+                        action='append',
+                        required=True,
+                        help='output variable with specific value')
+    args = parser.parse_args()
+
+    print "GUID = %s" % (args.namespace_guid)
+    print
+    for var in args.var:
+        value_file = open(var[1], "r")
+        value = value_file.read()
+        print "%s @%s" % (var[0], escaped_value(value))
+        print
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print e
