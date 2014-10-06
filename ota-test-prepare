@@ -45,6 +45,13 @@ done
 
 shift $((OPTIND-1))
 
+NUM_CPUS=`grep -c ^processor /proc/cpuinfo`
+if [ -n "`grep -o '^flags\b.*: .*\bht\b' /proc/cpuinfo | tail -1`" ]; then
+    NUM_CPUS=$(($NUM_CPUS / 2))
+fi
+
+export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
+
 function sign_tfp {
     t1=`mktemp tmp.tfp1.XXXXXXXX`
 
@@ -79,7 +86,7 @@ if [[ -n "$TFP" ]]; then
         echo "No build name provided!"
         exit 1
     fi
-    make -j12 otatools keystore_signer
+    make -j$CONCURRENCY_LEVEL otatools keystore_signer
     mkdir -p ota/
     sign_tfp $TFP ota/tfp-${1}.zip
     build_provimg ota/tfp-${1}.zip ota/flashfiles-${1}.zip
@@ -94,7 +101,7 @@ mkdir ota/
 # FIXME how to get the boot images to come out differently?
 
 echo "Building source software version A"
-make -j12 target-files-package otatools keystore_signer &> ota/make-A.log
+make -j$CONCURRENCY_LEVEL target-files-package otatools keystore_signer &> ota/make-A.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
 
 # Not sure why rebuilds of the EFI binaries don't come out exactly the same, probably
@@ -110,7 +117,7 @@ echo "Cleaning source tree"
 make installclean &> /dev/null
 
 echo "Building target software version B"
-make -j12 target-files-package otatools keystore_signer &> ota/make-B.log
+make -j$CONCURRENCY_LEVEL target-files-package otatools keystore_signer &> ota/make-B.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
 
 # Clean up the changed EFI binaries from the rebuild
