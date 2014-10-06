@@ -343,6 +343,7 @@ def main(argv):
         common.Usage(__doc__)
         sys.exit(1)
 
+    output_zip = zipfile.ZipFile(args[1], "w")
 
     print "Extracting bootloader.zip"
     unpack_dir, input_zip = common.UnzipTemp(args[0])
@@ -361,14 +362,17 @@ def main(argv):
     print "Creating Fastboot image"
     if os.path.exists(os.path.join(unpack_dir, "RADIO", "fastboot.img")):
         os.unlink(os.path.join(unpack_dir, "RADIO", "fastboot.img"))
-    fastboot = intel_common.GetFastbootImage(unpack_dir)
+        fastboot = intel_common.GetFastbootImage(unpack_dir)
+    else:
+        fastboot = intel_common.GetFastbootImage(unpack_dir)
+        common.ZipWriteStr(output_zip, "RADIO/fastboot.img", fastboot.data)
 
     print "Building destination target-files-package"
-    output_zip = zipfile.ZipFile(args[1], "w")
-    common.ZipWriteStr(output_zip, "RADIO/fastboot.img", fastboot.data)
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             output_zip.write(output_bz_file, zi.filename)
+        elif zi.filename == "RADIO/fastboot.img":
+            output_zip.writestr(zi, fastboot.data)
         else:
             output_zip.writestr(zi, input_zip.read(zi))
 
