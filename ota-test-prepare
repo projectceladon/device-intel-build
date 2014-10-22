@@ -57,6 +57,7 @@ function sign_tfp {
 
     ./build/tools/releasetools/sign_target_files_apks  \
             --verbose \
+            --replace_ota_keys \
             --replace_verity_public_key $PRODKEYS/verity.pub \
             --replace_verity_private_key $PRODKEYS/verity \
             --default_key_mappings $PRODKEYS $1 $t1
@@ -90,7 +91,9 @@ if [[ -n "$TFP" ]]; then
     mkdir -p ota/
     sign_tfp $TFP ota/tfp-${1}.zip
     build_provimg ota/tfp-${1}.zip ota/flashfiles-${1}.zip
-    ./build/tools/releasetools/ota_from_target_files --block --verbose ota/tfp-${1}.zip ota/ota-${1}.zip
+    ./build/tools/releasetools/ota_from_target_files --block --verbose \
+            --package_key $PRODKEYS/releasekey \
+            ota/tfp-${1}.zip ota/ota-${1}.zip
     echo "All done!"
     exit
 fi
@@ -134,10 +137,13 @@ fi
 echo "Building OTA update packages"
 if [[ "$QUICK" != "1" ]]; then
     ./build/tools/releasetools/ota_from_target_files \
+            --package_key $PRODKEYS/releasekey \
             --block --verbose ota/tfp-A.zip ota/ota-A.zip
     ./build/tools/releasetools/ota_from_target_files \
+            --package_key $PRODKEYS/releasekey \
             --block --verbose ota/tfp-B.zip ota/ota-B.zip
     ./build/tools/releasetools/ota_from_target_files \
+            --package_key $PRODKEYS/releasekey \
             --block --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
 fi
 ./build/tools/releasetools/ota_from_target_files \
