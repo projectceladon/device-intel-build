@@ -13,6 +13,14 @@ KEYSTORE_SIGNER := $(HOST_OUT_EXECUTABLES)/keystore_signer
 OPENSSL := $(HOST_OUT_EXECUTABLES)/openssl$(HOST_EXECUTABLE_SUFFIX)
 SBSIGN := $(HOST_OUT_EXECUTABLES)/sbsign$(HOST_EXECUTABLE_SUFFIX)
 
+# Extra host tools we need built to use our *_from_target_files
+# or sign_target_files_* scripts
+INTEL_OTATOOLS := \
+    $(SBSIGN) \
+    $(KEYSTORE_SIGNER)
+
+otatools: $(INTEL_OTATOOLS)
+
 # FIXME: may be unsafe to omit -no-sse
 TARGET_EFI_GLOBAL_CFLAGS := -ggdb -O3 -fno-stack-protector \
 	-fno-strict-aliasing -fpic \
