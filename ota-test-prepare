@@ -107,14 +107,7 @@ echo "Building source software version A"
 make -j$CONCURRENCY_LEVEL target-files-package otatools &> ota/make-A.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
 
-# Not sure why rebuilds of the EFI binaries don't come out exactly the same, probably
-# embedded date stamps or something. Whatever...
-
-echo "Regenerating UEFI Binaries to create artificial deltas"
-
-pushd hardware/intel/kernelflinger
-./generate-prebuilts.sh &> $ANDROID_BUILD_TOP/ota/kernelflinger.log
-popd
+rm -rf $OUT/obj/EFI
 
 echo "Cleaning source tree"
 make installclean &> /dev/null
@@ -122,11 +115,6 @@ make installclean &> /dev/null
 echo "Building target software version B"
 make -j$CONCURRENCY_LEVEL target-files-package otatools &> ota/make-B.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
-
-# Clean up the changed EFI binaries from the rebuild
-pushd hardware/intel/efi_prebuilts/kernelflinger
-git reset --hard
-popd
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"
