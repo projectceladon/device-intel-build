@@ -133,11 +133,16 @@ if [[ "$QUICK" != "1" ]]; then
     ./build/tools/releasetools/ota_from_target_files \
             --package_key $PRODKEYS/releasekey \
             --block --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
+    ./build/tools/releasetools/ota_from_target_files \
+            --package_key $PRODKEYS/releasekey \
+            --block --verbose -i ota/tfp-B.zip ota/tfp-A.zip ota/ota-B-A.zip
 fi
 ./build/tools/releasetools/ota_from_target_files \
             --block --verbose ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
 ./build/tools/releasetools/ota_from_target_files \
             --block --verbose -i ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
+./build/tools/releasetools/ota_from_target_files \
+            --block --verbose -i ota/tfp-B-testkey.zip ota/tfp-A-testkey.zip ota/ota-B-A-testkey.zip
 
 echo "Building provisioning media"
 if [[ "$QUICK" != "1" ]]; then
