@@ -79,16 +79,14 @@ def main(argv):
         print "--zipfile is required"
         common.Usage(__doc__)
         sys.exit(1)
-    if not OPTIONS.fastboot:
-        print "--fastboot is required"
-        common.Usage(__doc__)
-        sys.exit(1)
 
     tf = tempfile.NamedTemporaryFile()
     tf.write("foo")
     tf.flush()
 
-    extra_files = [(OPTIONS.fastboot, "fastboot.img")]
+    extra_files = []
+    if OPTIONS.fastboot:
+        extra_files.append((OPTIONS.fastboot, "fastboot.img"))
     if OPTIONS.bootable:
         extra_files.append((tf.name, "force_fastboot"))
 
