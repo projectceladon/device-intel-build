@@ -43,8 +43,10 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None):
     bootloader.close()
 
     fastboot = GetFastbootImage(unpack_dir)
-    fastboot_file = fastboot.WriteToTemp()
-    extra_files.append((fastboot_file.name,"fastboot.img"))
+    if fastboot:
+        fastboot_file = fastboot.WriteToTemp()
+        extra_files.append((fastboot_file.name,"fastboot.img"))
+
     if not autosize:
         size = int(open(os.path.join(unpack_dir, "RADIO", "bootloader-size.txt")).read().strip())
     else:
@@ -54,7 +56,6 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None):
     bootloader = open(filename)
     data = bootloader.read()
     bootloader.close()
-    fastboot_file.close()
     os.unlink(filename)
     return data
 
@@ -124,12 +125,16 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         print "using prebuilt fastboot.img"
         return common.File.FromLocalFile("fastboot.img", prebuilt_path)
 
+    ramdisk_path = os.path.join(unpack_dir, "RADIO", "ufb-ramdisk.zip")
+    if not os.path.exists(ramdisk_path):
+        print "no user fastboot image found, assuming efi fastboot"
+        return None
+
     print "building Fastboot image from target_files..."
     ramdisk_img = tempfile.NamedTemporaryFile()
     img = tempfile.NamedTemporaryFile()
 
-    ramdisk_tmp, ramdisk_zip = common.UnzipTemp(
-        os.path.join(unpack_dir, "RADIO", "ufb-ramdisk.zip"))
+    ramdisk_tmp, ramdisk_zip = common.UnzipTemp(ramdisk_path)
 
     cmd1 = ["mkbootfs", ramdisk_tmp]
     try:
