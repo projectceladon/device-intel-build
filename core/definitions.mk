@@ -12,11 +12,15 @@ CLEAR_VARS := $(EFI_BUILD_SYSTEM)/clear_vars.mk
 KEYSTORE_SIGNER := $(HOST_OUT_EXECUTABLES)/keystore_signer
 OPENSSL := $(HOST_OUT_EXECUTABLES)/openssl$(HOST_EXECUTABLE_SUFFIX)
 SBSIGN := $(HOST_OUT_EXECUTABLES)/sbsign$(HOST_EXECUTABLE_SUFFIX)
+MKDOSFS := $(HOST_OUT_EXECUTABLES)/mkdosfs$(HOST_EXECUTABLE_SUFFIX)
+MCOPY := $(HOST_OUT_EXECUTABLES)/mcopy$(HOST_EXECUTABLE_SUFFIX)
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
     $(SBSIGN) \
+    $(MKDOSFS) \
+    $(MCOPY) \
     $(KEYSTORE_SIGNER)
 
 otatools: $(INTEL_OTATOOLS)
