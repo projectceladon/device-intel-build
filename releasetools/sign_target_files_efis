@@ -359,13 +359,14 @@ def main(argv):
     process_bootzip(input_bootzip, output_bootzip, passwords)
     output_bootzip.close()
 
-    print "Creating Fastboot image"
+    print "Creating UserFastboot image if necessary"
     if os.path.exists(os.path.join(unpack_dir, "RADIO", "fastboot.img")):
         os.unlink(os.path.join(unpack_dir, "RADIO", "fastboot.img"))
         fastboot = intel_common.GetFastbootImage(unpack_dir)
     else:
         fastboot = intel_common.GetFastbootImage(unpack_dir)
-        common.ZipWriteStr(output_zip, "RADIO/fastboot.img", fastboot.data)
+        if fastboot:
+            common.ZipWriteStr(output_zip, "RADIO/fastboot.img", fastboot.data)
 
     print "Building destination target-files-package"
     for zi in input_zip.infolist():
