@@ -101,6 +101,8 @@ endif
 $(INTEL_LIVEIMAGE_TARGET): \
 		device/intel/build/tasks/liveimage.mk \
 		$(liveimage_zip) \
+		$(MKDOSFS) \
+		$(MCOPY) \
                 $(live_bootimage) \
 		device/intel/build/bootloader_from_zip \
 
