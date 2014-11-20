@@ -61,10 +61,16 @@ import sys
 import shutil
 import zipfile
 import os
+import os.path
 import shlex
 import tempfile
 import subprocess
 import struct
+from pyasn1.error import PyAsn1Error
+from pyasn1.codec.ber import decoder as ber_decoder
+from pyasn1_modules import rfc5208 as pkcs8
+
+import json
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -87,20 +93,42 @@ OPTIONS.verity_keys = []
 OPTIONS.oem_key = None
 
 
-def to_der_from_priv(priv_path):
-    tf = tempfile.NamedTemporaryFile(prefix="to_der_from_priv")
+def der_pub_from_pem_priv(priv_path):
+    tf = tempfile.NamedTemporaryFile(prefix="der_pub_from_pem_priv")
 
-    cmd = ["openssl", "rsa", "-pubout", "-inform", "PEM", "-outform", "DER",
-        "-in", priv_path, "-out", tf.name]
-    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    p.communicate()
-    assert p.returncode == 0, "verity cert conversion failed"
+    # prefer getting the public key from a cert, if it exists. This is
+    # important for private key files that actually contain references to
+    # ECSS keys, because they do not contain the necessary key material to
+    # compute the public key.
+    (priv_path_root, priv_path_ext) = os.path.splitext(priv_path)
+    if os.path.exists(priv_path_root + OPTIONS.public_key_suffix): #.x509.pem
+        cmd1 = ["openssl", "x509",
+                "-in", priv_path_root + OPTIONS.public_key_suffix,
+                "-noout", "-pubkey"]
+        cmd2 = ["openssl", "rsa",
+                "-inform", "PEM",
+                "-pubin",
+                "-outform", "DER",
+                "-out", tf.name]
+        p1 = common.Run(cmd1, stdout=subprocess.PIPE)
+        p2 = common.Run(cmd2, stdin=p1.stdout)
+        p2.communicate()
+        p1.wait()
+        assert p1.returncode == 0, "extracting verity public key failed"
+        assert p2.returncode == 0, "verity public key conversion failed"
+    else:
+        cmd = ["openssl", "rsa", "-pubout", "-inform", "PEM", "-outform", "DER",
+                "-in", priv_path, "-out", tf.name]
+        p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        p.communicate()
+        assert p.returncode == 0, "verity cert conversion failed"
+
     tf.seek(os.SEEK_SET, 0)
     return tf
 
 
-def to_der(pem_cert_path):
-    tf = tempfile.NamedTemporaryFile(prefix="to_der")
+def pem_cert_to_der_cert(pem_cert_path):
+    tf = tempfile.NamedTemporaryFile(prefix="pem_cert_to_der_cert")
 
     cmd = ["openssl", "x509", "-inform", "PEM", "-outform", "DER",
         "-in", pem_cert_path, "-out", tf.name]
@@ -111,9 +139,17 @@ def to_der(pem_cert_path):
     return tf
 
 
-def to_pem(der_key_path, password=None):
+def pk8_to_pem(der_key_path, password=None, none_on_fail_convert=False):
+    # If the key is already available in converted form, then use that
+    # file. This is important for .pk8 files that actually contain references
+    # to ECSS keys, because they are not fully parseable by openssl.
+    (der_key_path_root,der_key_path_ext) = os.path.splitext(der_key_path)
+    der_key_path_pem = der_key_path_root + ".pem"
+    if os.path.exists(der_key_path_pem):
+        return open(der_key_path_pem)
+
     # Defaults to 0600 permissions which is defintitely what we want!
-    tf = tempfile.NamedTemporaryFile(prefix="to_pem")
+    tf = tempfile.NamedTemporaryFile(prefix="pk8_to_pem")
 
     cmd = ["openssl", "pkcs8"];
     if password:
@@ -127,7 +163,12 @@ def to_pem(der_key_path, password=None):
     if password is not None:
         password += "\n"
     p.communicate(password)
-    assert p.returncode == 0, "openssl key conversion failed"
+    if none_on_fail_convert:
+        if p.returncode != 0:
+            tf.close()
+            return None
+    else:
+        assert p.returncode == 0, "openssl key conversion failed"
     tf.seek(os.SEEK_SET, 0)
     return tf
 
@@ -140,6 +181,43 @@ def is_32bit_efi(data):
     tf.close()
     return "80386" in out
 
+
+def sign_ecss(src_path, dest_path, priv_path, cert_path):
+    signfile_path = os.environ.get('SIGNFILE_PATH')
+    assert signfile_path is not None, "Must set SIGNFILE_PATH environment variable"
+
+    # extract content of private key
+    with open(priv_path, 'rb') as priv_key:
+        key_data = priv_key.read()
+        try:
+            parsed_pk8, remaining = ber_decoder.decode(key_data, asn1Spec = pkcs8.PrivateKeyInfo())
+            params_octets, remaining = ber_decoder.decode(parsed_pk8['privateKey'])
+            params = ("%s" % params_octets).split()
+            assert params[0] == 'ECSS!', "Input private key is not an ECSS reference"
+            params = params[1:]
+        except PyAsn1Error:
+            raise Exception("'%s' does not contain a valid private key." % priv_path)
+
+    # FIXME -- FIXME -- FIXME
+    # This is a hack to re-sign the input file with the testkey so that the
+    # signature is valid before passing it to the ECSS SignFile, which
+    # requires signature to be valid before resigning.
+    # Uncomment -out parameter to SignFile when this hack is removed
+    testpriv = pk8_to_pem("build/target/product/security/testkey.pk8")
+    sign_efi(src_path, dest_path, testpriv.name, "build/target/product/security/testkey.x509.pem")
+    # END FIXME -- END FIXME -- END FIXME
+
+    cmd = [os.path.join(signfile_path, 'SignFile'),
+            '-vv', '-ts',
+            '-ha', 'SHA256']
+    cmd.extend(params)
+    cmd.append('-sb')
+    cmd.append(dest_path)
+    #cmd.append(src_path)
+    #cmd.extend(['-out', dest_path])
+    p = common.Run(cmd)
+    p.wait()
+    assert p.returncode == 0, "SignFile failed: %d" % p.returncode
 
 def sign_efi(src_path, dest_path, priv_path, cert_path):
     cmd = ["sbsign", "--key", priv_path, "--cert", cert_path,
@@ -192,8 +270,8 @@ def get_section_offset(data, name):
 
 
 def generate_keystore(oem_key_pair, verity_keys, password):
-    oem_key_private_pem = to_pem(oem_key_pair + OPTIONS.private_key_suffix, password)
-    verity_keys_der = [to_der_from_priv(i) for i in verity_keys]
+    oem_key_private_pem = pk8_to_pem(oem_key_pair + OPTIONS.private_key_suffix, password)
+    verity_keys_der = [der_pub_from_pem_priv(i) for i in verity_keys]
     tf = tempfile.NamedTemporaryFile(prefix="keystore")
     cmd = ["keystore_signer", oem_key_private_pem.name, tf.name]
     cmd.extend([i.name for i in verity_keys_der])
@@ -217,9 +295,10 @@ def replace_keys(data, oem_key_pair, verity_keys, password):
     oem_keystore_offset = oem_keystore_offset + off
     oem_key_offset = oem_key_offset + off
 
-    oem_key_data_der_file = to_der(oem_key_pair + OPTIONS.public_key_suffix)
+    oem_key_data_der_file = pem_cert_to_der_cert(oem_key_pair + OPTIONS.public_key_suffix)
     oem_key_data = zero_pad(oem_key_data_der_file.read(), oem_key_size)
     oem_key_data_der_file.close()
+
     oem_keystore_data = zero_pad(generate_keystore(oem_key_pair,
                 verity_keys, password), oem_keystore_size)
 
@@ -259,8 +338,9 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
             password = None
             if OPTIONS.key_map[path] in passwords:
                 password = passwords[OPTIONS.key_map[path]]
-            priv = to_pem(OPTIONS.key_map[path] + OPTIONS.private_key_suffix,
-                    password)
+            priv = pk8_to_pem(OPTIONS.key_map[path] + OPTIONS.private_key_suffix,
+                    password=password, none_on_fail_convert=True)
+            print "priv is %s" % priv
 
             in_efi = tempfile.NamedTemporaryFile(prefix="in_efi")
             in_efi.write(data)
@@ -268,10 +348,23 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
 
             out_efi = tempfile.NamedTemporaryFile(prefix="out_efi")
 
-            sign_efi(in_efi.name, out_efi.name, priv.name, cert_path)
+            # If the private key couldn't be converted to PEM, we assume it's
+            # because it's a PKCS #8 blob with an ECSS reference instead of
+            # a raw private key.
+            if priv is None:
+                # The ECSS SignFile utility will create a new inode, so the
+                # output file must be closed and reopened after signing.
+                out_efi_name = out_efi.name;
+                out_efi.close();
+                sign_ecss(in_efi.name, out_efi_name, OPTIONS.key_map[path] + OPTIONS.private_key_suffix, cert_path)
+                common.OPTIONS.tempfiles.append(out_efi_name)
+                out_efi = open(out_efi_name);
+            else:
+                sign_efi(in_efi.name, out_efi.name, priv.name, cert_path)
 
             in_efi.close()
-            priv.close()
+            if priv is not None:
+                priv.close()
             out_efi.seek(os.SEEK_SET, 0)
             data = out_efi.read()
             out_efi.close()

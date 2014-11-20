@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# Bail on any errors
+set -e
+
+# Allow job control
+set -m
+
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+
+while getopts "qst:ed:r:o:" opt; do
+    case $opt in
+        s)
+            set -x
+            ;;
+        t)
+            export TFP=$OPTARG
+            ;;
+        e)
+            # Set path and additional signapk options for use with ECSS key sets
+            export PATH_OPTIONS="--path $ANDROID_BUILD_TOP/out/host/linux-x86/ecss"
+            export ALTERNATE_SIGNAPK_OPTION="--signapk_path framework/signapk_ecss.jar"
+            export EXTRA_SIGNAPK_ARGS="-providerClass com.intel.ecss.jce.provider.IntelECSSProvider"
+            ;;
+        d)
+            export PROD_KEY_DIR=$OPTARG
+            export PACKAGE_KEY_OPTION="-k $PROD_KEY_DIR/releasekey"
+            ;;
+        r)
+            export RELEASE_NAME=$OPTARG
+            ;;
+        o)
+            export OUTPUT_DIR=$OPTARG
+            ;;
+        \?)
+            echo "Usage:"
+            echo
+            echo "  signed_from_target_files [-s] -t <path to TFP zipfile> [-r <release name>][-d <keyset dir>][-p <java path>][-a <alternate signapk>] <build name>"
+            echo "    Use an existing TFP and create a set of deliverables for performing OTA updates and factory provisioning."
+            echo "    The ota/ directory will contain a re-signed TFP, factory archive, and full-image OTA."
+            echo "    The build name identifies the build."
+            echo
+            echo "Valid options:"
+            echo "-s: Show commands being run"
+            echo "-t: Don't do own build; use supplied target-files to create a re-signed release"
+            echo "-p <java path>: Alternate path to find Java tools. Tools are expected to be found in <java path>/framework"
+            echo "-a <alternate signapk>: Alternate signapk.jar to the standard framework/signapk.jar"
+            echo "-d <keyset dir>: Directory containing signing certs and private keys for signing"
+            echo "-r <release name>: Files inside output packages are named using <release name>"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$TFP" ]]; then
+    echo "No target files package specified!"
+    exit 1
+fi
+
+if [[ -z "$1" ]]; then
+    echo "No build name provided!"
+    exit 1
+fi
+
+#${VARIABLE:-default}
+export PROD_KEY_DIR=${PROD_KEY_DIR:-device/intel/build/testkeys/production-test}
+export ANDROID_PW_FILE=$PROD_KEY_DIR/pwfile
+export RELEASE_NAME=${RELEASE_NAME:-signed}
+export OUTPUT_DIR=${OUTPUT_DIR:-`dirname $TFP`}
+
+shift $((OPTIND-1))
+
+function sign_tfp {
+    t1=`mktemp tmp.tfp1.XXXXXXXX`
+
+    ./build/tools/releasetools/sign_target_files_apks  \
+            --verbose $PATH_OPTIONS $ALTERNATE_SIGNAPK_OPTION \
+            --extra_signapk_args "$EXTRA_SIGNAPK_ARGS" \
+            --replace_ota_keys \
+            --replace_verity_public_key $PROD_KEY_DIR/verity_key \
+            --replace_verity_private_key $PROD_KEY_DIR/verity_private_release_key \
+            --default_key_mappings $PROD_KEY_DIR \
+            $1 $t1
+
+    ./device/intel/build/releasetools/sign_target_files_efis \
+            --verbose $PATH_OPTIONS \
+            --oem-key $PROD_KEY_DIR/oem \
+            --oem-keystore $PROD_KEY_DIR/verity_private_release_key \
+            --key-mapping loader.efi=$PROD_KEY_DIR/DB \
+            $t1 $2
+    rm $t1
+}
+
+mkdir -p $OUTPUT_DIR
+sign_tfp $TFP $OUTPUT_DIR/tfp-${1}.zip
+./build/tools/releasetools/ota_from_target_files $PATH_OPTIONS $ALTERNATE_SIGNAPK_OPTION --extra_signapk_args "$EXTRA_SIGNAPK_ARGS" $PACKAGE_KEY_OPTION --block --verbose $OUTPUT_DIR/tfp-${1}.zip $OUTPUT_DIR/ota-${1}.zip
+echo "All done!"
