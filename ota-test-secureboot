@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# #! /bin/sh
 
-# TODO: In OFFICIAL BUILD, need to determine whether its IRDA/GMINL/...
+# TODO: In OFFICIAL BUILD, need to determine whether its IRDA/GMINL/.... Currently its pointing to GMINL.
 # TODO: Add provision to store logcat logs for critical instances.
 # TODO: Sideload test-cases are not covered.
 # TODO: Consider creating configuration file for parameters.
-# TODO: Use mechanical arm for VOL-UP key press and remove this workaround.
 # TODO: Interrupt at different OTA completion %age not in random time intervals.
+# TODO: Use mechanical arm for VOL-UP key press and remove this workaround.
 # TODO: In Official build test-cases, VOL-Up key intervention is required and USB connection loses.
 
 # Commented this, as this is breaking on negative test case execution and 'interrupt_OTA_update' tests when DUT is not detected.
@@ -30,9 +29,12 @@ PASSWORD=$5
 OFFICIAL_REL_SRC_A=$6
 OFFICIAL_REL_DST_B=$((OFFICIAL_REL_SRC_A+1))
 
+ANDROID_SERIAL=$7
+# ISSUE: ANDROID_SERIAL doesn't behave well when PFT UI is open on same machine.
+ANDROID_DEVICEID=$7
+
 BUILD_TARGET=$PRODUCT_NAME-$BUILD_VARIANT
 OFFICIAL_REL_URL=https://mcg-depot.intel.com/artifactory/simple/otc-jf/releases/gmin-l
-
 
 case $1 in
     -q)
@@ -55,7 +57,7 @@ case $1 in
     *)
         echo "Usage:"
         echo
-        echo "  ota-test-secureboot [-q -s -r -o -a] PRODUCT_NAME BUILD_VARIANT IDSID PASSWORD OFFICIAL_REL_SRC_A"
+        echo "  ota-test-secureboot [-q -s -r -o -a] PRODUCT_NAME BUILD_VARIANT IDSID PASSWORD OFFICIAL_REL_SRC_A ANDROID_DEVICEID"
         echo
         echo "    Valid options [-o -q -r -s -a] :"
         echo "      -q: Execute QUICK test cases, requires first two parameters only"
@@ -70,6 +72,7 @@ case $1 in
         echo "      IDSID: Intel's IDSID"
         echo "      PASSWORD: Password associated with IDSID"
         echo "      OFFICIAL_REL_SRC_A: Official release Number like '107' to be used as source, its consecutive release will be used as Destination"
+        echo "      ANDROID_DEVICEID [Optional parameter]: Supply Android DUT Device ID in case multiple devices are connected to Host machine "
         echo
         [[ $PS1 ]]&&return||exit;
         ;;
@@ -78,104 +81,100 @@ esac
 
 ##### Functions
 
-function confirmRecoverySleepNReboot {
-    RecoverySleepLoopCount=1
+function confirmStateSleepNReboot {
+    WaitForDUTStateTOCnt=1
+    if [ "$1" == "fastboot" ]; then COMMAND=fastboot; else COMMAND=adb; fi
     while true
     do
-        if (adb devices | grep recovery) || [ $RecoverySleepLoopCount -eq 20 ]
+        if ($COMMAND -s $ANDROID_DEVICEID devices | grep $1) || [ $WaitForDUTStateTOCnt -eq 200 ]
         then
-            echo 'Entered Recovery Mode'; date; break
+            echo 'Entered '$1' Mode in '`expr $WaitForDUTStateTOCnt \\* 3`' seconds'; date; break
         else
-            echo 'Waiting to enter into Recovery Mode' $((RecoverySleepLoopCount++)); sleep 4
+            echo 'Waiting to enter into '$1' Mode' $((WaitForDUTStateTOCnt++)); sleep 3
         fi
     done
-
-    sleep $1
-
-    if [ "$2" == "reboot" ]
-    then
-        adb reboot
-    fi
+    sleep $2
+    if [ "$3" == "reboot" ]; then $COMMAND -s $ANDROID_DEVICEID reboot; fi
 }
+
 
 function provisionDevice {
     date
     echo 'provisionDevice('$1')'
-    adb reboot dnx
-    sleep 20
+    adb -s $ANDROID_DEVICEID reboot dnx
+    confirmStateSleepNReboot fastboot 2 noReboot
     echo 'Flash Source software A'
     cflasher -f $1 -x flash.xml
     echo 'Wait for UI to reach lock screen'
-    adb wait-for-device
-    adb logcat -v time | grep -e 'Boot has been completed' --max-count=1
-    #adb logcat -v time | grep -e 'HWC_POWER_MODE_OFF' --max-count=1
+    adb -s $ANDROID_DEVICEID wait-for-device
+    adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
+    # If 'Boot has been completed' gives timing trouble, use 'HWC_POWER_MODE_OFF' instead
+    #adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'HWC_POWER_MODE_OFF' --max-count=1
 }
 
 function verify_SW {
     date
     echo 'verify_SW('$1')'
-    adb wait-for-device
+    adb -s $ANDROID_DEVICEID wait-for-device
     echo 'Reboot into fastboot mode'
-    adb reboot fastboot
+    adb -s $ANDROID_DEVICEID reboot fastboot
+    confirmStateSleepNReboot fastboot 2 noReboot
+    # ISSUE: If VOL-UP key is not pressed and timeout happens. DUT boots into normal mode than fastboot mode.
     echo 'Confirm whether update in DUT is done'
     ./device/intel/build/verify_from_target_files $1
     echo 'Boot into normal mode'
-    fastboot reboot
-    adb wait-for-device
-    adb logcat -v time | grep -e 'Boot has been completed' --max-count=1
+    fastboot -s $ANDROID_DEVICEID reboot
+    adb -s $ANDROID_DEVICEID wait-for-device
+    adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
+    batteryLevel=$(adb -s $ANDROID_DEVICEID shell dumpsys battery | grep level | awk '{print ($2)}')
+    if [ $batteryLevel -le 10 ]; then echo Low Battery = $batteryLevel, Charging for 30 minutes; sleep 1800; else echo Battery is $batteryLevel; fi
 }
 
 function interrupt_OTA_update {
     echo 'Waiting for DUT to enter recovery mode'
     echo 'Interrupt/Power-Off DUT at different completion %age during OTA update.'
-#    confirmRecoverySleepNReboot 5 reboot
-    confirmRecoverySleepNReboot 10 reboot
-#    confirmRecoverySleepNReboot 15 reboot
-#    confirmRecoverySleepNReboot 20 reboot
-#    confirmRecoverySleepNReboot 25 reboot
-#    confirmRecoverySleepNReboot 30 reboot
-#    confirmRecoverySleepNReboot 35 reboot
-#    confirmRecoverySleepNReboot 40 reboot
+    #confirmStateSleepNReboot recovery 5 reboot
+    confirmStateSleepNReboot recovery 10 reboot
+    #confirmStateSleepNReboot recovery 15 reboot
+    #confirmStateSleepNReboot recovery 20 reboot
+    #confirmStateSleepNReboot recovery 25 reboot
+    #confirmStateSleepNReboot recovery 30 reboot
+    #confirmStateSleepNReboot recovery 35 reboot
+    #confirmStateSleepNReboot recovery 40 reboot
     echo 'Let OTA update finish which can even take few minutes and boot to UI'
-    adb wait-for-device
-    adb logcat -v time | grep -e 'Boot has been completed' --max-count=1
+    adb -s $ANDROID_DEVICEID wait-for-device
+    adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
 }
 
 ##### MAIN CODE begins
 
 echo 'Make sure BIOS settings are correct'
 echo 'This script will take few hours to execute !!!'
-#sleep 10
 echo 'Setup environment and confirm DUT provisioning before tests execution'
-#pause
 
 echo 'Skip VOL-UP key user inputs using this work-around.'
 cd hardware/intel/kernelflinger/
 if git log | grep -e 'I7993d46f75aa11b7efec032daf3272f4c4011de9' --max-count=1
 then
-echo 'Commit Exists'
+    echo 'Commit Exists'
 else
-git fetch git://android.intel.com/a/bsp/hardware/intel/efi/kernelflinger refs/changes/75/297975/1 && git cherry-pick FETCH_HEAD
+    git fetch git://android.intel.com/a/bsp/hardware/intel/efi/kernelflinger refs/changes/75/297975/1 && git cherry-pick FETCH_HEAD
 fi
 cd -
 
 echo 'Setting Build Environment'
 . build/envsetup.sh
 lunch $BUILD_TARGET
-#make -j12
-#make flashfiles -j12
-#provisionDevice $OUT/$PRODUCT_NAME-flashfiles-eng.$USER.zip
-
 
 if [ "$OTA_TESTS" -eq 7 ]; then
-	echo "ALL OTA Secure boot TESTS : QUICK + STANDARD + OFFICIAL BUILD"
+    echo "ALL OTA Secure boot TESTS : QUICK + STANDARD + OFFICIAL BUILD"
     STRESS_TEST_COUNT=100;
 fi
 
 if [ "$OTA_TESTS" -eq 1 ] || [ "$OTA_TESTS" -eq 7 ]; then
     echo "Test_Q: QUICK OTA Secure boot TESTS"
 
-    rm -rf ota_q ota
+    rm -rf ota_q
     echo 'Test_Q: Create quick test packages : ota-test-prepare -q'
     ./device/intel/build/ota-test-prepare -q
     echo 'Test_Q: Backup quick test packages to another folder to save from overwriting'
@@ -183,24 +182,31 @@ if [ "$OTA_TESTS" -eq 1 ] || [ "$OTA_TESTS" -eq 7 ]; then
 
     echo 'Test_Q: Test update from A->B and DUT will boot with B'
     provisionDevice ota/flashfiles-A-testkey.zip
-    adb shell getprop > ota_q/getprop_A.log
+    adb -s $ANDROID_DEVICEID shell getprop > ota_q/getprop_A.log
     verify_SW ota/tfp-A-testkey.zip
     ./device/intel/build/flash-update ota/ota-A-B-testkey.zip
     interrupt_OTA_update
-    adb shell getprop > ota_q/getprop_B.log
+    adb -s $ANDROID_DEVICEID shell getprop > ota_q/getprop_B.log
     verify_SW ota/tfp-B-testkey.zip
 
     echo 'Test_Q: Test update from B->A'
     ./device/intel/build/flash-update ota/ota-B-A-testkey.zip
     interrupt_OTA_update
-    adb shell getprop > ota_q/getprop_A1.log
+    adb -s $ANDROID_DEVICEID shell getprop > ota_q/getprop_A1.log
     verify_SW ota/tfp-A-testkey.zip
 fi
 
 if [ "$OTA_TESTS" -eq 2 ] || [ "$OTA_TESTS" -eq 7 ]; then
     echo "Test_S: STANDARD OTA Secure boot TESTS"
 
-    rm -rf ota_s ota
+    rm -rf ota_s
+
+    # Provision DUT before starting tests to ensure build/DUT is good.
+    make -j12
+    make flashfiles -j12
+    provisionDevice $OUT/$PRODUCT_NAME-flashfiles-eng.$USER.zip
+    adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A.log
+
     echo 'Test_S: Create standard test packages : ota-test-prepare -s'
     ./device/intel/build/ota-test-prepare -s
     echo 'Test_S: Backup test packages to another folder to save from overwriting'
@@ -208,38 +214,54 @@ if [ "$OTA_TESTS" -eq 2 ] || [ "$OTA_TESTS" -eq 7 ]; then
 
 : <<'COMMENT_LOCAL-TEST_UPDATE-KEY'
     echo 'Test_S: Provision with production keys'
-    fastboot oem unlock
+    fastboot -s $ANDROID_DEVICEID oem unlock
     sleep 10
-    fastboot flash efirun hardware/intel/efi_prebuilts/efitools/linux-x86_64/production-test/LockDownPT.efi
+    fastboot -s $ANDROID_DEVICEID flash efirun hardware/intel/efi_prebuilts/efitools/linux-x86_64/production-test/LockDownPT.efi
     sleep 10
-    fastboot reboot-bootloader
+    fastboot -s $ANDROID_DEVICEID reboot-bootloader
     sleep 10
-    fastboot oem verified
+    fastboot -s $ANDROID_DEVICEID oem verified
     sleep 10
-    fastboot reboot-bootloader
+    fastboot -s $ANDROID_DEVICEID reboot-bootloader
 COMMENT_LOCAL-TEST_UPDATE-KEY
 
     provisionDevice ota/flashfiles-A.zip
-    adb shell getprop > ota_s/getprop_A0.log
+    adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A0.log
     echo 'Test_S: verify provisioned SW with wrong input, negative testcase'
     verify_SW ota/tfp-B-testkey.zip
     echo 'Test_S: verify provisioned SW with correct input'
+    # DOUBT: Which key we should use for verification.
     verify_SW ota/tfp-A.zip
     echo 'Test_S: verify provisioned SW with correct input and interruption'
-    #verify_SW ota/tfp-A.zip
-    # ISSUE: If manual ^C is done, then DUT becomes unresponsive.
-    # TODO: ^C to stop this command and re-issue the same.
+    # ISSUE: DUT becomes unresponsive after executing this test-case.
+: <<'COMMENT_FAILURE_TESTCASE_VERIFY_INTERRUPT'
+    adb reboot fastboot
+    confirmStateSleepNReboot fastboot 2 noReboot
+    ./device/intel/build/verify_from_target_files ota/tfp-A.zip &
+    sleep 5
+    pkill fastboot
+COMMENT_FAILURE_TESTCASE_VERIFY_INTERRUPT
 
     echo 'Test_S: Full image update from A->B'
-    ./device/intel/build/flash-update ota/ota-B.zip
-    interrupt_OTA_update
-    adb shell getprop > ota_s/getprop_B1.log
-    verify_SW ota/tfp-B0.zip
-    echo 'Test_S: Full image update from B->A'
-    #provisionDevice ota/flashfiles-A.zip
+    echo 'Test_S: Negative test case, send same SW which is provisioned.'
     ./device/intel/build/flash-update ota/ota-A.zip
     interrupt_OTA_update
-    adb shell getprop > ota_s/getprop_A1.log
+    # ISSUE: It tries to update the provisioned SW.
+    adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A0.1.log
+    verify_SW ota/tfp-A.zip
+    echo 'Test_S: Provide correct inputs for full image update.'
+    ./device/intel/build/flash-update ota/ota-B.zip
+    interrupt_OTA_update
+    adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_B1.log
+    verify_SW ota/tfp-B.zip
+    # ISSUE: Cannot update back to Software A. Remove comments and below provisioning line after this issue is resolved.
+: <<'COMMENT_FAILURE_TESTCASE_FULL_OTA_ANTIROLLBACK'
+    echo 'Test_S: Full image update from B->A'
+    ./device/intel/build/flash-update ota/ota-A.zip
+    interrupt_OTA_update
+COMMENT_FAILURE_TESTCASE_FULL_OTA_ANTIROLLBACK
+    provisionDevice ota/flashfiles-A.zip
+    adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A1.log
     verify_SW ota/tfp-A.zip
 
     LoopCounter=1
@@ -250,7 +272,7 @@ COMMENT_LOCAL-TEST_UPDATE-KEY
         echo 'Test_R: Update from A->B'
         ./device/intel/build/flash-update ota/ota-A-B.zip
         interrupt_OTA_update
-        adb shell getprop > ota_s/getprop_B$LoopCounter.log
+        adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_B$LoopCounter.log
         verify_SW ota/tfp-B.zip
 
         echo 'Test_R: Update from B->A'
@@ -258,21 +280,22 @@ COMMENT_LOCAL-TEST_UPDATE-KEY
         ./device/intel/build/flash-update ota/ota-A-B.zip
         echo 'Test_R: Wait for device to fail update and reboot into normal mode'
         sleep 15
-        adb wait-for-device
-        adb logcat -v time | grep -e 'Test_R: Boot has been completed' --max-count=1
+        adb -s $ANDROID_DEVICEID wait-for-device
+        adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
         verify_SW ota/tfp-B.zip
         echo 'Test_R: Send correct update package'
         ./device/intel/build/flash-update ota/ota-B-A.zip
         interrupt_OTA_update
-        adb shell getprop > ota_s/getprop_A$LoopCounter.log
+        adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A$LoopCounter.log
         verify_SW ota/tfp-A.zip
     done
+    # ISSUE: adb reboot dnx stops working after exiting the loop.
 fi
 
 if [ "$OTA_TESTS" -eq 4 ] || [ "$OTA_TESTS" -eq 7 ]; then
     echo "OFFICIAL BUILD OTA Secure boot TESTS"
 
-    rm -rf ota_o ota
+    rm -rf ota_o
     echo 'Test_O: Download Official Releases'
     mkdir -p downloadRelease
     cd downloadRelease
@@ -295,43 +318,47 @@ if [ "$OTA_TESTS" -eq 4 ] || [ "$OTA_TESTS" -eq 7 ]; then
 
     echo 'Test_O: Full image update from A->B'
     provisionDevice ota/flashfiles-A.zip
-    adb shell getprop > ota_o/getprop_A.log
+    adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A.log
     ./device/intel/build/flash-update ota/ota-B.zip
     # ISSUE: Enters into recovery screen with options enabled. Signature verification failed.
     # ISSUE: Enters into recovery screen with options enabled. While OTA update in recovery mode, UI was blank.
     # ISSUE: If VOL-UP is not pressed immediately before DUT goes to sleep, OTA process doesn't start on Power-On again.
-    confirmRecoverySleepNReboot 0 noReboot
-    adb wait-for-device
-    adb logcat -v time | grep -e 'Test_O: Boot has been completed' --max-count=1
+    confirmStateSleepNReboot recovery 0 noReboot
+    adb -s $ANDROID_DEVICEID wait-for-device
+    adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
     # TODO: Confirm the verification key input zip file name
-#    verify_SW ota/ota-B.zip
-    adb shell getprop > ota_o/getprop_B.log
+    #verify_SW ota/ota-B.zip
+    adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_B.log
     echo 'Test_O: Full image update from B->A'
     ./device/intel/build/flash-update ota/ota-A.zip
     # ISSUE: Cannot update back to Software A.
-    confirmRecoverySleepNReboot 0 noReboot
-    adb wait-for-device
-    adb logcat -v time | grep -e 'Test_R: Boot has been completed' --max-count=1
-#    verify_SW ota/tfp-A.zip
-    adb shell getprop > ota_o/getprop_A1.log
+    #interrupt_OTA_update
+    confirmStateSleepNReboot recovery 0 noReboot
+    adb -s $ANDROID_DEVICEID wait-for-device
+    adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
+    #verify_SW ota/tfp-A.zip
+    adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A1.log
 
     echo 'Test_O: Update from A->B'
+    # TODO: Remove below lines as SW A already rolled-back so no need to reprovision.
     provisionDevice ota/flashfiles-A.zip
-    adb shell getprop > ota_o/getprop_A2.log
+    adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A2.log
     ./device/intel/build/flash-update ota/ota-A-B.zip
-#    interrupt_OTA_update
-    adb shell getprop > ota_o/getprop_B2.log
+    # Issue: Interrupting OTA is not working.
+    #interrupt_OTA_update
+    adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_B1.log
     verify_SW ota/tfp-B.zip
 
     echo 'Test_O: Update from B->A'
     ./device/intel/build/flash-update ota/ota-B-A.zip
-#    interrupt_OTA_update
-    adb shell getprop > ota_o/getprop_A3.log
+    #interrupt_OTA_update
+    adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A2.log
     verify_SW ota/tfp-A.zip
 fi
 
 rm -rf ota/
 
+echo 'Please manually delete ota_q/ota_s/ota_r folders, if not required.'
 echo 'OTA Secure test cases finished execution'
 
 ##### MAIN CODE ends

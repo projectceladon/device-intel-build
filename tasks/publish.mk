@@ -44,10 +44,33 @@ publish_liveimage:
 	@echo "Warning: Unable to fulfill publish_liveimage makefile request"
 endif
 
+.PHONY: publish_otapackage
+publish_otapackage: publish_mkdir_dest $(INTERNAL_OTA_PACKAGE_TARGET)
+	@$(ACP) $(INTERNAL_OTA_PACKAGE_TARGET) $(publish_dest)
+
+.PHONY: publish_ota_targetfiles
+publish_ota_targetfiles: publish_mkdir_dest $(BUILT_TARGET_FILES_PACKAGE)
+	@$(ACP) $(BUILT_TARGET_FILES_PACKAGE) $(publish_dest)
+
+.PHONY: publish_ota_flashfile
+ifneq ($(PUBLISH_CONF),)
+BUILDBOT_PUBLISH_DEPS := $(shell python -c 'import json,os ; print " ".join(json.loads(os.environ["PUBLISH_CONF"]).get("$(TARGET_BUILD_VARIANT)",[]))')
+
+# Translate buildbot target to makefile target
+publish_ota_flashfile: $(BUILDBOT_PUBLISH_DEPS)
+
+full_ota: publish_otapackage
+full_ota_flashfile:
+ota_target_files: publish_ota_targetfiles
+system_img:
+else
+publish_ota_flashfile:
+	@echo "Do not publish ota_flashfile"
+endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage
+publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
