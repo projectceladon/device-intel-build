@@ -8,23 +8,25 @@ else
     PACKAGE="$1"
 fi
 
+if [ ! "$2" ]; then dutID=$(adb devices | grep -v 'List' | awk '{print ($1)}'); else dutID=$2; fi
+
 function wait_for_adb {
-    while [ -z "$(adb devices | awk 'NR==2{print}')" ]; do
+    while [ -z "$(adb devices | grep $dutID | awk '{print($1)}')" ]; do
         sleep 1
     done
 }
 
-echo "Waiting for device..."
+echo "Waiting for device : $dutID"
 wait_for_adb
 echo "Setting root permissions..."
-adb root
+adb -s $dutID root
 sleep 1
 wait_for_adb
 
 echo "Copying OTA image $(basename $PACKAGE) to device..."
-adb push $PACKAGE /data/local/tmp/update.zip
+adb -s $dutID push $PACKAGE /data/local/tmp/update.zip
 echo "Setting parameters and rebooting into recovery console..."
-adb shell "mkdir -p /cache/recovery"
-adb shell "echo \"--update_package=/data/local/tmp/update.zip\" > /cache/recovery/command"
-adb shell start pre-recovery
+adb -s $dutID shell "mkdir -p /cache/recovery"
+adb -s $dutID shell "echo \"--update_package=/data/local/tmp/update.zip\" > /cache/recovery/command"
+adb -s $dutID shell start pre-recovery
 
