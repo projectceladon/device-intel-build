@@ -79,12 +79,6 @@ $(hide) mkdir -p $(dir $@)
 $(hide) dd ibs=$(strip $1) if=$< of=$@ count=1 conv=sync
 endef
 
-define transform-verity-key-to-cert
-@echo "Verity DER certificate:  $(notdir $@) <= $(notdir $<)"
-$(hide) mkdir -p $(dir $@)
-$(hide) $(OPENSSL) rsa -pubout -inform PEM -outform DER -in $< -out $@
-endef
-
 define transform-o-to-efi-executable
 @echo "target EFI Executable: $(PRIVATE_MODULE) ($@)"
 $(hide) mkdir -p $(dir $@)
