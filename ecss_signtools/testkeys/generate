@@ -72,13 +72,12 @@ make_stuff releasekey OTC_Android_OS_TEST_Release
 make_stuff platform OTC_Android_OS_TEST_Platform
 make_stuff shared OTC_Android_OS_TEST_Shared
 make_stuff media OTC_Android_OS_TEST_Media
-make_stuff verity_private_release_key OTC_Android_OS_TEST_Verity -pem
+make_stuff verity OTC_Android_OS_TEST_Verity
 make_stuff DB OTC_Android_OS_TEST_UEFI_Boot_Signer
-make_stuff oem OTC_Android_OS_TEST_OEM -pem
+make_stuff oem OTC_Android_OS_TEST_OEM
 make_stuff KEK OTC_Android_OS_TEST_UEFI_KEK
 
 # Rename files and convert formats for dm-verity tool compatibility
-mv ${OUTPUT_DIR}/verity_private_release_key.pem ${OUTPUT_DIR}/verity_private_release_key
 ${CONVERTCERT} ${OUTPUT_DIR}/verity_private_release_key.x509.pem ${OUTPUT_DIR}/verity_key
 
 
