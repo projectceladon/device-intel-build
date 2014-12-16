@@ -81,14 +81,14 @@ function sign_tfp {
             --extra_signapk_args "$EXTRA_SIGNAPK_ARGS" \
             --replace_ota_keys \
             --replace_verity_public_key $PROD_KEY_DIR/verity_key \
-            --replace_verity_private_key $PROD_KEY_DIR/verity_private_release_key \
+            --replace_verity_private_key $PROD_KEY_DIR/verity \
             --default_key_mappings $PROD_KEY_DIR \
             $1 $t1
 
     ./device/intel/build/releasetools/sign_target_files_efis \
             --verbose $PATH_OPTIONS \
             --oem-key $PROD_KEY_DIR/oem \
-            --oem-keystore $PROD_KEY_DIR/verity_private_release_key \
+            --oem-keystore $PROD_KEY_DIR/verity \
             --key-mapping loader.efi=$PROD_KEY_DIR/DB \
             $t1 $2
     rm $t1
