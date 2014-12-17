@@ -54,13 +54,17 @@ export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
 
 function sign_tfp {
     t1=`mktemp tmp.tfp1.XXXXXXXX`
+    t2=`mktemp tmp.derkey.XXXXXXXX`
+
+    generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
 
     ./build/tools/releasetools/sign_target_files_apks  \
             --verbose \
             --replace_ota_keys \
-            --replace_verity_public_key $PRODKEYS/verity.pub \
+            --replace_verity_public_key ${t2}.pub \
             --replace_verity_private_key $PRODKEYS/verity \
             --default_key_mappings $PRODKEYS $1 $t1
+    rm ${t2}.pub
 
     ./device/intel/build/releasetools/sign_target_files_efis \
             --verbose \
