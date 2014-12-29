@@ -83,32 +83,50 @@ if [ -z "$ANDROID_BUILD_TOP" ]; then
     echo "Run lunch first!"
     exit 1
 fi
-
-pushd $ANDROID_BUILD_TOP &> /dev/null
-
 if [[ -n "$TFP" ]]; then
     if [[ -z "$1" ]]; then
         echo "No build name provided!"
         exit 1
     fi
-    make -j$CONCURRENCY_LEVEL otatools
-    mkdir -p ota/
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
+mkdir -p ota
+
+make -j$CONCURRENCY_LEVEL otatools
+
+TS=`date +"%s"`
+
+device/intel/build/generate_bios_oemvars \
+        -D $PRODKEYS/DB \
+        -K $PRODKEYS/KEK \
+        -P $PRODKEYS/PK \
+        -T $TS \
+        --unlock ota/unlock-pt.txt ota/oemvars-pt.txt
+
+device/intel/build/generate_bios_oemvars \
+        -D $TESTKEYS/DB \
+        -K $TESTKEYS/KEK \
+        -P $TESTKEYS/PK \
+        -T $TS \
+        --unlock ota/unlock-testkeys.txt ota/oemvars-testkeys.txt
+
+if [[ -n "$TFP" ]]; then
     sign_tfp $TFP ota/tfp-${1}.zip
     build_provimg ota/tfp-${1}.zip ota/flashfiles-${1}.zip
     ./build/tools/releasetools/ota_from_target_files --block --verbose \
             --package_key $PRODKEYS/releasekey \
             ota/tfp-${1}.zip ota/ota-${1}.zip
+
     echo "All done!"
     exit
 fi
 
-rm -rf ota/
-mkdir ota/
 
 # FIXME how to get the boot images to come out differently?
 
 echo "Building source software version A"
-make -j$CONCURRENCY_LEVEL target-files-package otatools &> ota/make-A.log
+make -j$CONCURRENCY_LEVEL target-files-package &> ota/make-A.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
 
 rm -rf $OUT/obj/EFI
@@ -117,7 +135,7 @@ echo "Cleaning source tree"
 make installclean &> /dev/null
 
 echo "Building target software version B"
-make -j$CONCURRENCY_LEVEL target-files-package otatools &> ota/make-B.log
+make -j$CONCURRENCY_LEVEL target-files-package &> ota/make-B.log
 cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
 
 if [[ "$QUICK" != "1" ]]; then
