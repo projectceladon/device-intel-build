@@ -10,10 +10,13 @@ CLEAR_VARS := $(EFI_BUILD_SYSTEM)/clear_vars.mk
 
 # Interesting binaries
 KEYSTORE_SIGNER := $(HOST_OUT_EXECUTABLES)/keystore_signer
+GENERATE_VERITY_KEY := $(HOST_OUT_EXECUTABLES)/generate_verity_key$(HOST_EXECUTABLE_SUFFIX)
 OPENSSL := $(HOST_OUT_EXECUTABLES)/openssl$(HOST_EXECUTABLE_SUFFIX)
 SBSIGN := $(HOST_OUT_EXECUTABLES)/sbsign$(HOST_EXECUTABLE_SUFFIX)
 MKDOSFS := $(HOST_OUT_EXECUTABLES)/mkdosfs$(HOST_EXECUTABLE_SUFFIX)
 MCOPY := $(HOST_OUT_EXECUTABLES)/mcopy$(HOST_EXECUTABLE_SUFFIX)
+SESL :=  $(HOST_OUT_EXECUTABLES)/sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
+CTESL :=  $(HOST_OUT_EXECUTABLES)/cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
@@ -21,7 +24,10 @@ INTEL_OTATOOLS := \
     $(SBSIGN) \
     $(MKDOSFS) \
     $(MCOPY) \
-    $(KEYSTORE_SIGNER)
+    $(KEYSTORE_SIGNER) \
+    $(GENERATE_VERITY_KEY) \
+    $(SESL) \
+    $(CTESL)
 
 otatools: $(INTEL_OTATOOLS)
 
@@ -44,6 +50,7 @@ ifeq ($(TARGET_UEFI_ARCH),x86_64)
 else
     TARGET_EFI_GLOBAL_CFLAGS += -m32
     TARGET_EFI_ARCH_NAME := ia32
+    TARGET_EFI_ASFLAGS := -m32
 endif
 
 TARGET_EFI_GLOBAL_LDFLAGS += -T $(GNU_EFI_BASE)/elf_$(TARGET_EFI_ARCH_NAME)_efi.lds
@@ -77,12 +84,6 @@ define pad-binary
 @echo "Padding to $(strip $1) bytes: $(notdir $@) <= $(notdir $<)"
 $(hide) mkdir -p $(dir $@)
 $(hide) dd ibs=$(strip $1) if=$< of=$@ count=1 conv=sync
-endef
-
-define transform-verity-key-to-cert
-@echo "Verity DER certificate:  $(notdir $@) <= $(notdir $<)"
-$(hide) mkdir -p $(dir $@)
-$(hide) $(OPENSSL) rsa -pubout -inform PEM -outform DER -in $< -out $@
 endef
 
 define transform-o-to-efi-executable

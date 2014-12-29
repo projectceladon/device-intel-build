@@ -38,9 +38,12 @@ Usage: sign_target_files_efiss <options> <input_target_files_zip> <output_file>
       Replace existing EFI binary with one supplied on the command line. Intended
       for situations where we want to use a first stage loader signed by Microsoft.
 
-  -O  (--oem-keystore) <path to new keypair>
-      Replace the OEM keystore inside kernelflinger with the replacement copy.
-      Expects a verity private key created by AOSP generate_verity_key
+  -O  (--oem-keystore) <path to keypair>
+      If used, generates a new OEM keystore with the supplied public key in .x509.pem
+      format. This may be called multiple times to include multiple keys in the
+      keystore.
+      Expects a key pair assuming public key ends with .x509.pem; the private key
+      is not used.
 
   -K  (--oem-key) <path to new keypair>
       Replace the OEM key inside kernelflinger with the replacement copy.
@@ -89,88 +92,8 @@ OPTIONS.first_stage = "loader.efi"
 OPTIONS.kernelflinger = None  # if None, use OPTIONS.first_stage
 OPTIONS.replace = {}
 OPTIONS.all_keys = set()
-OPTIONS.verity_keys = []
+OPTIONS.keystore_certs = []
 OPTIONS.oem_key = None
-
-
-def der_pub_from_pem_priv(priv_path):
-    tf = tempfile.NamedTemporaryFile(prefix="der_pub_from_pem_priv")
-
-    # prefer getting the public key from a cert, if it exists. This is
-    # important for private key files that actually contain references to
-    # ECSS keys, because they do not contain the necessary key material to
-    # compute the public key.
-    (priv_path_root, priv_path_ext) = os.path.splitext(priv_path)
-    if os.path.exists(priv_path_root + OPTIONS.public_key_suffix): #.x509.pem
-        cmd1 = ["openssl", "x509",
-                "-in", priv_path_root + OPTIONS.public_key_suffix,
-                "-noout", "-pubkey"]
-        cmd2 = ["openssl", "rsa",
-                "-inform", "PEM",
-                "-pubin",
-                "-outform", "DER",
-                "-out", tf.name]
-        p1 = common.Run(cmd1, stdout=subprocess.PIPE)
-        p2 = common.Run(cmd2, stdin=p1.stdout)
-        p2.communicate()
-        p1.wait()
-        assert p1.returncode == 0, "extracting verity public key failed"
-        assert p2.returncode == 0, "verity public key conversion failed"
-    else:
-        cmd = ["openssl", "rsa", "-pubout", "-inform", "PEM", "-outform", "DER",
-                "-in", priv_path, "-out", tf.name]
-        p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        p.communicate()
-        assert p.returncode == 0, "verity cert conversion failed"
-
-    tf.seek(os.SEEK_SET, 0)
-    return tf
-
-
-def pem_cert_to_der_cert(pem_cert_path):
-    tf = tempfile.NamedTemporaryFile(prefix="pem_cert_to_der_cert")
-
-    cmd = ["openssl", "x509", "-inform", "PEM", "-outform", "DER",
-        "-in", pem_cert_path, "-out", tf.name]
-    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    p.communicate()
-    assert p.returncode == 0, "openssl cert conversion failed"
-    tf.seek(os.SEEK_SET, 0)
-    return tf
-
-
-def pk8_to_pem(der_key_path, password=None, none_on_fail_convert=False):
-    # If the key is already available in converted form, then use that
-    # file. This is important for .pk8 files that actually contain references
-    # to ECSS keys, because they are not fully parseable by openssl.
-    (der_key_path_root,der_key_path_ext) = os.path.splitext(der_key_path)
-    der_key_path_pem = der_key_path_root + ".pem"
-    if os.path.exists(der_key_path_pem):
-        return open(der_key_path_pem)
-
-    # Defaults to 0600 permissions which is defintitely what we want!
-    tf = tempfile.NamedTemporaryFile(prefix="pk8_to_pem")
-
-    cmd = ["openssl", "pkcs8"];
-    if password:
-        cmd.extend(["-passin", "stdin"])
-    else:
-        cmd.append("-nocrypt")
-
-    cmd.extend(["-inform", "DER", "-outform", "PEM",
-        "-in", der_key_path, "-out", tf.name])
-    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    if password is not None:
-        password += "\n"
-    p.communicate(password)
-    if none_on_fail_convert:
-        if p.returncode != 0:
-            tf.close()
-            return None
-    else:
-        assert p.returncode == 0, "openssl key conversion failed"
-    tf.seek(os.SEEK_SET, 0)
-    return tf
 
 
 def is_32bit_efi(data):
@@ -203,7 +126,7 @@ def sign_ecss(src_path, dest_path, priv_path, cert_path):
     # signature is valid before passing it to the ECSS SignFile, which
     # requires signature to be valid before resigning.
     # Uncomment -out parameter to SignFile when this hack is removed
-    testpriv = pk8_to_pem("build/target/product/security/testkey.pk8")
+    testpriv = intel_common.pk8_to_pem("build/target/product/security/testkey.pk8")
     sign_efi(src_path, dest_path, testpriv.name, "build/target/product/security/testkey.x509.pem")
     # END FIXME -- END FIXME -- END FIXME
 
@@ -269,15 +192,15 @@ def get_section_offset(data, name):
     raise common.ExternalError("Section not found")
 
 
-def generate_keystore(oem_key_pair, verity_keys, password):
-    oem_key_private_pem = pk8_to_pem(oem_key_pair + OPTIONS.private_key_suffix, password)
-    verity_keys_der = [der_pub_from_pem_priv(i) for i in verity_keys]
+def generate_keystore(oem_key_pair, keystore_certs, password):
+    verity_keys_der = [intel_common.der_pub_from_pem_cert(i + OPTIONS.public_key_suffix)
+                       for i in keystore_certs]
     tf = tempfile.NamedTemporaryFile(prefix="keystore")
-    cmd = ["keystore_signer", oem_key_private_pem.name, tf.name]
+    cmd = ["keystore_signer", oem_key_pair + OPTIONS.private_key_suffix,
+            oem_key_pair + OPTIONS.public_key_suffix, tf.name]
     cmd.extend([i.name for i in verity_keys_der])
     p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     p.communicate()
-    oem_key_private_pem.close()
     [i.close() for i in verity_keys_der]
     assert p.returncode == 0, "keystore generation failed"
     tf.seek(os.SEEK_SET, 0)
@@ -286,7 +209,7 @@ def generate_keystore(oem_key_pair, verity_keys, password):
     return data
 
 
-def replace_keys(data, oem_key_pair, verity_keys, password):
+def replace_keys(data, oem_key_pair, keystore_certs, password):
     off = get_section_offset(data, ".oemkeys")
     oem_keystore_table = struct.unpack_from("<IIII", data, off)
     oem_keystore_size, oem_key_size, oem_keystore_offset, oem_key_offset = oem_keystore_table
@@ -295,12 +218,13 @@ def replace_keys(data, oem_key_pair, verity_keys, password):
     oem_keystore_offset = oem_keystore_offset + off
     oem_key_offset = oem_key_offset + off
 
-    oem_key_data_der_file = pem_cert_to_der_cert(oem_key_pair + OPTIONS.public_key_suffix)
+    oem_key_data_der_file = intel_common.pem_cert_to_der_cert(oem_key_pair +
+            OPTIONS.public_key_suffix)
     oem_key_data = zero_pad(oem_key_data_der_file.read(), oem_key_size)
     oem_key_data_der_file.close()
 
     oem_keystore_data = zero_pad(generate_keystore(oem_key_pair,
-                verity_keys, password), oem_keystore_size)
+                keystore_certs, password), oem_keystore_size)
 
     print "OEM key and keystore sizes:", oem_key_size, oem_keystore_size
 
@@ -329,7 +253,7 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
             if OPTIONS.oem_key in passwords:
                 password = passwords[OPTIONS.oem_key]
             data = replace_keys(data, OPTIONS.oem_key,
-                    OPTIONS.verity_keys, password)
+                    OPTIONS.keystore_certs, password)
 
         if path in OPTIONS.key_map:
             print "Re-signing", path
@@ -338,7 +262,7 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
             password = None
             if OPTIONS.key_map[path] in passwords:
                 password = passwords[OPTIONS.key_map[path]]
-            priv = pk8_to_pem(OPTIONS.key_map[path] + OPTIONS.private_key_suffix,
+            priv = intel_common.pk8_to_pem(OPTIONS.key_map[path] + OPTIONS.private_key_suffix,
                     password=password, none_on_fail_convert=True)
             print "priv is %s" % priv
 
@@ -405,7 +329,7 @@ def main(argv):
             OPTIONS.oem_key = a
             OPTIONS.all_keys.add(a)
         elif o in ("-O", "--oem-keystore"):
-            OPTIONS.verity_keys.append(a)
+            OPTIONS.keystore_certs.append(a)
         elif o in ("-L", "--kernelflinger"):
             OPTIONS.kernelflinger = a
         else:
@@ -426,7 +350,7 @@ def main(argv):
     if set(OPTIONS.key_map.keys()) & set(OPTIONS.replace.keys()):
         raise common.ExternalError("The same loaders can't be in --replace and --key_mapping\n")
 
-    if bool(OPTIONS.oem_key) != bool(OPTIONS.verity_keys):
+    if bool(OPTIONS.oem_key) != bool(OPTIONS.keystore_certs):
         raise common.ExternalError("--oem-key and --oem-keystore need to be used together\n");
 
     if OPTIONS.oem_key and OPTIONS.kernelflinger not in OPTIONS.key_map:

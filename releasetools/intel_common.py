@@ -26,6 +26,74 @@ sys.path.append("build/tools/releasetools")
 import common
 
 
+def der_pub_from_pem_cert(cert_path):
+    tf = tempfile.NamedTemporaryFile(prefix="der_pub_from_pem_cert")
+
+    cmd1 = ["openssl", "x509",
+            "-in", cert_path,
+            "-noout", "-pubkey"]
+    cmd2 = ["openssl", "rsa",
+            "-inform", "PEM",
+            "-pubin",
+            "-outform", "DER",
+            "-out", tf.name]
+    p1 = common.Run(cmd1, stdout=subprocess.PIPE)
+    p2 = common.Run(cmd2, stdin=p1.stdout)
+    p2.communicate()
+    p1.wait()
+    assert p1.returncode == 0, "extracting verity public key failed"
+    assert p2.returncode == 0, "verity public key conversion failed"
+
+    tf.seek(os.SEEK_SET, 0)
+    return tf
+
+
+def pem_cert_to_der_cert(pem_cert_path):
+    tf = tempfile.NamedTemporaryFile(prefix="pem_cert_to_der_cert")
+
+    cmd = ["openssl", "x509", "-inform", "PEM", "-outform", "DER",
+        "-in", pem_cert_path, "-out", tf.name]
+    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.communicate()
+    assert p.returncode == 0, "openssl cert conversion failed"
+    tf.seek(os.SEEK_SET, 0)
+    return tf
+
+
+def pk8_to_pem(der_key_path, password=None, none_on_fail_convert=False):
+    # If the key is already available in converted form, then use that
+    # file. This is important for .pk8 files that actually contain references
+    # to ECSS keys, because they are not fully parseable by openssl.
+    (der_key_path_root,der_key_path_ext) = os.path.splitext(der_key_path)
+    der_key_path_pem = der_key_path_root + ".pem"
+    if os.path.exists(der_key_path_pem):
+        return open(der_key_path_pem)
+
+    # Defaults to 0600 permissions which is defintitely what we want!
+    tf = tempfile.NamedTemporaryFile(prefix="pk8_to_pem")
+
+    cmd = ["openssl", "pkcs8"];
+    if password:
+        cmd.extend(["-passin", "stdin"])
+    else:
+        cmd.append("-nocrypt")
+
+    cmd.extend(["-inform", "DER", "-outform", "PEM",
+        "-in", der_key_path, "-out", tf.name])
+    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    if password is not None:
+        password += "\n"
+    p.communicate(password)
+    if none_on_fail_convert:
+        if p.returncode != 0:
+            tf.close()
+            return None
+    else:
+        assert p.returncode == 0, "openssl key conversion failed"
+    tf.seek(os.SEEK_SET, 0)
+    return tf
+
+
 def WriteFileToDest(img, dest):
     """Write common.File to destination"""
     fid = open(dest, 'w')
@@ -193,7 +261,9 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     signing_key = info_dict.get("verity_key")
     if info_dict.get("verity") == "true" and signing_key:
             boot_signer = os.getenv('BOOT_SIGNER') or "boot_signer"
-            cmd = [boot_signer, "/fastboot", img.name, signing_key, img.name];
+            cmd = [boot_signer, "/fastboot", img.name,
+                    signing_key + common.OPTIONS.private_key_suffix,
+                    signing_key + common.OPTIONS.public_key_suffix, img.name];
             try:
                 p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             except Exception as exc:
