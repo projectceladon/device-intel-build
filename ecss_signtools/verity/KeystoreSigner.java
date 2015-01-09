@@ -192,12 +192,12 @@ class BootKeystore extends ASN1Object
         } else {
             // Start Intel addition to enable specifying a provider class using
             // the same parameter form as signapk. The style is copied directly
-		    // from original version at system/extras/verity/BootSignature.java.
-		    int argStart = 0;
-		    if (args[0].equals("-providerClass")) {
-		        Utils.loadProviderIfNecessary(args[1]);
-		        argStart += 2;
-		    }
+            // from original version at system/extras/verity/BootSignature.java.
+            int argStart = 0;
+            if (args[0].equals("-providerClass")) {
+                Utils.loadProviderIfNecessary(args[1]);
+                argStart += 2;
+            }
             String privkeyFname = args[argStart + 0];
             String certFname = args[argStart + 1];
             String outfileFname = args[argStart + 2];
@@ -207,7 +207,7 @@ class BootKeystore extends ASN1Object
             for (int i = argStart + 3; i < args.length; i++) {
                 ks.addPublicKey(Utils.read(args[i]));
             }
-		    // End of Intel changes
+            // End of Intel changes
 
             ks.sign(Utils.loadDERPrivateKeyFromFile(privkeyFname));
             Utils.write(ks.getEncoded(), outfileFname);
