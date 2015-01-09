@@ -8,19 +8,8 @@ host-ecss-tools: \
 		$(HOST_ECSS_OUT_EXECUTABLES)/verity_signer \
 		$(HOST_ECSS_OUT_EXECUTABLES)/boot_signer \
 		$(HOST_ECSS_OUT_EXECUTABLES)/keystore_signer \
-		$(HOST_ECSS_OUT_EXECUTABLES)/cert_to_verity_public \
 		$(HOST_ECSS_OUT_JAVA_LIBRARIES)/makepk8_ecss.jar \
 		$(HOST_ECSS_OUT_JAVA_LIBRARIES)/dumpkey.jar
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := cert_to_verity_public
-LOCAL_SRC_FILES := verity/cert_to_verity_public.c
-LOCAL_MODULE_CLASS := EXECUTABLES
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_PATH := $(HOST_ECSS_OUT_EXECUTABLES)
-LOCAL_SHARED_LIBRARIES := libcrypto-host
-LOCAL_C_INCLUDES += external/openssl/include
-include $(BUILD_HOST_EXECUTABLE)
 
 # JCE provider that redirects to the Intel Enterprise Code Signing System
 # (ECSS) instead of local software crypto.
