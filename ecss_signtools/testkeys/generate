@@ -14,7 +14,7 @@
 MAKEPK8_JAR="${ANDROID_BUILD_TOP}/out/host/linux-x86/ecss/framework/makepk8_ecss.jar"
 MAKEPK8="java -jar ${MAKEPK8_JAR}"
 SIGNFILE=~/ecss/SignFile
-CONVERTCERT="${ANDROID_BUILD_TOP}/out/host/linux-x86/ecss/bin/cert_to_verity_public"
+CONVERTCERT="${ANDROID_BUILD_TOP}/out/host/linux-x86/bin/generate_verity_key -convert"
 AUTH_FILE=~/ecss/dpd-signing-ssl-combined.pem
 OUTPUT_DIR=`dirname "$0"`
 SERVER_URL="https://codesign-svc.intel.com/CertificateService31/Main.asmx"
@@ -78,6 +78,6 @@ make_stuff oem OTC_Android_OS_TEST_OEM
 make_stuff KEK OTC_Android_OS_TEST_UEFI_KEK
 
 # Rename files and convert formats for dm-verity tool compatibility
-${CONVERTCERT} ${OUTPUT_DIR}/verity_private_release_key.x509.pem ${OUTPUT_DIR}/verity_key
+${CONVERTCERT} ${OUTPUT_DIR}/verity.x509.pem ${OUTPUT_DIR}/verity_key
 
 

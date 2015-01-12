@@ -53,7 +53,7 @@ else
     TARGET_EFI_ASFLAGS := -m32
 endif
 
-TARGET_EFI_GLOBAL_LDFLAGS += -T $(GNU_EFI_BASE)/elf_$(TARGET_EFI_ARCH_NAME)_efi.lds
+TARGET_EFI_GLOBAL_LDFLAGS += -T $(EFI_BUILD_SYSTEM)/elf_$(TARGET_EFI_ARCH_NAME)_efi.lds
 TARGET_EFI_GLOBAL_OBJCOPY_FLAGS := \
 	-j .text -j .sdata -j .data \
 	-j .dynamic -j .dynsym  -j .rel \
