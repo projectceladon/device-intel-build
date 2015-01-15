@@ -84,7 +84,8 @@ class FlashFileJson:
         out_cfg = copy.deepcopy(config)
         for cfg_name, cfg in out_cfg.items():
             cfg.pop('commands')
-            cfg.pop('subgroup')
+            if 'subgroup' in cfg:
+                cfg.pop('subgroup')
             cfg['name'] = cfg_name
 
         self.flash = {'version': '2.0', 'osplatform': 'android',
@@ -103,7 +104,7 @@ class FlashFileJson:
         for cfg_name, cfg in self.configurations.items():
             if cfg['commands'] != self.cmd_grp:
                 continue
-            if not filter_command(cmd, None, None, cfg['subgroup']):
+            if not filter_command(cmd, None, None, cfg.get('subgroup', 'default')):
                 continue
             new['restrict'].append(cfg_name)
         if len(new['restrict']):
@@ -124,6 +125,8 @@ class FlashFileJson:
             new['timeout'] = cmd.get('timeout', 60000)
             new['retry'] = cmd.get('retry', 2)
             new['mandatory'] = cmd.get('mandatory', True)
+            if 'group' in cmd:
+                new['group'] = cmd['group']
 
             if not filter_command(cmd, variant, platform, None):
                 continue
@@ -150,6 +153,9 @@ class FlashFileJson:
         for grp in cmd_groups:
             self.cmd_grp = grp
             self.parse_command(cmd_groups[grp], variant, platform)
+
+    def add_groups(self, groups):
+        self.flash['groups'] = groups
 
     def finish(self):
         return json.dumps({'flash': self.flash}, indent=4, sort_keys=True)
@@ -179,6 +185,8 @@ def parse_config(conf, variant, platform):
         if c['filename'][-5:] == '.json':
             f = FlashFileJson(conf['configurations'])
             f.parse_command_grp(conf['commands'], variant, platform)
+            if 'groups' in conf:
+                f.add_groups(conf['groups'])
             results.append((c['filename'], f.finish()))
             continue
 
