@@ -24,7 +24,7 @@ make clean
 make -j16 fastboot otatools keystore_signer
 
 ./build/tools/releasetools/img_from_target_files --verbose fastboot/tfp.zip fastboot/update.zip
-./device/intel/build/releasetools/flashfiles_from_target_files --verbose fastboot/tfp.zip fastboot/flashfiles.zip
+./device/intel/build/releasetools/flashfiles_from_target_files --verbose -x $2 -x $3 fastboot/tfp.zip fastboot/flashfiles.zip
 unzip fastboot/flashfiles.zip -d fastboot/
 simg2img fastboot/system.img fastboot/unsparse.img
 ./device/intel/build/releasetools/bootloader_from_target_files --bootable --verbose fastboot/tfp.zip fastboot/fastboot-usb.zip
