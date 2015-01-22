@@ -111,6 +111,8 @@ class FlashFileJson:
 
     def parse_command(self, commands, variant, platform):
         for cmd in commands:
+            if not filter_command(cmd, variant, platform, None):
+                continue
             if 'target' in cmd:
                 fname = cmd['target']
                 shortname = fname.split('.')[0].lower()
