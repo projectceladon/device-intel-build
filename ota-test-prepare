@@ -64,7 +64,7 @@ function sign_tfp {
             --replace_verity_public_key ${t2}.pub \
             --replace_verity_private_key $PRODKEYS/verity \
             --default_key_mappings $PRODKEYS $1 $t1
-    rm ${t2}.pub
+    rm -f ${t2}.pub $t2
 
     ./device/intel/build/releasetools/sign_target_files_efis \
             --verbose \
