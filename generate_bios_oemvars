@@ -87,7 +87,7 @@ def get_auth_data(timestamp, sign_pair, password, pem_cert, guid_str, name):
     pem_key = intel_common.pk8_to_pem(sign_pair + OPTIONS.private_key_suffix, password)
 
     tf = tempfile.NamedTemporaryFile(prefix="auth_file-"+name+"-")
-    cmd = ["sign-efi-sig-list", "-t", str(timestamp), "-c", sign_pair + OPTIONS.public_key_suffix,
+    cmd = ["sign-efi-sig-list", "-t", time.ctime(timestamp), "-c", sign_pair + OPTIONS.public_key_suffix,
             "-k", pem_key.name, name, esl.name, tf.name]
     p = common.Run(cmd)
     p.communicate()
