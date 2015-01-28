@@ -78,7 +78,7 @@ def process_image(unpack_dir, dest_zip, source, target):
     if source == "fastboot":
         ifile = intel_common.GetFastbootImage(unpack_dir)
     elif source == "bootloader":
-        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir)
+        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, device_capsule=OPTIONS.device)
         ifile = common.File(target, bdata)
     elif source == "images":
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
