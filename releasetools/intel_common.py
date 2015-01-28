@@ -102,9 +102,19 @@ def WriteFileToDest(img, dest):
     fid.close()
 
 
-def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None):
+def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, device_capsule=None):
     if extra_files == None:
         extra_files = []
+
+    if device_capsule:
+        provdata, provdata_zip = common.UnzipTemp(os.path.join(unpack_dir,
+                "RADIO", "provdata_" + device_capsule +".zip"))
+        cap_path = os.path.join(provdata,"capsule.fv")
+        if os.path.exists(cap_path):
+            extra_files.append((cap_path, "capsules/current.fv"))
+            extra_files.append((cap_path, "BIOSUPDATE.fv"))
+        else:
+            print "No capsule.fv found in provdata_" + device_capsule + ".zip"
 
     bootloader = tempfile.NamedTemporaryFile(delete=False)
     filename = bootloader.name
