@@ -140,9 +140,11 @@ def main(argv):
                     process_image(unpack_dir, dest_zip, command["source"], command["target"])
         # Add additionnal files to the .zip if required in flashfiles.json
         if "files" in conf:
-            for myFile in conf["files"].values():
-                if "source" in myFile and "target" in myFile:
-                    process_image(unpack_dir, dest_zip, myFile["source"], myFile["target"])
+            for f in conf["files"].values():
+                if "source" in f and "target" in f:
+                    if not isinstance(f["target"], list):
+                        f["target"] = [f["target"]]
+                    process_image(unpack_dir, dest_zip, f["source"], f["target"])
     print "All done."
 
 
