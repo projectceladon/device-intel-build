@@ -108,14 +108,14 @@ def main(argv):
     def option_handler(o, a):
         if o in ("-d", "--device"):
             OPTIONS.device = a
-        elif o in ("-p", "--file-path"):
+        elif o in ("-P", "--file-path"):
             OPTIONS.file_path = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "d:p:",
+            extra_opts = "d:P:",
             extra_long_opts = ["device=", "file-path="],
             extra_option_handler = option_handler)
 
