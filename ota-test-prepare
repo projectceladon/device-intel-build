@@ -26,8 +26,9 @@ export NO_LOGS=
 export NO_BUILD_OTATOOLS=
 export TFP=
 export QUICK=
+export SKIP_TFPS=
 
-while getopts "qst:d:jlo" opt; do
+while getopts "qst:d:jlok" opt; do
     case $opt in
         s)
             set -x
@@ -50,6 +51,9 @@ while getopts "qst:d:jlo" opt; do
         o)
             export NO_BUILD_OTATOOLS=YES
             ;;
+        k)
+            export SKIP_TFPS=YES
+            ;;
         \?)
             echo "Usage:"
             echo
@@ -71,6 +75,7 @@ while getopts "qst:d:jlo" opt; do
             echo "-j: Build output images in parallel (SSD recommended)"
             echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
             echo "-o: skip building otatools, assume they are there"
+            echo "-k: skip building target files packages, use ones already in ota/"
             exit 1
             ;;
     esac
@@ -142,7 +147,7 @@ function build_ota {
             $EXTRA_ARGS $1 $t1
         ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
             --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
-            $EXTRA_ARGS $t1 $2
+            --irda_variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $t1 $2
         rm -f $t1
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
@@ -164,6 +169,7 @@ function build_inc_ota {
             $EXTRA_ARGS --incremental_from $1 $2 $t1
         ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
             --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
+            --irda_variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
             $EXTRA_ARGS $t1 $3
         rm -f $t1
     else
@@ -250,19 +256,23 @@ if [[ -n "$TFP" ]]; then
     exit
 fi
 
-echo "Building source software version A"
-log_to make-A.log make -j$CONCURRENCY_LEVEL target-files-package
-cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-A-testkey.zip
+if [[ -z "$SKIP_TFPS" ]]; then
+    echo "Building source software version A"
+    log_to make-A.log make -j$CONCURRENCY_LEVEL target-files-package
+    cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
+            ota/tfp-A-testkey.zip
 
-# Force EFI binaries to be rebuilt
-rm -rf $OUT/obj/EFI
+    # Force EFI binaries to be rebuilt
+    rm -rf $OUT/obj/EFI
 
-echo "Cleaning source tree"
-make installclean &> /dev/null
+    echo "Cleaning source tree"
+    make installclean &> /dev/null
 
-echo "Building target software version B"
-log_to make-B.log make -j$CONCURRENCY_LEVEL target-files-package
-cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip ota/tfp-B-testkey.zip
+    echo "Building target software version B"
+    log_to make-B.log make -j$CONCURRENCY_LEVEL target-files-package
+    cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
+            ota/tfp-B-testkey.zip
+fi
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"

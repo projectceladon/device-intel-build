@@ -12,7 +12,15 @@ Usage: ota_deployment_fixup <options> <input_ota_zip> <output_file>
       Defaults to AOSP testkey.
   -M  (--pre_fish_name) Optional fish name on prior build.
 
-  -f  (--fish_name) The fish name that this is build for. 
+  -V  (--irda_variant) Name of the IRDA variant as expressed in the
+      board configuration FLASHFILES_VARIANTS. Required.
+  -T  (--target_files) Path to target files package used to create
+      the supplied OTA update zip. Required.
+  -S  (--source_target_files) If the OTA is incremental, path to
+      source TFP used to create the supplied OTA (the --incremental_from
+      argument to ota_from_target_files)
+
+  -f  (--fish_name) The fish name that this is built for
   -B  (--brand) <brand>
   -P  (--product) <product>
   -D  (--device) <device>
@@ -33,6 +41,11 @@ if None == os.environ.get('ANDROID_BUILD_TOP'):
 # Android Release Tools
 sys.path.append(os.environ['ANDROID_BUILD_TOP']+"/build/tools/releasetools")
 import common
+import edify_generator
+
+sys.path.append(os.environ['ANDROID_BUILD_TOP']+"/device/intel/build/releasetools")
+import intel_common
+import multiprocessing
 
 OPTIONS = common.OPTIONS
 OPTIONS.pre_fish_name = None
@@ -40,11 +53,19 @@ OPTIONS.brand = None
 OPTIONS.device = None
 OPTIONS.product = None
 OPTIONS.fish_name = None
+OPTIONS.tfp = None
+OPTIONS.source_tfp = None
+OPTIONS.incremental = False
+OPTIONS.variant = False
 
 # TODO: fetch default for this out default_system_dev_certificate in the TFP
 # once a TFP is a required argument
 OPTIONS.package_key = os.path.join(os.environ['ANDROID_BUILD_TOP'],
         "build/target/product/security/testkey")
+
+verify_end_str = "---- start making changes here ----"
+
+OPTIONS.worker_threads = multiprocessing.cpu_count()
 
 def process_metadata(data):
     lines = data.split("\n")
@@ -77,12 +98,69 @@ def process_updater_script(data):
           if line.startswith('getprop("ro.product.device") =='):
                linesout.append(line.replace(OPTIONS.fish_name, OPTIONS.device))
           elif OPTIONS.pre_fish_name and (fingerprint_pfx_old in line):
-               linesout.append(line.replace(fingerprint_pfx_old, fingerprint_new)) 
+               linesout.append(line.replace(fingerprint_pfx_old, fingerprint_new))
           elif fingerprint_pfx in line:
-               linesout.append(line.replace(fingerprint_pfx, fingerprint_new)) 
+               linesout.append(line.replace(fingerprint_pfx, fingerprint_new))
           else:
                linesout.append(line)
     return '\n'.join(linesout)
+
+
+def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
+        output_zip, script_data):
+    print "Computing new bootloader patches..."
+    output_files, delete_files, patch_list, verbatim_targets = \
+            intel_common.ComputeBootloaderPatch(source_tfp_dir,
+                                                target_tfp_dir,
+                                                variant=OPTIONS.variant,
+                                                existing_ota_dir=ota_dir)
+    for f in output_files:
+        print "Adding",f.name
+        f.AddToZip(output_zip)
+
+    # This script needs to be inserted into the main script at the
+    # end of VerifyEnd section
+    vscript = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
+
+    for fn, tf, sf, size in patch_list:
+        vscript.PatchCheck("/"+fn, tf.sha1, sf.sha1)
+    vscript = vscript.script
+
+    # This script needs to be inserted into the main script at the
+    # beginning of InstallEnd section
+    script = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
+
+    if delete_files:
+        script.Print("Removing unnecessary firmware files...")
+        script.DeleteFiles(delete_files)
+
+    if patch_list:
+        script.Print("Patching firmware files...")
+        for item in patch_list:
+            fn, tf, sf, size = item
+            script.ApplyPatch("/"+fn, "-", tf.size, tf.sha1, sf.sha1, "patch/"+fn+".p")
+
+    if verbatim_targets:
+        script.Print("Adding firmware files...")
+        script.UnpackPackageDir("bootloader", "/bootloader")
+    script = script.script
+
+    lines = script_data.split("\n")
+    for i in range(len(lines)):
+        if verify_end_str in lines[i]:
+            verify_index = i
+            break
+
+    # All lines up to the verification line
+    lines1 = lines[:verify_index]
+    # The verification line
+    vline = [lines[verify_index]]
+    # All lines after the verification line
+    lines2 = lines[(verify_index + 1):]
+
+    newlines = lines1 + vscript + vline + script + lines2;
+    return "\n".join(newlines)
+
 
 def main(argv):
     def option_handler(o, a):
@@ -98,35 +176,61 @@ def main(argv):
             OPTIONS.pre_fish_name = a
         elif o in ("-f", "--fish_name"):
             OPTIONS.fish_name = a
+        elif o in ("-T", "--target_files"):
+            OPTIONS.tfp = a
+        elif o in ("-S", "--source_target_files"):
+            OPTIONS.source_tfp = a
+            OPTIONS.incremental = True
+        elif o in ("-V", "--irda_variant"):
+            OPTIONS.variant = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "B:P:D:k:M:f:",
+            extra_opts = "B:P:D:k:M:f:T:S:V:",
             extra_long_opts = ["brand=","pre_fish_name=","fish_name=",
-                "product=", "device=", "package_key="],
+                "product=", "device=", "package_key=", "target_files=",
+                "source_target_files=", "irda_variant="],
             extra_option_handler = option_handler)
     if not OPTIONS.brand or not OPTIONS.product or not OPTIONS.device \
-           or not OPTIONS.fish_name:
-        print "Missing one of -B, -P, -D, -f"
+           or not OPTIONS.fish_name or not OPTIONS.variant or not OPTIONS.tfp:
+        print "Missing one of -B, -P, -D, -f, -V, -T"
         common.Usage(__doc__)
         sys.exit(1)
+
+    # TODO would be nice to analyze the OTA package to determine whether it is
+    # a full image or incremental update and require or reject -S accordingly
 
     if len(args) != 2:
         common.Usage(__doc__)
         sys.exit(1)
 
-    print "Processing", args[0]
-    input_zip = zipfile.ZipFile(args[0], "r")
+    print "Decompressing OTA update", args[0]
+    input_dir, input_zip = common.UnzipTemp(args[0])
     temp_zip = tempfile.NamedTemporaryFile()
     output_zip = zipfile.ZipFile(temp_zip, "w")
 
+    print "Decompressing target-files-packages..."
+    tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp)
+    if OPTIONS.incremental:
+        source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp)
+
+    print "Processing OTA update contents.."
     for zi in input_zip.infolist():
         if zi.filename == "META-INF/com/android/metadata":
             output_zip.writestr(zi, process_metadata(input_zip.read(zi)))
         elif zi.filename == "META-INF/com/google/android/updater-script":
-            output_zip.writestr(zi, process_updater_script(input_zip.read(zi)))
+            sdata = input_zip.read(zi)
+            sdata = process_updater_script(sdata)
+            if OPTIONS.incremental:
+                sdata = compute_new_bootloader_patches(source_tfp_dir,
+                        tfp_dir, input_dir, output_zip, sdata)
+            output_zip.writestr(zi, sdata)
+        elif zi.filename == "bootloader.img":
+            new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
+                    device_capsule=OPTIONS.variant)
+            output_zip.writestr(zi, new_bi)
         else:
             output_zip.writestr(zi, input_zip.read(zi))
     output_zip.close()
@@ -144,3 +248,6 @@ if __name__ == '__main__':
         print "   ERROR: %s" % (e,)
         print
         sys.exit(1)
+    finally:
+        common.Cleanup()
+
