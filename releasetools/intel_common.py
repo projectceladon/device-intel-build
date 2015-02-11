@@ -110,8 +110,8 @@ def patch_or_verbatim_exists(path, ota_dir):
 
 def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
                            existing_ota_dir=None):
-    target_data = LoadBootloaderFiles(target_tfp_dir, device_capsule=variant)
-    source_data = LoadBootloaderFiles(source_tfp_dir, device_capsule=variant)
+    target_data = LoadBootloaderFiles(target_tfp_dir, variant=variant)
+    source_data = LoadBootloaderFiles(source_tfp_dir, variant=variant)
 
     diffs = []
 
@@ -162,9 +162,9 @@ def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
     return (output_files, delete_files, patch_list, verbatim_targets)
 
 
-def LoadBootloaderFiles(tfpdir, extra_files=None, device_capsule=None):
+def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None):
     out = {}
-    data = GetBootloaderImageFromTFP(tfpdir, extra_files=extra_files, device_capsule=device_capsule)
+    data = GetBootloaderImageFromTFP(tfpdir, extra_files=extra_files, variant=variant)
     image = common.File("bootloader.img", data).WriteToTemp()
 
     # Extract the contents of the VFAT bootloader image so we
@@ -189,19 +189,19 @@ def LoadBootloaderFiles(tfpdir, extra_files=None, device_capsule=None):
     return out
 
 
-def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, device_capsule=None):
+def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, variant=None):
     if extra_files == None:
         extra_files = []
 
-    if device_capsule:
+    if variant:
         provdata, provdata_zip = common.UnzipTemp(os.path.join(unpack_dir,
-                "RADIO", "provdata_" + device_capsule +".zip"))
+                "RADIO", "provdata_" + variant +".zip"))
         cap_path = os.path.join(provdata,"capsule.fv")
         if os.path.exists(cap_path):
             extra_files.append((cap_path, "capsules/current.fv"))
             extra_files.append((cap_path, "BIOSUPDATE.fv"))
         else:
-            print "No capsule.fv found in provdata_" + device_capsule + ".zip"
+            print "No capsule.fv found in provdata_" + variant + ".zip"
 
     bootloader = tempfile.NamedTemporaryFile(delete=False)
     filename = bootloader.name

@@ -18,10 +18,10 @@
 
 Usage: flashfiles_from_target_files <options> <input_target_files_zip> <output_file>
 
-  -d (--device) <device name>
-  The device name needed for generating multiple flash files from one target.
+  -V (--variant) <variant name>
+  The variant name needed for generating multiple flash files from one target.
 
-  -p (--file-path) <path to directory additional files>
+  -P (--file-path) <path to directory additional files>
   Path to directory with additional files to be included in the flashfiles zip, i.e. oem image.
 
 
@@ -51,7 +51,7 @@ sys.path.append("device/intel/build/releasetools")
 import intel_common
 
 OPTIONS = common.OPTIONS
-OPTIONS.device = None
+OPTIONS.variant = None
 OPTIONS.file_path = None
 
 def getBuildProp(unpack_dir, prop):
@@ -78,7 +78,7 @@ def process_image(unpack_dir, dest_zip, source, target):
     if source == "fastboot":
         ifile = intel_common.GetFastbootImage(unpack_dir)
     elif source == "bootloader":
-        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, device_capsule=OPTIONS.device)
+        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=OPTIONS.variant)
         ifile = common.File(target, bdata)
     elif source == "images":
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
@@ -88,10 +88,10 @@ def process_image(unpack_dir, dest_zip, source, target):
         else:
             raise Exception("custom_path not supplied as argument")
     elif source == "provdatazip":
-        device = ""
-        if OPTIONS.device:
-            device = "_" + OPTIONS.device
-        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" %device), target)
+        variant = ""
+        if OPTIONS.variant:
+            variant = "_" + OPTIONS.variant
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" %variant), target)
     elif source == "bootloaderzip":
         ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
     elif source.startswith("boot:"):
@@ -106,8 +106,8 @@ def process_image(unpack_dir, dest_zip, source, target):
 
 def main(argv):
     def option_handler(o, a):
-        if o in ("-d", "--device"):
-            OPTIONS.device = a
+        if o in ("-V", "--variant"):
+            OPTIONS.variant = a
         elif o in ("-P", "--file-path"):
             OPTIONS.file_path = a
         else:
@@ -115,8 +115,8 @@ def main(argv):
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "d:P:",
-            extra_long_opts = ["device=", "file-path="],
+            extra_opts = "V:P:",
+            extra_long_opts = ["variant=", "file-path="],
             extra_option_handler = option_handler)
 
     if len(args) < 2:
