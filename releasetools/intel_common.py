@@ -156,8 +156,7 @@ def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
 
     # output list of files that need to be deleted, pass this to
     # edify generator DeleteFiles in InstallEnd
-    delete_files = (["/"+i[0] for i in verbatim_targets] +
-                    ["/"+i for i in sorted(source_data) if i not in target_data])
+    delete_files = ["/bootloader/"+i for i in sorted(source_data) if i not in target_data]
 
     return (output_files, delete_files, patch_list, verbatim_targets)
 
