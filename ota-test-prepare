@@ -28,7 +28,7 @@ export TFP=
 export QUICK=
 export SKIP_TFPS=
 
-while getopts "qst:d:jlok" opt; do
+while getopts "qst:V:jlok" opt; do
     case $opt in
         s)
             set -x
@@ -39,7 +39,7 @@ while getopts "qst:d:jlok" opt; do
         t)
             export TFP=$OPTARG
             ;;
-        d)
+        V)
             export IRDA_VARIANT=$OPTARG
             ;;
         j)
@@ -129,7 +129,7 @@ function build_provimg {
                 --verbose $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose -d $IRDA_VARIANT -P $OUT $1 $2
+                --verbose --variant $IRDA_VARIANT --file-path $OUT $1 $2
     fi
 }
 
@@ -147,7 +147,7 @@ function build_ota {
             $EXTRA_ARGS $1 $t1
         ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
             --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
-            --irda_variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $t1 $2
+            --variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $t1 $2
         rm -f $t1
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
@@ -169,7 +169,7 @@ function build_inc_ota {
             $EXTRA_ARGS --incremental_from $1 $2 $t1
         ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
             --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
-            --irda_variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
+            --variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
             $EXTRA_ARGS $t1 $3
         rm -f $t1
     else

@@ -12,7 +12,7 @@ Usage: ota_deployment_fixup <options> <input_ota_zip> <output_file>
       Defaults to AOSP testkey.
   -M  (--pre_fish_name) Optional fish name on prior build.
 
-  -V  (--irda_variant) Name of the IRDA variant as expressed in the
+  -V  (--variant) Name of the IRDA variant as expressed in the
       board configuration FLASHFILES_VARIANTS. Required.
   -T  (--target_files) Path to target files package used to create
       the supplied OTA update zip. Required.
@@ -181,7 +181,7 @@ def main(argv):
         elif o in ("-S", "--source_target_files"):
             OPTIONS.source_tfp = a
             OPTIONS.incremental = True
-        elif o in ("-V", "--irda_variant"):
+        elif o in ("-V", "--variant"):
             OPTIONS.variant = a
         else:
             return False
@@ -191,7 +191,7 @@ def main(argv):
             extra_opts = "B:P:D:k:M:f:T:S:V:",
             extra_long_opts = ["brand=","pre_fish_name=","fish_name=",
                 "product=", "device=", "package_key=", "target_files=",
-                "source_target_files=", "irda_variant="],
+                "source_target_files=", "variant="],
             extra_option_handler = option_handler)
     if not OPTIONS.brand or not OPTIONS.product or not OPTIONS.device \
            or not OPTIONS.fish_name or not OPTIONS.variant or not OPTIONS.tfp:
@@ -229,7 +229,7 @@ def main(argv):
             output_zip.writestr(zi, sdata)
         elif zi.filename == "bootloader.img":
             new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
-                    device_capsule=OPTIONS.variant)
+                    variant=OPTIONS.variant)
             output_zip.writestr(zi, new_bi)
         else:
             output_zip.writestr(zi, input_zip.read(zi))
