@@ -142,13 +142,11 @@ function build_ota {
     fi
 
     if [ -n "$IRDA_VARIANT" ]; then
-        t1=`$MKTEMP tmp.ota.XXXXXXXX`
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
-            $EXTRA_ARGS $1 $t1
+            $EXTRA_ARGS $1 $2.unfixed
         ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
             --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
-            --variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $t1 $2
-        rm -f $t1
+            --variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $2.unfixed $2
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS $1 $2
@@ -164,13 +162,12 @@ function build_inc_ota {
     fi
 
     if [ -n "$IRDA_VARIANT" ]; then
-        t1=`$MKTEMP tmp.otainc.XXXXXXXX`
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
-            $EXTRA_ARGS --incremental_from $1 $2 $t1
+            $EXTRA_ARGS --incremental_from $1 $2 $3.unfixed
         ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
             --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
             --variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
-            $EXTRA_ARGS $t1 $3
+            $EXTRA_ARGS $3.unfixed $3
         rm -f $t1
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
