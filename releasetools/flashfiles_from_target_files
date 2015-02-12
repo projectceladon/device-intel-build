@@ -21,10 +21,6 @@ Usage: flashfiles_from_target_files <options> <input_target_files_zip> <output_f
   -V (--variant) <variant name>
   The variant name needed for generating multiple flash files from one target.
 
-  -P (--file-path) <path to directory additional files>
-  Path to directory with additional files to be included in the flashfiles zip, i.e. oem image.
-
-
 """
 
 import json
@@ -52,7 +48,6 @@ import intel_common
 
 OPTIONS = common.OPTIONS
 OPTIONS.variant = None
-OPTIONS.file_path = None
 
 def getBuildProp(unpack_dir, prop):
     with open(os.path.join(unpack_dir, "SYSTEM", "build.prop"), "r") as fp:
@@ -82,11 +77,6 @@ def process_image(unpack_dir, dest_zip, source, target):
         ifile = common.File(target, bdata)
     elif source == "images":
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
-    elif source == "custom_path":
-        if OPTIONS.file_path:
-            ifile = common.File.FromLocalFile(target, os.path.join(OPTIONS.file_path, target))
-        else:
-            raise Exception("custom_path not supplied as argument")
     elif source == "provdatazip":
         variant = ""
         if OPTIONS.variant:
@@ -108,15 +98,13 @@ def main(argv):
     def option_handler(o, a):
         if o in ("-V", "--variant"):
             OPTIONS.variant = a
-        elif o in ("-P", "--file-path"):
-            OPTIONS.file_path = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "V:P:",
-            extra_long_opts = ["variant=", "file-path="],
+            extra_opts = "V:",
+            extra_long_opts = ["variant="],
             extra_option_handler = option_handler)
 
     if len(args) < 2:
