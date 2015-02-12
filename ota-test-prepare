@@ -129,7 +129,7 @@ function build_provimg {
                 --verbose $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose --variant $IRDA_VARIANT --file-path $OUT $1 $2
+                --verbose --variant $IRDA_VARIANT $1 $2
     fi
 }
 

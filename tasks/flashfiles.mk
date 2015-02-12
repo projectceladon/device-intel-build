@@ -25,7 +25,7 @@ $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDO
 	$(hide) mkdir -p $(dir $@)
 	$(eval y = $(subst -, ,$(basename $(@F))))
 	$(eval DEV = $(word 3, $(y)))
-	$(hide) $(fftf) --file-path=$(OUT) --variant=$(DEV) $(BUILT_TARGET_FILES_PACKAGE) $@
+	$(hide) $(fftf) --variant=$(DEV) $(BUILT_TARGET_FILES_PACKAGE) $@
 else
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDOSFS) $(MCOPY)
 	$(hide) mkdir -p $(dir $@)
