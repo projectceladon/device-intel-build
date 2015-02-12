@@ -17,6 +17,8 @@
 """
 Generates a VFAT EFI System partition image from a provided
 target-files-package
+
+   -V (--variant) <variant name> IRDA device variant, if applicable
 """
 
 import sys
@@ -38,19 +40,21 @@ import intel_common
 
 OPTIONS = common.OPTIONS
 OPTIONS.bootable = False
+OPTIONS.variant = None
 
 def main(argv):
 
     def option_handler(o, a):
-        print o
         if o in ("-u", "--bootable"):
             OPTIONS.bootable = True
+        if o in (-"V", "--variant"):
+            OPTIONS.variant = a
         else:
             return False
         return True
 
-    args = common.ParseOptions(argv, __doc__, extra_opts="u",
-            extra_long_opts=["bootable"],
+    args = common.ParseOptions(argv, __doc__, extra_opts="uV:",
+            extra_long_opts=["bootable", "variant="],
             extra_option_handler=option_handler)
 
     if len(args) != 2:
@@ -67,10 +71,12 @@ def main(argv):
         tf.write("foo")
         tf.flush()
         data = intel_common.GetBootloaderImageFromTFP(OPTIONS.input_tmp,
-                extra_files=[(tf.name,"force_fastboot")], autosize=True)
+                extra_files=[(tf.name,"force_fastboot")], autosize=True,
+                variant=OPTIONS.variant)
         tf.close()
     else:
-        data = intel_common.GetBootloaderImageFromTFP(OPTIONS.input_tmp)
+        data = intel_common.GetBootloaderImageFromTFP(OPTIONS.input_tmp,
+                variant=OPTIONS.variant)
 
     f = open(args[1], "w")
     f.write(data)
@@ -87,4 +93,6 @@ if __name__ == '__main__':
         print "   ERROR: %s" % (e,)
         print
         sys.exit(1)
+    finally:
+        common.Cleanup()
 

@@ -102,9 +102,105 @@ def WriteFileToDest(img, dest):
     fid.close()
 
 
-def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None):
+def patch_or_verbatim_exists(path, ota_dir):
+    filepath = os.path.join(ota_dir, "bootloader", path)
+    patchpath = os.path.join(ota_dir, "patch", "bootloader", path + ".p")
+    return os.path.exists(filepath) or os.path.exists(patchpath)
+
+
+def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
+                           existing_ota_dir=None):
+    target_data = LoadBootloaderFiles(target_tfp_dir, variant=variant)
+    source_data = LoadBootloaderFiles(source_tfp_dir, variant=variant)
+
+    diffs = []
+
+    # List of files that will be included in the OTA verbatim because
+    # they are either new or the patch is > 95% in size of the original
+    # file. If this isn't empty you just need to call edify generator
+    # UnpackPackageDir("bootloader", "/bootloader")
+    verbatim_targets = []
+
+    # Returned list of common.File objects that need to be added to
+    # the OTA archive, for each one call AddToZip()
+    output_files = []
+
+    # Returned list of patches to be created.
+    # Each element is a tuple of the form (path, target File object,
+    # source File object, target file size)
+    patch_list = []
+
+    for fn in sorted(target_data.keys()):
+        if existing_ota_dir and patch_or_verbatim_exists(fn, existing_ota_dir):
+            continue
+
+        tf = target_data[fn]
+        sf = source_data.get(fn, None)
+
+        if sf is None:
+            verbatim_targets.append(fn)
+            output_files.append(tf)
+        elif tf.sha1 != sf.sha1:
+            diffs.append(common.Difference(tf, sf))
+
+    common.ComputeDifferences(diffs)
+
+    for diff in diffs:
+        tf, sf, d = diff.GetPatch()
+        if d is None or len(d) > tf.size * 0.95:
+            output_files.append(tf)
+            verbatim_targets.append(tf.name)
+        else:
+            output_files.append(common.File("patch/" + tf.name + ".p", d))
+            patch_list.append((tf, sf))
+
+    # output list of files that need to be deleted, pass this to
+    # edify generator DeleteFiles in InstallEnd
+    delete_files = ["/bootloader/"+i for i in sorted(source_data) if i not in target_data]
+
+    return (output_files, delete_files, patch_list, verbatim_targets)
+
+
+def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None):
+    out = {}
+    data = GetBootloaderImageFromTFP(tfpdir, extra_files=extra_files, variant=variant)
+    image = common.File("bootloader.img", data).WriteToTemp()
+
+    # Extract the contents of the VFAT bootloader image so we
+    # can compute diffs on a per-file basis
+    esp_root = tempfile.mkdtemp(prefix="bootloader-")
+    common.OPTIONS.tempfiles.append(esp_root)
+    add_dir_to_path("/sbin")
+    subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
+    image.close();
+
+    for dpath, dname, fnames in os.walk(esp_root):
+        for fname in fnames:
+            # Capsule update file -- gets consumed and deleted by the firmware
+            # at first boot, shouldn't try to patch it
+            if (fname == "BIOSUPDATE.fv"):
+                continue
+            abspath = os.path.join(dpath, fname)
+            relpath = os.path.relpath(abspath, esp_root)
+            data = open(abspath).read()
+            out[relpath] = common.File("bootloader/" + relpath, data)
+
+    return out
+
+
+def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, variant=None):
     if extra_files == None:
         extra_files = []
+
+    if variant:
+        provdata, provdata_zip = common.UnzipTemp(os.path.join(unpack_dir,
+                "RADIO", "provdata_" + variant +".zip"))
+        cap_path = os.path.join(provdata,"capsule.fv")
+        if os.path.exists(cap_path):
+            extra_files.append((cap_path, "capsules/current.fv"))
+            extra_files.append((cap_path, "BIOSUPDATE.fv"))
+        else:
+            print "No capsule.fv found in provdata_" + variant + ".zip"
 
     bootloader = tempfile.NamedTemporaryFile(delete=False)
     filename = bootloader.name
@@ -144,7 +240,6 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size
     if size == 0:
         for dpath, dnames, fnames in os.walk(root):
             for f in fnames:
-                print f
                 size += os.path.getsize(os.path.join(dpath, f))
 
         # Add 1% extra space, minimum 32K
