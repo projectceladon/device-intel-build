@@ -4,6 +4,8 @@ Given a target-files zipfile, connect to the device over Fastboot and verify tha
 the installed system exactly matches that build.
 
 Usage: verify_from_target_files <target-files-package>
+
+   -V (--variant) <variant name> IRDA device variant, if applicable
 """
 
 import sys
@@ -22,6 +24,7 @@ sys.path.append("device/intel/build/releasetools")
 import intel_common
 
 OPTIONS = common.OPTIONS
+OPTIONS.variant = None
 
 _SIMG2IMG = "out/host/linux-x86/bin/simg2img"
 _FASTBOOT = "out/host/linux-x86/bin/fastboot"
@@ -123,8 +126,18 @@ def process_fastboot_data(data):
 
 def main(argv):
 
-    if (len(argv) != 1):
-        print __doc__
+    def option_handler(o, a):
+        if o in ("-V", "--variant"):
+            OPTIONS.variant = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__, extra_opts="V:",
+            extra_long_opts=["variant="], extra_option_handler=option_handler)
+
+    if (len(args) != 1):
+        common.Usage(__doc__)
         sys.exit(1)
 
     for app in [_SIMG2IMG, _FASTBOOT]:
@@ -139,12 +152,13 @@ def main(argv):
     hashdict = process_fastboot_data(fastboot_data)
 
     print "Extracting target files package..."
-    unpack_dir, tfp = common.UnzipTemp(argv[0])
+    unpack_dir, tfp = common.UnzipTemp(args[0])
     success = True
     OPTIONS.info_dict = common.LoadInfoDict(tfp)
 
     print "Extracting bootloader archive..."
-    data = intel_common.GetBootloaderImageFromTFP(unpack_dir)
+    data = intel_common.GetBootloaderImageFromTFP(unpack_dir,
+            variant=OPTIONS.variant)
     image = common.File("bootloader.img", data).WriteToTemp()
     esp_root = tempfile.mkdtemp(prefix="bootloader-")
     OPTIONS.tempfiles.append(esp_root)

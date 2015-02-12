@@ -69,7 +69,7 @@ $(live_bootimage): \
 		device/intel/build/tasks/liveimage.mk \
 		$(INSTALLED_KERNEL_TARGET) \
 		$(live_ramdisk) \
-		$(MKBOOTIMG) \
+		$(MKBOOTIMG) $(BOOT_SIGNER) \
 
 	$(hide) mkdir -p $(dir $@)
 	$(hide) $(MKBOOTIMG) --kernel $(INSTALLED_KERNEL_TARGET) \
@@ -77,6 +77,7 @@ $(live_bootimage): \
 			--cmdline "$(BOARD_KERNEL_CMDLINE)" \
 			$(BOARD_MKBOOTIMG_ARGS) \
 			--output $@
+	$(hide) $(BOOT_SIGNER) /fastboot $@ $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $@
 
 $(liveimage_zip): \
 		device/intel/build/tasks/liveimage.mk \
