@@ -135,7 +135,11 @@ def main(argv):
                     continue
                 if "source" in command and "target" in command:
                     process_image(unpack_dir, dest_zip, command["source"], command["target"])
-
+        # Add additionnal files to the .zip if required in flashfiles.json
+        if "files" in conf:
+            for myFile in conf["files"].values():
+                if "source" in myFile and "target" in myFile:
+                    process_image(unpack_dir, dest_zip, myFile["source"], myFile["target"])
     print "All done."
 
 
