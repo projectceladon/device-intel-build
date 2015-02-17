@@ -92,12 +92,6 @@ export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
 export OTA_TMP_DIR=ota/tmp/
 export MKTEMP="mktemp --tmpdir=ota/tmp/"
 
-if [ -n "$IRDA_VARIANT" ]; then
-    echo "Looking up IRDA device variant information..."
-    PDATA=$(python device/intel/coho/device_mapping.py $IRDA_VARIANT)
-    read IRDA_BRAND IRDA_PRODUCT IRDA_DEVICE <<< $PDATA
-fi
-
 # Args: <input TFP> <output TFP>
 function sign_tfp {
     t1=`$MKTEMP tmp.tfp1.XXXXXXXX`
@@ -129,7 +123,7 @@ function build_provimg {
                 --verbose $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose --variant $IRDA_VARIANT --file-path $OUT $1 $2
+                --verbose --variant $IRDA_VARIANT $1 $2
     fi
 }
 
@@ -144,8 +138,7 @@ function build_ota {
     if [ -n "$IRDA_VARIANT" ]; then
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS $1 $2.unfixed
-        ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
-            --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
+        ./device/intel/build/releasetools/ota_deployment_fixup \
             --variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $2.unfixed $2
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
@@ -164,8 +157,7 @@ function build_inc_ota {
     if [ -n "$IRDA_VARIANT" ]; then
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS --incremental_from $1 $2 $3.unfixed
-        ./device/intel/build/releasetools/ota_deployment_fixup --fish_name coho \
-            --brand $IRDA_BRAND --product $IRDA_PRODUCT --device $IRDA_DEVICE \
+        ./device/intel/build/releasetools/ota_deployment_fixup \
             --variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
             $EXTRA_ARGS $3.unfixed $3
         rm -f $t1
