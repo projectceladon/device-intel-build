@@ -26,13 +26,15 @@ Usage: ota_deployment_fixup <options> <input_ota_zip> <output_file>
   -D  (--device) <device>
       Replacement parameters for the brand, product, and device portions of
       the deployment fingerprints. All of these parameters must
-      be specified.
+      be specified on the command line if this information can't be retrieved
+      from the target-files-package.
 """
 
 import sys
 import os
 import zipfile
 import tempfile
+import imp
 
 if None == os.environ.get('ANDROID_BUILD_TOP'):
     print "I'm hungry. Feed me lunch."
@@ -161,6 +163,19 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
     newlines = lines1 + vscript + vline + script + lines2;
     return "\n".join(newlines)
 
+def check_arg(arg, errortext):
+    if not arg:
+        sys.stderr.write(errortext + "\n")
+        common.Usage(__doc__)
+        sys.exit(1)
+
+def load_device_mapping(tfp_path):
+    try:
+        info = imp.find_module("device_mapping", [os.path.join(tfp_path, "RADIO")])
+    except ImportError:
+        return None
+    mod = imp.load_module("device_mapping", *info)
+    return mod.dmap
 
 def main(argv):
     def option_handler(o, a):
@@ -193,11 +208,9 @@ def main(argv):
                 "product=", "device=", "package_key=", "target_files=",
                 "source_target_files=", "variant="],
             extra_option_handler = option_handler)
-    if not OPTIONS.brand or not OPTIONS.product or not OPTIONS.device \
-           or not OPTIONS.fish_name or not OPTIONS.variant or not OPTIONS.tfp:
-        print "Missing one of -B, -P, -D, -f, -V, -T"
-        common.Usage(__doc__)
-        sys.exit(1)
+
+    check_arg(OPTIONS.tfp, "Missing --target_files option")
+    check_arg(OPTIONS.variant, "Missing --variant option")
 
     # TODO would be nice to analyze the OTA package to determine whether it is
     # a full image or incremental update and require or reject -S accordingly
@@ -215,6 +228,25 @@ def main(argv):
     tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp)
     if OPTIONS.incremental:
         source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp)
+
+    dmap = load_device_mapping(tfp_dir)
+    if dmap:
+        if OPTIONS.variant in dmap:
+            OPTIONS.brand, OPTIONS.product, OPTIONS.device, OPTIONS.fish_name = dmap[OPTIONS.variant]
+        else:
+            print "Missing information for target variant", OPTIONS.variant
+    else:
+        print "Couldn't get device mapping information from", OPTIONS.tfp
+
+    if OPTIONS.incremental:
+        source_dmap = load_device_mapping(source_tfp_dir)
+        if source_dmap and OPTIONS.variant in source_dmap:
+            _, _, _, OPTIONS.pre_fish_name = source_dmap[OPTIONS.variant]
+        else:
+            print "Couldn't get pre_fish_name for", OPTIONS.variant, "from", OPTIONS.source_tfp
+
+    check_arg(OPTIONS.brand and OPTIONS.product and OPTIONS.device and OPTIONS.fish_name,
+              "Missing one of -B, -P, -D, -f and cannot get this info from target-files")
 
     print "Processing OTA update contents.."
     for zi in input_zip.infolist():
@@ -235,6 +267,7 @@ def main(argv):
             output_zip.writestr(zi, input_zip.read(zi))
     output_zip.close()
 
+    print "Signing fixed-up package", args[1]
     passwords = common.GetKeyPasswords([OPTIONS.package_key])
     common.SignFile(temp_zip.name, args[1], OPTIONS.package_key, passwords[OPTIONS.package_key], whole_file=True)
 
