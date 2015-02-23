@@ -35,6 +35,7 @@ import os
 import zipfile
 import tempfile
 import imp
+import re
 
 if None == os.environ.get('ANDROID_BUILD_TOP'):
     print "I'm hungry. Feed me lunch."
@@ -92,19 +93,20 @@ def process_metadata(data):
 def process_updater_script(data):
     lines = data.split("\n")
     linesout = []
+    fingerprint_pfx_combo = []
     if OPTIONS.pre_fish_name:
-        fingerprint_pfx_old = 'intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name
-    fingerprint_pfx = 'intel/'+OPTIONS.fish_name+'/'+OPTIONS.fish_name
+        fingerprint_pfx_combo.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name)
+        fingerprint_pfx_combo.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.fish_name)
+    fingerprint_pfx_combo.append('intel/'+OPTIONS.fish_name+'/'+OPTIONS.fish_name)
     fingerprint_new = OPTIONS.brand+'/'+OPTIONS.product+'/'+OPTIONS.device
+    pfx_regex = '|'.join(fingerprint_pfx_combo)
+    pfx = re.compile(pfx_regex)
     for line in lines:
           if line.startswith('getprop("ro.product.device") =='):
+               print 'found ' + line
                linesout.append(line.replace(OPTIONS.fish_name, OPTIONS.device))
-          elif OPTIONS.pre_fish_name and (fingerprint_pfx_old in line):
-               linesout.append(line.replace(fingerprint_pfx_old, fingerprint_new))
-          elif fingerprint_pfx in line:
-               linesout.append(line.replace(fingerprint_pfx, fingerprint_new))
           else:
-               linesout.append(line)
+               linesout.append(pfx.sub(fingerprint_new, line))
     return '\n'.join(linesout)
 
 
@@ -237,13 +239,6 @@ def main(argv):
             print "Missing information for target variant", OPTIONS.variant
     else:
         print "Couldn't get device mapping information from", OPTIONS.tfp
-
-    if OPTIONS.incremental:
-        source_dmap = load_device_mapping(source_tfp_dir)
-        if source_dmap and OPTIONS.variant in source_dmap:
-            _, _, _, OPTIONS.pre_fish_name = source_dmap[OPTIONS.variant]
-        else:
-            print "Couldn't get pre_fish_name for", OPTIONS.variant, "from", OPTIONS.source_tfp
 
     check_arg(OPTIONS.brand and OPTIONS.product and OPTIONS.device and OPTIONS.fish_name,
               "Missing one of -B, -P, -D, -f and cannot get this info from target-files")
