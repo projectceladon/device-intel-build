@@ -65,34 +65,37 @@ def getFromZip(zip_path, filename):
 added_targets = []
 
 def process_image(unpack_dir, dest_zip, source, target):
-    if target in added_targets:
-        return
+    for t in target:
+        if t in added_targets:
+            return
 
-    print "-- Adding", target
+        print "-- Adding", t
 
-    if source == "fastboot":
-        ifile = intel_common.GetFastbootImage(unpack_dir)
-    elif source == "bootloader":
-        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=OPTIONS.variant)
-        ifile = common.File(target, bdata)
-    elif source == "images":
-        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
-    elif source == "provdatazip":
-        variant = ""
-        if OPTIONS.variant:
-            variant = "_" + OPTIONS.variant
-        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" %variant), target)
-    elif source == "bootloaderzip":
-        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
-    elif source.startswith("boot:"):
-        _, iname = source.split(":")
-        ifile = common.GetBootableImage(target, iname+".img", unpack_dir, iname.upper())
-    else:
-        raise Exception("unknown source image type " + source)
+        if source == "fastboot":
+            ifile = intel_common.GetFastbootImage(unpack_dir)
+        elif source == "bootloader":
+            bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=OPTIONS.variant)
+            ifile = common.File(t, bdata)
+        elif source == "images":
+            ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", t))
+        elif source == "provdatazip":
+            variant = ""
+            if OPTIONS.variant:
+                variant = "_" + OPTIONS.variant
+            ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" %variant), t)
+        elif source == "bootloaderzip":
+            ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), t)
+        elif source.startswith("boot:"):
+            _, iname = source.split(":")
+            ifile = common.GetBootableImage(t, iname+".img", unpack_dir, iname.upper())
+        elif source == "radio":
+            ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "RADIO", t))
+        else:
+            raise Exception("unknown source image type " + source)
 
-    ifile.name = target
-    ifile.AddToZip(dest_zip)
-    added_targets.append(target)
+        ifile.name = t
+        ifile.AddToZip(dest_zip)
+        added_targets.append(t)
 
 def main(argv):
     def option_handler(o, a):

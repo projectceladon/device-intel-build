@@ -117,10 +117,13 @@ class FlashFileJson:
             if not filter_command(cmd, variant, platform, None):
                 continue
             if 'target' in cmd:
-                fname = cmd['target']
-                shortname = fname.split('.')[0].lower()
-                self.add_file(shortname, fname)
-                cmd['pftname'] = '${' + shortname + '}'
+                if not isinstance(cmd['target'], list):
+                    cmd['target'] = [cmd['target']]
+                cmd['pftname'] = []
+                for f in cmd['target']:
+                    shortname = f.split('.')[0].lower()
+                    self.add_file(shortname, f)
+                    cmd['pftname'].append('${' + shortname + '}')
 
         for cmd in commands:
             new = {}
@@ -133,12 +136,16 @@ class FlashFileJson:
             if not filter_command(cmd, variant, platform, None):
                 continue
 
-            if cmd['type'] == 'fastboot':
+            if cmd['type'] in ('fastboot', 'dldr'):
                 new['description'] = cmd.get('desc', cmd['args'])
-                new['tool'] = 'fastboot'
+                new['tool'] = cmd['type']
                 new['args'] = cmd['args']
                 if 'pftname' in cmd:
-                    new['args'] += ' ' + cmd['pftname']
+                    if '$' in new['args']:
+                        for i, f in enumerate(cmd['pftname']):
+                            new['args'] = new['args'].replace('$' + str(i + 1), f)
+                    else:
+                        new['args'] += ' ' + cmd['pftname'][0]
             elif cmd['type'] == 'waitForDevice':
                 new['state'] = cmd.get('state','pos')
                 new['description'] = cmd.get('desc', 'Wait for device to enumerate in ' + new['state'])
