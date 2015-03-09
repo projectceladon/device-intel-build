@@ -60,6 +60,7 @@ OPTIONS.tfp = None
 OPTIONS.source_tfp = None
 OPTIONS.incremental = False
 OPTIONS.variant = False
+OPTIONS.base_variant = False
 
 # TODO: fetch default for this out default_system_dev_certificate in the TFP
 # once a TFP is a required argument
@@ -93,20 +94,19 @@ def process_metadata(data):
 def process_updater_script(data):
     lines = data.split("\n")
     linesout = []
-    fingerprint_pfx_combo = []
-    if OPTIONS.pre_fish_name:
-        fingerprint_pfx_combo.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name)
-        fingerprint_pfx_combo.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.fish_name)
-    fingerprint_pfx_combo.append('intel/'+OPTIONS.fish_name+'/'+OPTIONS.fish_name)
     fingerprint_new = OPTIONS.brand+'/'+OPTIONS.product+'/'+OPTIONS.device
-    pfx_regex = '|'.join(fingerprint_pfx_combo)
-    pfx = re.compile(pfx_regex)
+    fingerprint_old = ['intel/'+OPTIONS.fish_name+'/'+OPTIONS.fish_name]
+    if OPTIONS.pre_fish_name:
+        fingerprint_old.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name)
+        fingerprint_old.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.fish_name)
+
+    pfx = re.compile('|'.join(fingerprint_old))
     for line in lines:
           if line.startswith('getprop("ro.product.device") =='):
-               print 'found ' + line
                linesout.append(line.replace(OPTIONS.fish_name, OPTIONS.device))
           else:
                linesout.append(pfx.sub(fingerprint_new, line))
+
     return '\n'.join(linesout)
 
 
@@ -117,6 +117,7 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
             intel_common.ComputeBootloaderPatch(source_tfp_dir,
                                                 target_tfp_dir,
                                                 variant=OPTIONS.variant,
+                                                base_variant=OPTIONS.base_variant,
                                                 existing_ota_dir=ota_dir)
     for f in output_files:
         print "Adding",f.name
@@ -200,15 +201,17 @@ def main(argv):
             OPTIONS.incremental = True
         elif o in ("-V", "--variant"):
             OPTIONS.variant = a
+        elif o in ("-L", "--legacy_variant"):
+            OPTIONS.base_variant = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "B:P:D:k:M:f:T:S:V:",
+            extra_opts = "B:P:D:k:M:f:T:S:V:L:",
             extra_long_opts = ["brand=","pre_fish_name=","fish_name=",
                 "product=", "device=", "package_key=", "target_files=",
-                "source_target_files=", "variant="],
+                "source_target_files=", "variant=", "legacy_variant="],
             extra_option_handler = option_handler)
 
     check_arg(OPTIONS.tfp, "Missing --target_files option")
@@ -234,12 +237,15 @@ def main(argv):
     dmap = load_device_mapping(tfp_dir)
     if dmap:
         if OPTIONS.variant in dmap:
-            OPTIONS.brand, OPTIONS.product, OPTIONS.device, OPTIONS.fish_name = dmap[OPTIONS.variant]
+            OPTIONS.brand, OPTIONS.product, OPTIONS.device, \
+            OPTIONS.fish_name, OPTIONS.base_variant = dmap[OPTIONS.variant]
         else:
             print "Missing information for target variant", OPTIONS.variant
     else:
         print "Couldn't get device mapping information from", OPTIONS.tfp
 
+    if OPTIONS.base_variant == OPTIONS.variant:
+        OPTIONS.base_variant = None
     check_arg(OPTIONS.brand and OPTIONS.product and OPTIONS.device and OPTIONS.fish_name,
               "Missing one of -B, -P, -D, -f and cannot get this info from target-files")
 

@@ -109,9 +109,9 @@ def patch_or_verbatim_exists(path, ota_dir):
 
 
 def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
-                           existing_ota_dir=None):
-    target_data = LoadBootloaderFiles(target_tfp_dir, variant=variant)
-    source_data = LoadBootloaderFiles(source_tfp_dir, variant=variant)
+                           base_variant=None, existing_ota_dir=None):
+    target_data = LoadBootloaderFiles(target_tfp_dir, variant=variant, base_variant=base_variant)
+    source_data = LoadBootloaderFiles(source_tfp_dir, variant=variant, base_variant=base_variant)
 
     diffs = []
 
@@ -161,9 +161,10 @@ def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
     return (output_files, delete_files, patch_list, verbatim_targets)
 
 
-def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None):
+def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None, base_variant=None):
     out = {}
-    data = GetBootloaderImageFromTFP(tfpdir, extra_files=extra_files, variant=variant)
+    data = GetBootloaderImageFromTFP(tfpdir, extra_files=extra_files,
+                                     variant=variant, base_variant=base_variant)
     image = common.File("bootloader.img", data).WriteToTemp()
 
     # Extract the contents of the VFAT bootloader image so we
@@ -188,13 +189,15 @@ def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None):
     return out
 
 
-def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, variant=None):
+def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, variant=None, base_variant=None):
     if extra_files == None:
         extra_files = []
 
     if variant:
-        provdata, provdata_zip = common.UnzipTemp(os.path.join(unpack_dir,
-                "RADIO", "provdata_" + variant +".zip"))
+        provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant +".zip")
+        if base_variant and (os.path.isfile(provdata_name) == False):
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + base_variant +".zip")
+        provdata, provdata_zip = common.UnzipTemp(provdata_name)
         cap_path = os.path.join(provdata,"capsule.fv")
         if os.path.exists(cap_path):
             extra_files.append((cap_path, "capsules/current.fv"))
