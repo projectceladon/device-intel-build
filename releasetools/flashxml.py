@@ -5,6 +5,7 @@ import json
 import copy
 from optparse import OptionParser
 import xml.etree.ElementTree as etree
+from xml.dom import minidom
 import tempfile
 import StringIO
 
@@ -69,10 +70,11 @@ class FlashFileXml:
     def finish(self):
         tree = etree.ElementTree(self.xml)
         tf = StringIO.StringIO()
-        tree.write(tf, xml_declaration=True, encoding="utf-8", pretty_print=True)
+        tree.write(tf, xml_declaration=True, encoding="utf-8")
         data = tf.getvalue()
         tf.close()
-        return data
+        pretty = minidom.parseString(data)
+        return pretty.toprettyxml(encoding="utf-8")
 
 # main Class to generate json file from json configuration file
 class FlashFileJson:
