@@ -4,7 +4,7 @@ import os
 import json
 import copy
 from optparse import OptionParser
-from lxml import etree
+import xml.etree.ElementTree as etree
 import tempfile
 import StringIO
 
