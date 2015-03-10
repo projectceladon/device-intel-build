@@ -91,7 +91,7 @@ def process_metadata(data):
             linesout.append(line)
     return '\n'.join(linesout)
 
-def process_updater_script(data):
+def process_updater_script(data, unpack_dir):
     lines = data.split("\n")
     linesout = []
     fingerprint_new = OPTIONS.brand+'/'+OPTIONS.product+'/'+OPTIONS.device
@@ -106,6 +106,16 @@ def process_updater_script(data):
                linesout.append(line.replace(OPTIONS.fish_name, OPTIONS.device))
           else:
                linesout.append(pfx.sub(fingerprint_new, line))
+
+    # Check the provdata archive for extra edify commands to inject into the OTA
+    # script
+    provdata, provdata_zip = common.UnzipTemp(os.path.join(unpack_dir,
+                "RADIO", "provdata_" + OPTIONS.variant +".zip"))
+    extra_script_path = os.path.join(provdata, "extra_script.edify")
+    if os.path.exists(extra_script_path):
+        print "Appending extra Edify script commands"
+        with open(extra_script_path) as es:
+            linesout.extend(es.readlines())
 
     return '\n'.join(linesout)
 
@@ -255,7 +265,7 @@ def main(argv):
             output_zip.writestr(zi, process_metadata(input_zip.read(zi)))
         elif zi.filename == "META-INF/com/google/android/updater-script":
             sdata = input_zip.read(zi)
-            sdata = process_updater_script(sdata)
+            sdata = process_updater_script(sdata, tfp_dir)
             if OPTIONS.incremental:
                 sdata = compute_new_bootloader_patches(source_tfp_dir,
                         tfp_dir, input_dir, output_zip, sdata)
