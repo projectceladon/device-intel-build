@@ -69,7 +69,7 @@ if [ ! -e ${MAKEPK8_JAR} ]; then
 	exit 1
 fi
 if [ ! -e ${GENERATE_VERITY} ]; then
-	echo "Must make ${CONVERTCERT}"
+	echo "Must make ${GENERATE_VERITY}"
 	exit 1
 fi
 
@@ -82,6 +82,7 @@ make_stuff media GMIN_PreRelease_TEST_Media
 make_stuff verity GMIN_PreRelease_TEST_Verity
 make_stuff DB GMIN_PreRelease_TEST_UEFI_Boot_Signer
 make_stuff oem GMIN_PreRelease_TEST_OEM
+make_stuff telemetry_consent GMIN_PreRelease_TEST_Telemetry_Consent
 
 # Rename files and convert formats for dm-verity tool compatibility
 ${CONVERTCERT} ${OUTPUT_DIR}/verity.x509.pem ${OUTPUT_DIR}/verity_key
