@@ -11,7 +11,7 @@ if [ -z "$ANDROID_BUILD_TOP" ]; then
     exit 1
 fi
 
-while getopts "qst:ed:r:o:" opt; do
+while getopts "st:ed:r:o:k:" opt; do
     case $opt in
         s)
             set -x
@@ -29,6 +29,9 @@ while getopts "qst:ed:r:o:" opt; do
             export PROD_KEY_DIR=$OPTARG
             export PACKAGE_KEY_OPTION="-k $PROD_KEY_DIR/releasekey"
             ;;
+        k)
+            export ADDITIONAL_KEY_MAPPINGS="$ADDITIONAL_KEY_MAPPINGS --key_mapping $OPTARG"
+            ;;
         r)
             export RELEASE_NAME=$OPTARG
             ;;
@@ -38,18 +41,21 @@ while getopts "qst:ed:r:o:" opt; do
         \?)
             echo "Usage:"
             echo
-            echo "  signed_from_target_files [-s] -t <path to TFP zipfile> [-r <release name>][-d <keyset dir>][-p <java path>][-a <alternate signapk>] <build name>"
-            echo "    Use an existing TFP and create a set of deliverables for performing OTA updates and factory provisioning."
-            echo "    The ota/ directory will contain a re-signed TFP, factory archive, and full-image OTA."
-            echo "    The build name identifies the build."
+            echo "  signed_from_target_files -t <path to TFP zipfile> -d <keyset-dir>"
+            echo "                           [<optional args>] <build name>"
+            echo "    Process an existing TFP and output a re-signed TFP and full OTA package."
             echo
             echo "Valid options:"
             echo "-s: Show commands being run"
-            echo "-t: Don't do own build; use supplied target-files to create a re-signed release"
-            echo "-p <java path>: Alternate path to find Java tools. Tools are expected to be found in <java path>/framework"
-            echo "-a <alternate signapk>: Alternate signapk.jar to the standard framework/signapk.jar"
-            echo "-d <keyset dir>: Directory containing signing certs and private keys for signing"
-            echo "-r <release name>: Files inside output packages are named using <release name>"
+            echo "-t <input-TFP-zipfile>: use supplied target-files to create a re-signed TFP"
+            echo "-e: Setup Intel EDSS signer environment"
+            echo "-d <keyset-dir>: Directory containing signing certs and private keys for"
+            echo "   signing. Names mapped according to standard AOSP mapping."
+            echo "-k <src-key>=<dest-key>: Add key mapping for re-signing APKs. May be used"
+            echo "   multiple times as needed."
+            echo "-r <release-name>: deprecated. default: signed"
+            echo "-o <output-dir>: Where to place output files. default: same directory as"
+            echo "   input TFP"
             exit 1
             ;;
     esac
@@ -82,7 +88,7 @@ function sign_tfp {
             --replace_ota_keys \
             --replace_verity_public_key $PROD_KEY_DIR/verity_key \
             --replace_verity_private_key $PROD_KEY_DIR/verity \
-            --default_key_mappings $PROD_KEY_DIR \
+            --default_key_mappings $PROD_KEY_DIR $ADDITIONAL_KEY_MAPPINGS \
             $1 $t1
 
     ./device/intel/build/releasetools/sign_target_files_efis \
