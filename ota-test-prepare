@@ -167,6 +167,41 @@ function build_inc_ota {
     fi
 }
 
+function rename_in_zip {
+    printf "@ $2\n@=$3\n" | zipnote -w $1
+}
+
+# Does an in-place modification of a target-files-package to ensure that
+# bootloader updates are working corectly. We add two extra files to
+# the bootloader image which are copies of the supplied blob.
+# In the source TFP, these will be called A.bin and B.bin.
+# In the target TFP, these will be B.bin and C.bin.
+# During the incremental OTA, A should be deleted, C created,
+# and B patched.
+# ARGS: <TFP> <blob filename> <archive path in TFP under RADIO/> <filename1> <filename2>
+function season_tfp {
+    local_archive=`$MKTEMP tmp.bootloader.XXXXXXXX`
+    tfp=$1
+    blob=$2
+    archive=RADIO/$3
+    fn1=$4
+    fn2=$5
+
+    unzip -jp $tfp $archive > $local_archive
+
+    zip -j $local_archive $blob
+    rename_in_zip $local_archive $(basename $blob) $fn1
+
+    zip -j $local_archive $blob
+    rename_in_zip $local_archive $(basename $blob) $fn2
+
+    zip -d $tfp $archive
+    zip -jm $tfp $local_archive
+    rename_in_zip $tfp $(basename $local_archive) $archive
+
+    rm -rf $local_archive
+}
+
 # Args: <private signing key> <signing cert> <keystore filename> <key1> <key2>
 function build_keystore {
     t1=`$MKTEMP tmp.derkey.XXXXXXXXX`
@@ -245,6 +280,8 @@ background oemvars-testkeys.log device/intel/build/generate_bios_oemvars \
         -T $TS \
         --unlock ota/unlock-testkeys.txt ota/oemvars-testkeys.txt
 
+# Builds a keystore signed with production-test OEM key that has both
+# testing and production-test verity keys in it
 background build-keystore.log build_keystore \
         $PRODKEYS/oem.pk8 $PRODKEYS/oem.x509.pem ota/keystore.bin \
         build/target/product/security/verity.x509.pem \
@@ -277,6 +314,28 @@ if [[ -z "$SKIP_TFPS" ]]; then
     log_to make-B.log make -j$CONCURRENCY_LEVEL target-files-package
     cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
             ota/tfp-B-testkey.zip
+
+    echo "Seasoning target-files-packages..."
+    NUM_WAIT=2
+    background season_tfp-A.log season_tfp ota/tfp-A-testkey.zip \
+                    device/intel/common/recovery/blob1.bin \
+                    bootloader.zip A.bin B.bin
+    background season_tfp-B.log season_tfp ota/tfp-B-testkey.zip \
+                    device/intel/common/recovery/blob2.bin \
+                    bootloader.zip C.bin B.bin
+
+    if [ -n "$IRDA_VARIANT" ]; then
+        NUM_WAIT=$(($NUM_WAIT + 2))
+        background season_tfp-irda-A.log season_tfp ota/tfp-A-testkey.zip \
+                    device/intel/common/recovery/blob1.bin \
+                    provdata_${IRDA_VARIANT}.zip \
+                    BOOTLOADER/D.bin BOOTLOADER/E.bin
+        background season_tfp-irda-B.log season_tfp ota/tfp-B-testkey.zip \
+                    device/intel/common/recovery/blob2.bin \
+                    provdata_${IRDA_VARIANT}.zip \
+                    BOOTLOADER/F.bin BOOTLOADER/E.bin
+    fi
+    wait_complete $NUM_WAIT
 fi
 
 if [[ "$QUICK" != "1" ]]; then
