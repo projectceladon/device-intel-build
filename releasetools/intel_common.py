@@ -204,6 +204,14 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
             extra_files.append((cap_path, "BIOSUPDATE.fv"))
         else:
             print "No capsule.fv found in provdata_" + variant + ".zip"
+        base_bootloader = os.path.join(provdata, "BOOTLOADER")
+        if os.path.exists(base_bootloader):
+            for root, dirs, files in os.walk(base_bootloader):
+                for name in files:
+                    fullpath = os.path.join(root, name)
+                    relpath = os.path.relpath(fullpath, base_bootloader)
+                    print "Adding extra bootloader file", relpath
+                    extra_files.append((fullpath, relpath))
 
     bootloader = tempfile.NamedTemporaryFile(delete=False)
     filename = bootloader.name
