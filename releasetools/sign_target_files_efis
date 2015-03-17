@@ -94,6 +94,7 @@ OPTIONS.replace = {}
 OPTIONS.all_keys = set()
 OPTIONS.keystore_certs = []
 OPTIONS.oem_key = None
+OPTIONS.target_product = None
 
 
 def is_32bit_efi(data):
@@ -244,7 +245,7 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
             print "Processing",path
 
         # Don't bother copying these over
-        if path.startswith("EFI/BOOT/boot"):
+        if path.startswith("EFI/BOOT/boot") or path == "shim.efi":
             continue
 
         if OPTIONS.oem_key and path == OPTIONS.kernelflinger:
@@ -304,6 +305,8 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
                 output_bootzip.writestr("EFI/BOOT/bootia32.efi", data)
             else:
                 output_bootzip.writestr("EFI/BOOT/bootx64.efi", data)
+                if OPTIONS.target_product == "coho":
+                    output_bootzip.writestr("shim.efi", data)
 
 
 
@@ -366,6 +369,16 @@ def main(argv):
     unpack_dir, input_zip = common.UnzipTemp(args[0])
     input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
                 "RADIO", "bootloader.zip"), "r")
+
+    print "Parsing build.prop for target_product"
+    d = {}
+    try:
+        with open(os.path.join(unpack_dir, "SYSTEM", "build.prop")) as f:
+            d = common.LoadDictionaryFromLines(f.read().split("\n"))
+    except IOError, e:
+       if e.errno == errno.ENOENT:
+          raise KeyError(f)
+    OPTIONS.target_product = d["ro.product.name"]
 
     print "Processing private keys"
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
