@@ -167,6 +167,16 @@ function build_inc_ota {
     fi
 }
 
+# Args: <private signing key> <signing cert> <keystore filename> <key1> <key2>
+function build_keystore {
+    t1=`$MKTEMP tmp.derkey.XXXXXXXXX`
+    t2=`$MKTEMP tmp.derkey.XXXXXXXXX`
+    openssl x509 -in $4 -pubkey -noout | openssl enc -base64 -d > $t1
+    openssl x509 -in $5 -pubkey -noout | openssl enc -base64 -d > $t2
+    keystore_signer $1 $2 $3 $t1 $t2
+    rm -f $t1 $t2
+}
+
 # Args: <logfile> <command> <args...>
 function background {
     if [ -n "$PARALLEL" ]; then
@@ -234,7 +244,13 @@ background oemvars-testkeys.log device/intel/build/generate_bios_oemvars \
         -P $TESTKEYS/PK \
         -T $TS \
         --unlock ota/unlock-testkeys.txt ota/oemvars-testkeys.txt
-wait_complete 2
+
+background build-keystore.log build_keystore \
+        $PRODKEYS/oem.pk8 $PRODKEYS/oem.x509.pem ota/keystore.bin \
+        build/target/product/security/verity.x509.pem \
+        $PRODKEYS/verity.x509.pem
+
+wait_complete 3
 
 if [[ -n "$TFP" ]]; then
     log_to sign_tfp-${1}.log sign_tfp $TFP ota/tfp-${1}.zip
