@@ -137,8 +137,8 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
     # end of VerifyEnd section
     vscript = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
 
-    for fn, tf, sf, size in patch_list:
-        vscript.PatchCheck("/"+fn, tf.sha1, sf.sha1)
+    for tf, sf in patch_list:
+        vscript.PatchCheck("/"+tf.name, tf.sha1, sf.sha1)
     vscript = vscript.script
 
     # This script needs to be inserted into the main script at the
@@ -151,9 +151,8 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
 
     if patch_list:
         script.Print("Patching firmware files...")
-        for item in patch_list:
-            fn, tf, sf, size = item
-            script.ApplyPatch("/"+fn, "-", tf.size, tf.sha1, sf.sha1, "patch/"+fn+".p")
+        for tf, sf in patch_list:
+            script.ApplyPatch("/"+tf.name, "-", tf.size, tf.sha1, sf.sha1, "patch/"+tf.name+".p")
 
     if verbatim_targets:
         script.Print("Adding firmware files...")
