@@ -21,6 +21,7 @@ Usage: ota_deployment_fixup <options> <input_ota_zip> <output_file>
       argument to ota_from_target_files)
 
   -f  (--fish_name) The fish name that this is built for
+  -l  (--lunch) The lunch target used for this project
   -B  (--brand) <brand>
   -P  (--product) <product>
   -D  (--device) <device>
@@ -58,6 +59,7 @@ OPTIONS.product = None
 OPTIONS.fish_name = None
 OPTIONS.tfp = None
 OPTIONS.source_tfp = None
+OPTIONS.lunch = None
 OPTIONS.incremental = False
 OPTIONS.variant = False
 OPTIONS.base_variant = False
@@ -99,6 +101,9 @@ def process_updater_script(data, unpack_dir):
     if OPTIONS.pre_fish_name:
         fingerprint_old.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name)
         fingerprint_old.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.fish_name)
+    if OPTIONS.lunch:
+        fingerprint_old.append('intel/'+OPTIONS.lunch+'/'+OPTIONS.fish_name)
+
 
     pfx = re.compile('|'.join(fingerprint_old))
     for line in lines:
@@ -212,15 +217,18 @@ def main(argv):
             OPTIONS.variant = a
         elif o in ("-L", "--legacy_variant"):
             OPTIONS.base_variant = a
+        elif o in ("-l", "--lunch"):
+            OPTIONS.lunch = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "B:P:D:k:M:f:T:S:V:L:",
+            extra_opts = "B:P:D:k:M:f:T:S:V:L:l:",
             extra_long_opts = ["brand=","pre_fish_name=","fish_name=",
                 "product=", "device=", "package_key=", "target_files=",
-                "source_target_files=", "variant=", "legacy_variant="],
+                "source_target_files=", "variant=", "legacy_variant=",
+                "lunch="],
             extra_option_handler = option_handler)
 
     check_arg(OPTIONS.tfp, "Missing --target_files option")
@@ -246,8 +254,16 @@ def main(argv):
     dmap = load_device_mapping(tfp_dir)
     if dmap:
         if OPTIONS.variant in dmap:
-            OPTIONS.brand, OPTIONS.product, OPTIONS.device, \
-            OPTIONS.fish_name, OPTIONS.base_variant = dmap[OPTIONS.variant]
+            if '__version__' in dmap: # Versions >= 1 have the version key
+                if dmap['__version__'] == 1:
+                    OPTIONS.brand, OPTIONS.product, OPTIONS.device, \
+                    OPTIONS.lunch, OPTIONS.fish_name, \
+                    OPTIONS.base_variant = dmap[OPTIONS.variant]
+                else:
+                    print "Invalid/unsupported device map version number"
+            else:   # Version 0 does not have the version key
+                OPTIONS.brand, OPTIONS.product, OPTIONS.device, \
+                OPTIONS.fish_name, OPTIONS.base_variant = dmap[OPTIONS.variant]
         else:
             print "Missing information for target variant", OPTIONS.variant
     else:
