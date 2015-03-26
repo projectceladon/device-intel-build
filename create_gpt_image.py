@@ -420,7 +420,7 @@ class TableEntryInfos(object):
         result = '\t{0}name: {1}\n'.format(result,
                                            self.name.decode('utf-16le'))
         result = '\t{0}size: {1}\n'.format(result,
-                                           self.lba_last - self.lba_first)
+                                           self.lba_last + 1 - self.lba_first)
 
         return result
 
@@ -456,6 +456,8 @@ class TableEntryInfos(object):
                                              'e0aac75f4db1'),
                       'android_factory': ('0fc63daf-8483-4772-8e79-'
                                           '3d69d8477de4'),
+                      'android_config': ('0fc63daf-8483-4772-8e79-'
+                                         '3d69d8477de4')
                       }
             }
 
@@ -559,6 +561,23 @@ class TLBInfos(list):
                 else:
                     debug('TLB not parsed line: {0}'.format(line))
 
+    def _preparse_partitions(self, cfg):
+        """
+        Taken from gpt_ini2bin.py
+        """
+        with open(self.path, 'r') as f:
+            data = f.read()
+
+            partitions = cfg.get('base', 'partitions').split()
+
+            for l in data.split('\n'):
+                words = l.split()
+                if len(words) > 2:
+                    if words[0] == 'partitions' and words[1] == '+=':
+                        partitions += words[2:]
+
+        return partitions
+
     def _read_ini(self, block_size):
         """
         Used to read a INI TLB partition file
@@ -572,7 +591,8 @@ class TLBInfos(list):
             error('Invalid TLB partition file: {0}'.format(self.path))
             exit(-1)
 
-        partitionList = cfg.get('base', 'partitions').split()
+        # gpt.ini is not a "standard" ini file because keys are not uniques
+        partitionList = self._preparse_partitions(cfg)
 
         # sets the start lba value which the read value or uses the default
         # value
@@ -581,7 +601,7 @@ class TLBInfos(list):
             debug('The start_lab value read in the TLB partition file')
 
         except NoOptionError:
-            start_lba_prev = 40
+            start_lba_prev = 2048
             info('The start_lab value is undefined in the TLB partition file,'
                  ' the default value is used: {0}'.format(start_lba_prev))
 
@@ -614,47 +634,61 @@ class TLBInfos(list):
         else:
             self._read_ini(block_size)
 
+    def _recompute_partition_begin(self):
+        """
+        Ensure that partitions do not overlap
+        """
+        new_begin = -1
+        for pos, entry in enumerate(self):
+            if new_begin == -1:
+                new_begin = self[pos].begin + self[pos].size
+                continue
+            self[pos] = self[pos]._replace(begin=new_begin)
+            new_begin += self[pos].size
+
     def compute_last_size_entry(self, img_size, block_size, entry_size,
                                 table_length):
         """
         Compute the size of the last TLB entry
         """
-        # searchs the TLB entry with an undefined size
         last = -1
+        # reserve the size for primary and secondary gpt
+        MB = 1024 * 1024
+        remaining_size = (img_size - MB) / block_size - 2048
         for pos, entry in enumerate(self):
             debug('Entry size: {0}'.format(entry.size))
             if entry.size < 0:
-                last = pos
-                break
+                if (last == -1):
+                    last = pos
+                    continue
+                else:
+                    error('Only one partition of size -1 allowed')
+                    exit(-1)
+            remaining_size -= entry.size
 
         # if all entries size are already defined
-        if last < 0:
+        if last == -1:
             debug('All entry sizes are already defined.')
             return
 
-        # computes the size of last entry
-        size_in_block = img_size / block_size
-        entries_size_in_block = (entry_size * table_length) / block_size
-        value = size_in_block - 1 - entries_size_in_block \
-            - int(self[last].begin)
-
-        # checks the computed entry size
-        if value > 0:
-            self[last] = self[last]._replace(size=value)
-            debug('The computed size for the last entry is: {0}'
-                  .format(self[last].size))
-        else:
+        if remaining_size < 0:
             error('The image size is too small regarding partition mapping.')
-            missing = -value * block_size
-            error('Missing around: {0} Bytes.'.format(missing))
+            missing = -remaining_size * block_size
+            error('Missing at least: {0} Bytes.'.format(missing))
             exit(-1)
+
+        # Update the size of the partition with -1 size and recompute
+        # the start of each partitions after it
+        self[last] = self[last]._replace(size=remaining_size)
+        self._recompute_partition_begin()
 
 
 class GPTImage(object):
     """
     GPT/UEFI image.
     """
-    __slots__ = ('path', 'size', 'block_size', 'mbr', 'gpt_header', 'table')
+    __slots__ = ('path', 'size', 'block_size', 'mbr',
+                 'gpt_header', 'table')
 
     ANDROID_PARTITIONS = [
         'bootloader',
@@ -667,10 +701,12 @@ class GPTImage(object):
         'cache',
         'data',
         'persistent',
-        'factory'
+        'factory',
+        'config',
         ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
+
         self.path = path
         self.size = GPTImage.convert_size_to_bytes(size)
         self.block_size = block_size
@@ -751,16 +787,21 @@ class GPTImage(object):
         """
         Calculate and write CRC32 of GPT partition table, header and backup
         """
-        # reads the partition table
+        # reads partition tables
         img_file.seek(2 * self.block_size)
-        raw_table = img_file.read(self.gpt_header.table_length
-                                  * self.gpt_header.entry_size)
+        raw_table = img_file.read(self.gpt_header.table_length *
+                                  self.gpt_header.entry_size)
+        img_file.seek((self.gpt_header.lba_backup - 32) * self.block_size)
+        raw_backup_table = img_file.read(self.gpt_header.table_length *
+                                         self.gpt_header.entry_size)
 
-        # computes the CRC 32 of the partition table
+        # computes CRC 32 partition tables
         table_crc = crc32(raw_table) & 0xffffffff
+        backup_table_crc = crc32(raw_backup_table) & 0xffffffff
 
-        # creates a raw with the calculated CRC32 of partition table
+        # creates raw with the calculated CRC32 of partition tables
         raw_table_crc = pack('<I', table_crc)
+        raw_backup_table_crc = pack('<I', backup_table_crc)
 
         # writes the calculated CRC 32 of partition table in GPT header
         img_file.seek(self.block_size + 88)
@@ -768,7 +809,7 @@ class GPTImage(object):
 
         # writes the calculated CRC 32 of partition table in GPT backup
         img_file.seek(self.size - self.block_size + 88)
-        img_file.write(raw_table_crc)
+        img_file.write(raw_backup_table_crc)
 
         # reads the GPT header
         img_file.seek(self.block_size)
@@ -855,8 +896,9 @@ class GPTImage(object):
 
             # fill output image header with 0x00: MBR size + GPT header size +
             # (partition table length * entry size)
-            zero = '\x00' * (2 * self.block_size + self.gpt_header.table_length
-                             * self.gpt_header.entry_size)
+            zero = '\x00' * (2 * self.block_size +
+                             self.gpt_header.table_length *
+                             self.gpt_header.entry_size)
             img_file.seek(0)
             img_file.write(zero)
 
@@ -870,9 +912,17 @@ class GPTImage(object):
             offset = self.block_size
             self.gpt_header.write(img_file, offset, self.block_size)
 
-            info('Writing the partition table of the GPT/UEFI image: {0}'
+            info('Writing the primary partition table of the GPT/UEFI'
+                 ' image: {0}'
                  .format(self.path))
             offset = 2 * self.block_size
+            self.table.write(img_file, offset, self.gpt_header.entry_size,
+                             tlb_infos, self.gpt_header.lba_last)
+
+            info('Writing the secondary partition table of the'
+                 ' GPT/UEFI image: {0}'
+                 .format(self.path))
+            offset = (self.gpt_header.lba_backup - 32) * self.block_size
             self.table.write(img_file, offset, self.gpt_header.entry_size,
                              tlb_infos, self.gpt_header.lba_last)
 
