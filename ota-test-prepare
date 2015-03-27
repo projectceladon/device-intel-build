@@ -254,6 +254,11 @@ if [[ -n "$TFP" ]]; then
 fi
 
 if [ -z "$IRDA_VARIANT" ]; then
+    if [ $TARGET_PRODUCT == "coho" -o $TARGET_PRODUCT == "cohol" ]; then
+        echo "IRDA builds require use of -V parameter"
+        exit 1
+    fi
+
     BASEDIR=ota/$TARGET_PRODUCT/
 else
     BASEDIR=ota/$TARGET_PRODUCT-$IRDA_VARIANT/
