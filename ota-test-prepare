@@ -253,7 +253,11 @@ if [[ -n "$TFP" ]]; then
     fi
 fi
 
-BASEDIR=ota/$TARGET_PRODUCT/
+if [ -z "$IRDA_VARIANT" ]; then
+    BASEDIR=ota/$TARGET_PRODUCT/
+else
+    BASEDIR=ota/$TARGET_PRODUCT-$IRDA_VARIANT/
+fi
 
 pushd $ANDROID_BUILD_TOP &> /dev/null
 mkdir -p $BASEDIR
