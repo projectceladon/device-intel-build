@@ -167,6 +167,41 @@ function build_inc_ota {
     fi
 }
 
+function rename_in_zip {
+    printf "@ $2\n@=$3\n" | zipnote -w $1
+}
+
+# Does an in-place modification of a target-files-package to ensure that
+# bootloader updates are working corectly. We add two extra files to
+# the bootloader image which are copies of the supplied blob.
+# In the source TFP, these will be called A.bin and B.bin.
+# In the target TFP, these will be B.bin and C.bin.
+# During the incremental OTA, A should be deleted, C created,
+# and B patched.
+# ARGS: <TFP> <blob filename> <archive path in TFP under RADIO/> <filename1> <filename2>
+function season_tfp {
+    local_archive=`$MKTEMP tmp.bootloader.XXXXXXXX`
+    tfp=$1
+    blob=$2
+    archive=RADIO/$3
+    fn1=$4
+    fn2=$5
+
+    unzip -jp $tfp $archive > $local_archive
+
+    zip -j $local_archive $blob
+    rename_in_zip $local_archive $(basename $blob) $fn1
+
+    zip -j $local_archive $blob
+    rename_in_zip $local_archive $(basename $blob) $fn2
+
+    zip -d $tfp $archive
+    zip -jm $tfp $local_archive
+    rename_in_zip $tfp $(basename $local_archive) $archive
+
+    rm -rf $local_archive
+}
+
 # Args: <private signing key> <signing cert> <keystore filename> <key1> <key2>
 function build_keystore {
     t1=`$MKTEMP tmp.derkey.XXXXXXXXX`
@@ -192,7 +227,7 @@ function log_to {
         shift
         $@
     else
-        local LOGFILE=ota/logs/$1
+        local LOGFILE=$BASEDIR/logs/$1
         shift
         $@ &> $LOGFILE
     fi
@@ -218,10 +253,24 @@ if [[ -n "$TFP" ]]; then
     fi
 fi
 
+if [ -z "$IRDA_VARIANT" ]; then
+    if [ $TARGET_PRODUCT == "coho" -o $TARGET_PRODUCT == "cohol" ]; then
+        echo "IRDA builds require use of -V parameter"
+        exit 1
+    fi
+
+    BASEDIR=ota/$TARGET_PRODUCT/
+else
+    BASEDIR=ota/$TARGET_PRODUCT-$IRDA_VARIANT/
+fi
+
 pushd $ANDROID_BUILD_TOP &> /dev/null
+mkdir -p $BASEDIR
+rm -rf $BASEDIR/ota*.zip $BASEDIR/flashfiles*.zip
+rm -rf ota/tmp
 mkdir -p ota/tmp
-rm -rf ota/logs
-mkdir -p ota/logs
+rm -rf $BASEDIR/logs
+mkdir -p $BASEDIR/logs
 
 if [ -z "$NO_BUILD_OTATOOLS" ]; then
     echo "Building support tools"
@@ -245,6 +294,8 @@ background oemvars-testkeys.log device/intel/build/generate_bios_oemvars \
         -T $TS \
         --unlock ota/unlock-testkeys.txt ota/oemvars-testkeys.txt
 
+# Builds a keystore signed with production-test OEM key that has both
+# testing and production-test verity keys in it
 background build-keystore.log build_keystore \
         $PRODKEYS/oem.pk8 $PRODKEYS/oem.x509.pem ota/keystore.bin \
         build/target/product/security/verity.x509.pem \
@@ -253,9 +304,9 @@ background build-keystore.log build_keystore \
 wait_complete 3
 
 if [[ -n "$TFP" ]]; then
-    log_to sign_tfp-${1}.log sign_tfp $TFP ota/tfp-${1}.zip
-    background flashfiles-${1}.log build_provimg ota/tfp-${1}.zip ota/flashfiles-${1}.zip
-    background ota-${1}.log build_ota ota/tfp-${1}.zip ota/ota-${1}.zip $PRODKEYS/releasekey
+    log_to sign_tfp-${1}.log sign_tfp $TFP $BASEDIR/tfp-${1}.zip
+    background flashfiles-${1}.log build_provimg $BASEDIR/tfp-${1}.zip $BASEDIR/flashfiles-${1}.zip
+    background ota-${1}.log build_ota $BASEDIR/tfp-${1}.zip $BASEDIR/ota-${1}.zip $PRODKEYS/releasekey
     wait_complete 2
     echo "All done!"
     exit
@@ -265,7 +316,7 @@ if [[ -z "$SKIP_TFPS" ]]; then
     echo "Building source software version A"
     log_to make-A.log make -j$CONCURRENCY_LEVEL target-files-package
     cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
-            ota/tfp-A-testkey.zip
+            $BASEDIR/tfp-A-testkey.zip
 
     # Force EFI binaries to be rebuilt
     rm -rf $OUT/obj/EFI
@@ -276,26 +327,48 @@ if [[ -z "$SKIP_TFPS" ]]; then
     echo "Building target software version B"
     log_to make-B.log make -j$CONCURRENCY_LEVEL target-files-package
     cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
-            ota/tfp-B-testkey.zip
+            $BASEDIR/tfp-B-testkey.zip
+
+    echo "Seasoning target-files-packages..."
+    NUM_WAIT=2
+    background season_tfp-A.log season_tfp $BASEDIR/tfp-A-testkey.zip \
+                    device/intel/common/recovery/blob1.bin \
+                    bootloader.zip A.bin B.bin
+    background season_tfp-B.log season_tfp $BASEDIR/tfp-B-testkey.zip \
+                    device/intel/common/recovery/blob2.bin \
+                    bootloader.zip C.bin B.bin
+
+    if [ -n "$IRDA_VARIANT" ]; then
+        NUM_WAIT=$(($NUM_WAIT + 2))
+        background season_tfp-irda-A.log season_tfp $BASEDIR/tfp-A-testkey.zip \
+                    device/intel/common/recovery/blob1.bin \
+                    provdata_${IRDA_VARIANT}.zip \
+                    BOOTLOADER/D.bin BOOTLOADER/E.bin
+        background season_tfp-irda-B.log season_tfp $BASEDIR/tfp-B-testkey.zip \
+                    device/intel/common/recovery/blob2.bin \
+                    provdata_${IRDA_VARIANT}.zip \
+                    BOOTLOADER/F.bin BOOTLOADER/E.bin
+    fi
+    wait_complete $NUM_WAIT
 fi
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"
-    background sign_tfp-A.log sign_tfp ota/tfp-A-testkey.zip ota/tfp-A.zip
-    background sign_tfp-B.log sign_tfp ota/tfp-B-testkey.zip ota/tfp-B.zip
+    background sign_tfp-A.log sign_tfp $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-A.zip
+    background sign_tfp-B.log sign_tfp $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-B.zip
     wait_complete 2
 fi
 
 echo "Building flashfiles..."
 NUM_WAIT=0
 if [[ "$QUICK" != "1" ]]; then
-    background flashfiles-A.log build_provimg ota/tfp-A.zip ota/flashfiles-A.zip
-    background flashfiles-B.log build_provimg ota/tfp-B.zip ota/flashfiles-B.zip
+    background flashfiles-A.log build_provimg $BASEDIR/tfp-A.zip $BASEDIR/flashfiles-A.zip
+    background flashfiles-B.log build_provimg $BASEDIR/tfp-B.zip $BASEDIR/flashfiles-B.zip
     NUM_WAIT=$(($NUM_WAIT + 2))
 fi
 
-background flashfiles-A-testkey.log build_provimg ota/tfp-A-testkey.zip ota/flashfiles-A-testkey.zip
-background flashfiles-B-testkey.log build_provimg ota/tfp-B-testkey.zip ota/flashfiles-B-testkey.zip
+background flashfiles-A-testkey.log build_provimg $BASEDIR/tfp-A-testkey.zip $BASEDIR/flashfiles-A-testkey.zip
+background flashfiles-B-testkey.log build_provimg $BASEDIR/tfp-B-testkey.zip $BASEDIR/flashfiles-B-testkey.zip
 NUM_WAIT=$(($NUM_WAIT + 2))
 
 wait_complete $NUM_WAIT
@@ -303,17 +376,17 @@ wait_complete $NUM_WAIT
 NUM_WAIT=0
 echo "Building OTA update packages..."
 if [[ "$QUICK" != "1" ]]; then
-    background ota-A.log build_ota ota/tfp-A.zip ota/ota-A.zip $PRODKEYS/releasekey
-    background ota-B.log build_ota ota/tfp-B.zip ota/ota-B.zip $PRODKEYS/releasekey
-    background ota-A-B.log build_inc_ota ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip $PRODKEYS/releasekey
-    background ota-B-A.log build_inc_ota ota/tfp-B.zip ota/tfp-A.zip ota/ota-B-A.zip $PRODKEYS/releasekey
+    background ota-A.log build_ota $BASEDIR/tfp-A.zip $BASEDIR/ota-A.zip $PRODKEYS/releasekey
+    background ota-B.log build_ota $BASEDIR/tfp-B.zip $BASEDIR/ota-B.zip $PRODKEYS/releasekey
+    background ota-A-B.log build_inc_ota $BASEDIR/tfp-A.zip $BASEDIR/tfp-B.zip $BASEDIR/ota-A-B.zip $PRODKEYS/releasekey
+    background ota-B-A.log build_inc_ota $BASEDIR/tfp-B.zip $BASEDIR/tfp-A.zip $BASEDIR/ota-B-A.zip $PRODKEYS/releasekey
     NUM_WAIT=$(($NUM_WAIT + 4))
 fi
 
-background ota-A-testkey.log build_ota ota/tfp-A-testkey.zip ota/ota-A-testkey.zip
-background ota-B-testkey.log build_ota ota/tfp-B-testkey.zip ota/ota-B-testkey.zip
-background ota-A-B-testkey.log build_inc_ota ota/tfp-A-testkey.zip ota/tfp-B-testkey.zip ota/ota-A-B-testkey.zip
-background ota-B-A-testkey.log build_inc_ota ota/tfp-B-testkey.zip ota/tfp-A-testkey.zip ota/ota-B-A-testkey.zip
+background ota-A-testkey.log build_ota $BASEDIR/tfp-A-testkey.zip $BASEDIR/ota-A-testkey.zip
+background ota-B-testkey.log build_ota $BASEDIR/tfp-B-testkey.zip $BASEDIR/ota-B-testkey.zip
+background ota-A-B-testkey.log build_inc_ota $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-B-testkey.zip $BASEDIR/ota-A-B-testkey.zip
+background ota-B-A-testkey.log build_inc_ota $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-A-testkey.zip $BASEDIR/ota-B-A-testkey.zip
 NUM_WAIT=$(($NUM_WAIT + 4))
 
 wait_complete $NUM_WAIT
