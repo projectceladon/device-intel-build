@@ -112,7 +112,7 @@ class FlashFileJson:
         if len(new['restrict']):
             self.flash['commands'].append(new)
 
-    def parse_command(self, commands, variant, platform):
+    def parse_command(self, commands, options, variant, platform):
         for cmd in commands:
             if not filter_command(cmd, variant, platform, None):
                 continue
@@ -139,6 +139,9 @@ class FlashFileJson:
             if cmd['type'] in ('fastboot', 'dldr'):
                 new['description'] = cmd.get('desc', cmd['args'])
                 new['tool'] = cmd['type']
+                if options and 'fastboot' in options:
+                    for opt in options['fastboot']:
+                        new[opt] = options['fastboot'][opt]
                 new['args'] = cmd['args']
                 if 'pftname' in cmd:
                     if '$' in new['args']:
@@ -158,10 +161,10 @@ class FlashFileJson:
                 continue
             self.add_command(new, cmd)
 
-    def parse_command_grp(self, cmd_groups, variant, platform):
+    def parse_command_grp(self, cmd_groups, options, variant, platform):
         for grp in cmd_groups:
             self.cmd_grp = grp
-            self.parse_command(cmd_groups[grp], variant, platform)
+            self.parse_command(cmd_groups[grp], options, variant, platform)
 
     def add_groups(self, groups):
         self.flash['groups'] = groups
@@ -193,7 +196,8 @@ def parse_config(conf, variant, platform):
         # Special case for json, because it can have multiple configurations
         if c['filename'][-5:] == '.json':
             f = FlashFileJson(conf['configurations'])
-            f.parse_command_grp(conf['commands'], variant, platform)
+            options = conf.get('options', "")
+            f.parse_command_grp(conf['commands'], options, variant, platform)
             if 'groups' in conf:
                 f.add_groups(conf['groups'])
             results.append((c['filename'], f.finish()))
