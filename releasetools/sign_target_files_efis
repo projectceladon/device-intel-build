@@ -398,12 +398,23 @@ def main(argv):
         if fastboot:
             common.ZipWriteStr(output_zip, "RADIO/fastboot.img", fastboot.data)
 
+    print "Creating TDOS image if necessary"
+    if os.path.exists(os.path.join(unpack_dir, "RADIO", "tdos.img")):
+        os.unlink(os.path.join(unpack_dir, "RADIO", "tdos.img"))
+        tdos = intel_common.GetTdosImage(unpack_dir)
+    else:
+        tdos = intel_common.GetTdosImage(unpack_dir)
+        if tdos:
+            common.ZipWriteStr(output_zip, "RADIO/tdos.img", tdos.data)
+
     print "Building destination target-files-package"
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             output_zip.write(output_bz_file, zi.filename)
         elif zi.filename == "RADIO/fastboot.img":
             output_zip.writestr(zi, fastboot.data)
+        elif zi.filename == "RADIO/tdos.img":
+            output_zip.writestr(zi, tdos.data)
         else:
             output_zip.writestr(zi, input_zip.read(zi))
 
