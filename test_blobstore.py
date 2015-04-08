@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from blobstore import *
 
 def test1():
