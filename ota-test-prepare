@@ -26,9 +26,9 @@ export NO_LOGS=
 export NO_BUILD_OTATOOLS=
 export TFP=
 export QUICK=
-export SKIP_TFPS=
+export FORCE_BUILD_TFPS=
 
-while getopts "qst:V:jlok" opt; do
+while getopts "qst:V:jlof" opt; do
     case $opt in
         s)
             set -x
@@ -51,8 +51,8 @@ while getopts "qst:V:jlok" opt; do
         o)
             export NO_BUILD_OTATOOLS=YES
             ;;
-        k)
-            export SKIP_TFPS=YES
+        f)
+            export FORCE_BUILD_TFPS=YES
             ;;
         \?)
             echo "Usage:"
@@ -71,11 +71,11 @@ while getopts "qst:V:jlok" opt; do
             echo "-q: Just build testkey signed images for the 'quick' test cases"
             echo "-s: Show commands being run"
             echo "-t <tfp>: Don't do own build; use supplied target-files to create a re-signed release"
-            echo "-d <device>: Device variant for IRDA builds"
+            echo "-V <variant>: Device variant for IRDA builds"
             echo "-j: Build output images in parallel (SSD recommended)"
             echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
             echo "-o: skip building otatools, assume they are there"
-            echo "-k: skip building target files packages, use ones already in ota/"
+            echo "-f: force building target files packages even if they exist"
             exit 1
             ;;
     esac
@@ -160,7 +160,6 @@ function build_inc_ota {
         ./device/intel/build/releasetools/ota_deployment_fixup \
             --variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
             $EXTRA_ARGS $3.unfixed $3
-        rm -f $t1
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS --incremental_from $1 $2 $3
@@ -170,6 +169,51 @@ function build_inc_ota {
 function rename_in_zip {
     printf "@ $2\n@=$3\n" | zipnote -w $1
 }
+
+function reset_tree {
+    # Force EFI binaries to be rebuilt
+    rm -rf $OUT/obj/EFI
+
+    echo "Cleaning source tree"
+    make installclean &> /dev/null
+}
+
+function build_release {
+    RELNAME=$1
+    BLOB=$2
+    F1=$3
+    F2=$4
+
+    reset_tree
+
+    echo "Building source software version $RELNAME"
+    log_to make-${RELNAME}.log make -j$CONCURRENCY_LEVEL target-files-package
+    cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
+            $BASEDIR/tfp-$RELNAME-testkey.zip
+
+    if [[ "$RELNAME" == "A" ]]; then
+        BBIN=blob1.bin
+        BLOBS1="A.bin"
+        BLOBS2="BOOTLOADER/D.bin"
+    else
+        BBIN=blob2.bin
+        BLOBS1="C.bin"
+        BLOBS2="BOOTLOADER/F.bin"
+    fi
+
+    echo "Adding extra test case files to TFP for $RELNAME"
+    season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
+                    device/intel/common/recovery/$BBIN \
+                    bootloader.zip $BLOBS1 B.bin
+
+    if [ -n "$IRDA_VARIANT" ]; then
+        season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
+                    device/intel/common/recovery/$BBIN \
+                    provdata_${IRDA_VARIANT}.zip \
+                    $BLOBS2 BOOTLOADER/E.bin
+    fi
+}
+
 
 # Does an in-place modification of a target-files-package to ensure that
 # bootloader updates are working corectly. We add two extra files to
@@ -266,7 +310,7 @@ fi
 
 pushd $ANDROID_BUILD_TOP &> /dev/null
 mkdir -p $BASEDIR
-rm -rf $BASEDIR/ota*.zip $BASEDIR/flashfiles*.zip
+rm -rf $BASEDIR/ota*.zip $BASEDIR/flashfiles*.zip $BASEDIR/*.unfixed
 rm -rf ota/tmp
 mkdir -p ota/tmp
 rm -rf $BASEDIR/logs
@@ -312,51 +356,28 @@ if [[ -n "$TFP" ]]; then
     exit
 fi
 
-if [[ -z "$SKIP_TFPS" ]]; then
-    echo "Building source software version A"
-    log_to make-A.log make -j$CONCURRENCY_LEVEL target-files-package
-    cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
-            $BASEDIR/tfp-A-testkey.zip
+if [[ -n $FORCE_BUILD_TFPS || ! -f $BASEDIR/tfp-A-testkey.zip ]]; then
+    build_release A
+    RESIGN_A=true
+fi
 
-    # Force EFI binaries to be rebuilt
-    rm -rf $OUT/obj/EFI
-
-    echo "Cleaning source tree"
-    make installclean &> /dev/null
-
-    echo "Building target software version B"
-    log_to make-B.log make -j$CONCURRENCY_LEVEL target-files-package
-    cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
-            $BASEDIR/tfp-B-testkey.zip
-
-    echo "Seasoning target-files-packages..."
-    NUM_WAIT=2
-    background season_tfp-A.log season_tfp $BASEDIR/tfp-A-testkey.zip \
-                    device/intel/common/recovery/blob1.bin \
-                    bootloader.zip A.bin B.bin
-    background season_tfp-B.log season_tfp $BASEDIR/tfp-B-testkey.zip \
-                    device/intel/common/recovery/blob2.bin \
-                    bootloader.zip C.bin B.bin
-
-    if [ -n "$IRDA_VARIANT" ]; then
-        NUM_WAIT=$(($NUM_WAIT + 2))
-        background season_tfp-irda-A.log season_tfp $BASEDIR/tfp-A-testkey.zip \
-                    device/intel/common/recovery/blob1.bin \
-                    provdata_${IRDA_VARIANT}.zip \
-                    BOOTLOADER/D.bin BOOTLOADER/E.bin
-        background season_tfp-irda-B.log season_tfp $BASEDIR/tfp-B-testkey.zip \
-                    device/intel/common/recovery/blob2.bin \
-                    provdata_${IRDA_VARIANT}.zip \
-                    BOOTLOADER/F.bin BOOTLOADER/E.bin
-    fi
-    wait_complete $NUM_WAIT
+if [[ -n $FORCE_BUILD_TFPS || ! -f $BASEDIR/tfp-B-testkey.zip ]]; then
+    build_release B
+    RESIGN_B=true
 fi
 
 if [[ "$QUICK" != "1" ]]; then
     echo "Re-signing target-files-packages"
-    background sign_tfp-A.log sign_tfp $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-A.zip
-    background sign_tfp-B.log sign_tfp $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-B.zip
-    wait_complete 2
+    NUM_WAIT=0
+    if [[ -n "$RESIGN_A" || ! -f $BASEDIR/tfp-A.zip ]]; then
+        NUM_WAIT=$(($NUM_WAIT + 1))
+        background sign_tfp-A.log sign_tfp $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-A.zip
+    fi
+    if [[ -n "$RESIGN_B" || ! -f $BASEDIR/tfp-B.zip ]]; then
+        NUM_WAIT=$(($NUM_WAIT + 1))
+        background sign_tfp-B.log sign_tfp $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-B.zip
+    fi
+    wait_complete $NUM_WAIT
 fi
 
 echo "Building flashfiles..."
