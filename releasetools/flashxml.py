@@ -172,6 +172,23 @@ class FlashFileJson:
     def finish(self):
         return json.dumps({'flash': self.flash}, indent=4, sort_keys=True)
 
+# main Class to generate installer cmd file from json configuration file
+class FlashFileCmd:
+    def __init__(self, config):
+        self.cmd = ""
+
+    def parse_command(self, commands):
+        for cmd in commands:
+            if cmd['type'] == 'fastboot':
+                self.cmd += cmd['args']
+                if 'target' in cmd and 'format' not in cmd['args']:
+                    self.cmd += " " + cmd['target'][0]
+                self.cmd += "\n"
+
+    def finish(self):
+        return self.cmd
+
+
 def filter_command(cmd, variant, platform, subgroup):
     # You can filter-out items by prefixing with !. So cmd["!platform"] matches all platforms
     # except those in the list
