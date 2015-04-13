@@ -299,14 +299,14 @@ class BlobStore:
     def getBlob(self, blobKey, blobType):
         if not ValidBlobType(blobType):
             print 'Invalid blobType'
-            return None
+            return (None, 0)
 
         blobKeyFixed = blobKey.ljust(BLOB_KEY_LENGTH, '\0')
 
         matchedBlock = self._blocksList.get(blobKeyFixed)
         if(matchedBlock is None):
             print 'No Blob found with given key %s' % blobKey
-            return None
+            return (None, 0)
 
         blobLocation, blobSize = matchedBlock.getBlobInfo(blobType)
         if not (blobLocation > 0 and blobSize > 0):
@@ -316,7 +316,7 @@ class BlobStore:
         blob = self._file.read(blobSize)
         if (blob is None):
             print 'Unable to retrieve the blob'
-        return blob
+        return (blob, blobSize)
 
     def putBlob(self, blob, blobSize, blobKey, blobType):
 
@@ -352,7 +352,6 @@ class BlobStore:
         self.addToBlocksList(block)
         blockLocation = self.calcBlockLocation(block._blockNumber)
         block.write(self._file, blockLocation)
-        block.printInfo()
         self._superBlock.write(self._file)
         return True
 
