@@ -47,7 +47,7 @@ class FlashFileXml:
 
     def parse_command(self, commands):
         for cmd in commands:
-            if 'target' in cmd:
+            if 'target' in cmd and 'format' not in cmd['args']:
                 fname = cmd['target']
                 shortname = fname.split('.')[0]
                 self.add_file(shortname, fname, 'unspecified')
@@ -119,11 +119,12 @@ class FlashFileJson:
             if 'target' in cmd:
                 if not isinstance(cmd['target'], list):
                     cmd['target'] = [cmd['target']]
-                cmd['pftname'] = []
-                for f in cmd['target']:
-                    shortname = f.split('.')[0].lower()
-                    self.add_file(shortname, f)
-                    cmd['pftname'].append('${' + shortname + '}')
+                if 'format' not in cmd['args']:
+                    cmd['pftname'] = []
+                    for f in cmd['target']:
+                        shortname = f.split('.')[0].lower()
+                        self.add_file(shortname, f)
+                        cmd['pftname'].append('${' + shortname + '}')
 
         for cmd in commands:
             new = {}
