@@ -222,6 +222,11 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
         fastboot_file = fastboot.WriteToTemp()
         extra_files.append((fastboot_file.name,"fastboot.img"))
 
+    tdos = GetTdosImage(unpack_dir)
+    if tdos:
+        tdos_file = tdos.WriteToTemp()
+        extra_files.append((tdos_file.name,"tdos.img"))
+
     if not autosize:
         size = int(open(os.path.join(unpack_dir, "RADIO", "bootloader-size.txt")).read().strip())
     else:
@@ -284,6 +289,77 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size
         in_p = os.path.join(root, f)
         out_p = os.path.relpath(in_p, root)
         PutFatFile(filename, in_p, out_p)
+
+
+def GetTdosImage(unpack_dir, info_dict=None):
+    if info_dict is None:
+        info_dict = common.OPTIONS.info_dict
+
+    prebuilt_path = os.path.join(unpack_dir, "RADIO", "tdos.img")
+    if (os.path.exists(prebuilt_path)):
+        print "using prebuilt tdos.img"
+        return common.File.FromLocalFile("tdos.img", prebuilt_path)
+
+    ramdisk_path = os.path.join(unpack_dir, "RADIO", "ramdisk-tdos.img")
+    if not os.path.exists(ramdisk_path):
+        print "no TDOS ramdisk found"
+        return None
+
+    print "building TDOS image from target_files..."
+    ramdisk_img = tempfile.NamedTemporaryFile()
+    img = tempfile.NamedTemporaryFile()
+
+    # use MKBOOTIMG from environ, or "mkbootimg" if empty or not set
+    mkbootimg = os.getenv('MKBOOTIMG') or "mkbootimg"
+
+    cmd = [mkbootimg, "--kernel", os.path.join(unpack_dir, "BOOT", "kernel")]
+    fn = os.path.join(unpack_dir, "BOOT", "cmdline")
+    if os.access(fn, os.F_OK):
+        cmd.append("--cmdline")
+        cmd.append(open(fn).read().rstrip("\n"))
+
+    # Add 2nd-stage loader, if it exists
+    fn = os.path.join(unpack_dir, "BOOT", "second")
+    if os.access(fn, os.F_OK):
+        cmd.append("--second")
+        cmd.append(fn)
+
+    args = info_dict.get("mkbootimg_args", None)
+    if args and args.strip():
+        cmd.extend(shlex.split(args))
+
+    cmd.extend(["--ramdisk", ramdisk_path,
+                "--output", img.name])
+
+    try:
+        p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
+    p.communicate()
+    assert p.returncode == 0, "mkbootimg of fastboot image failed"
+
+    # Sign the image using BOOT_SIGNER env variable, or "boot_signer" command
+    signing_key = info_dict.get("verity_key")
+    if info_dict.get("verity") == "true" and signing_key:
+            boot_signer = os.getenv('BOOT_SIGNER') or "boot_signer"
+            cmd = [boot_signer, "/tdos", img.name,
+                    signing_key + common.OPTIONS.private_key_suffix,
+                    signing_key + common.OPTIONS.public_key_suffix, img.name];
+            try:
+                p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            except Exception as exc:
+                    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+                    raise exc
+            p.communicate()
+            assert p.returncode == 0, "boot signing of tdos image failed"
+
+    img.seek(os.SEEK_SET, 0)
+    data = img.read()
+
+    img.close()
+
+    return common.File("tdos.img", data)
 
 
 def GetFastbootImage(unpack_dir, info_dict=None):

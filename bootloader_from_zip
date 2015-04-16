@@ -20,7 +20,8 @@ zip file containing its contents relative to the root directory
 
 -i, --size      Size of partition in bytes (required)
 -z, --zipfile   Source zipfile containing root contents (required)
--f, --fastboot  Path to Fastboot boot image (required)
+-b, --fastboot  Path to Fastboot boot image
+-B, --bootimage Path to additonal boot images, can call multiple times
 -u, --bootable  Flag indicating this is bootable USB image,
                 creates sentinel file for loader
 """
@@ -45,7 +46,7 @@ import intel_common
 OPTIONS = common.OPTIONS
 OPTIONS.bootable = False
 OPTIONS.zipfile = None
-OPTIONS.fastboot = None
+OPTIONS.bootimage = []
 OPTIONS.size = 0;
 OPTIONS.extra_size = 0;
 
@@ -56,8 +57,10 @@ def main(argv):
             OPTIONS.size = int(a)
         elif o in ("-z", "--zipfile"):
             OPTIONS.zipfile = a
-	elif o in ("-b", "--fastboot"):
-            OPTIONS.fastboot = a
+        elif o in ("-b", "--fastboot"):
+            OPTIONS.bootimage.append((a, "fastboot.img"))
+        elif o in ("-B", "--bootimage"):
+            OPTIONS.bootimage.append((a, os.path.basename(a)))
         elif o in ("-u", "--bootable"):
             OPTIONS.bootable = True
         elif o in ("-e", "--extra-size"):
@@ -67,8 +70,8 @@ def main(argv):
         return True
 
     args = common.ParseOptions(argv, __doc__,
-                            extra_opts="i:z:b:ue:",
-                            extra_long_opts=["size=", "zipfile=", "fastboot=",
+                            extra_opts="i:z:b:B:ue:",
+                            extra_long_opts=["size=", "zipfile=", "bootimage=", "fastboot=",
                                              "bootable", "extra-size="],
                             extra_option_handler=option_handler)
     if len(args) != 1:
@@ -84,9 +87,7 @@ def main(argv):
     tf.write("foo")
     tf.flush()
 
-    extra_files = []
-    if OPTIONS.fastboot:
-        extra_files.append((OPTIONS.fastboot, "fastboot.img"))
+    extra_files = OPTIONS.bootimage
     if OPTIONS.bootable:
         extra_files.append((tf.name, "force_fastboot"))
 
