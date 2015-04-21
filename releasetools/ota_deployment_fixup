@@ -102,6 +102,7 @@ def process_updater_script(data, unpack_dir):
         fingerprint_old.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.pre_fish_name)
         fingerprint_old.append('intel/'+OPTIONS.pre_fish_name+'/'+OPTIONS.fish_name)
     if OPTIONS.lunch:
+        fingerprint_old.append('intel/'+OPTIONS.lunch+'/'+OPTIONS.lunch)
         fingerprint_old.append('intel/'+OPTIONS.lunch+'/'+OPTIONS.fish_name)
 
 
