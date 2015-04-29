@@ -39,7 +39,7 @@ public final class ECSSRSAPrivateKey implements PrivateKey {
 	 */
 	@Override
 	public String getAlgorithm() {
-		System.err.println(getClass().getName() + " getAlgorithm");
+		//System.err.println(getClass().getName() + " getAlgorithm");
 		return "RSA";
 	}
 
