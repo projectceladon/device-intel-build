@@ -23,13 +23,15 @@ Usage: flashfiles_from_target_files <options> <input_target_files_zip> <output_f
 
 """
 
-import json
 import sys
 import os
 import tempfile
 import zipfile
 import shutil
+import iniparser
+import flash_cmd_generator
 import flashxml
+import json
 
 # Sources:
 # fastboot - build a Fastboot boot image
@@ -65,37 +67,36 @@ def getFromZip(zip_path, filename):
 added_targets = []
 
 def process_image(unpack_dir, dest_zip, source, target):
-    for t in target:
-        if t in added_targets:
-            continue
+    if target in added_targets:
+        return
 
-        print "-- Adding", t
+    print "-- Adding", target
 
-        if source == "fastboot":
-            ifile = intel_common.GetFastbootImage(unpack_dir)
-        elif source == "bootloader":
-            bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=OPTIONS.variant)
-            ifile = common.File(t, bdata)
-        elif source == "images":
-            ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", t))
-        elif source == "provdatazip":
-            variant = ""
-            if OPTIONS.variant:
-                variant = "_" + OPTIONS.variant
-            ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" %variant), t)
-        elif source == "bootloaderzip":
-            ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), t)
-        elif source.startswith("boot:"):
-            _, iname = source.split(":")
-            ifile = common.GetBootableImage(t, iname+".img", unpack_dir, iname.upper())
-        elif source == "radio":
-            ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "RADIO", t))
-        else:
-            raise Exception("unknown source image type " + source)
+    if source == "fastboot":
+        ifile = intel_common.GetFastbootImage(unpack_dir)
+    elif source == "bootloader":
+        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=OPTIONS.variant)
+        ifile = common.File(target, bdata)
+    elif source == "images":
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
+    elif source == "provdatazip":
+        variant = ""
+        if OPTIONS.variant:
+            variant = "_" + OPTIONS.variant
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" %variant), target)
+    elif source == "bootloaderzip":
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
+    elif source.startswith("boot:"):
+        _, iname = source.split(":")
+        ifile = common.GetBootableImage(target, iname+".img", unpack_dir, iname.upper())
+    elif source == "radio":
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "RADIO", target))
+    else:
+        raise Exception("unknown source image type " + source)
 
-        ifile.name = t
-        ifile.AddToZip(dest_zip)
-        added_targets.append(t)
+    ifile.name = target
+    ifile.AddToZip(dest_zip)
+    added_targets.append(target)
 
 def main(argv):
     def option_handler(o, a):
@@ -118,33 +119,32 @@ def main(argv):
     unpack_dir, input_zip = common.UnzipTemp(args[0])
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
 
-    print "Reading JSON configuration..."
-    with open(os.path.join(unpack_dir, "RADIO", "flashfiles.json"), "r") as f:
-        conf = json.loads(f.read())
+    variant = getBuildProp(unpack_dir, "ro.build.type")
+    platform = getBuildProp(unpack_dir, "ro.product.name")
+
+    flashfile = os.path.join(unpack_dir, "RADIO", "flashfiles")
+    if os.path.exists(flashfile + ".ini"):
+        print "Reading INI configuration..."
+        with open(flashfile + ".ini", "r") as f:
+            ip = iniparser.IniParser()
+            ip.parse(f)
+        configs, files = flash_cmd_generator.parse_config(ip, variant, platform)
+    else:
+        print "Reading JSON configuration..."
+        with open(flashfile + ".json", "r") as f:
+            conf = json.loads(f.read())
+        configs, files = flashxml.parse_config(conf, variant, platform)
 
     with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
-        print "Generating XML/JSON flash configuration files..."
-        variant = getBuildProp(unpack_dir, "ro.build.type")
-        platform = getBuildProp(unpack_dir, "ro.product.name")
-        configs = flashxml.parse_config(conf, variant, platform)
+        print "Generating JSON flash configuration files..."
+
         for fn, data in configs:
             ifile = common.File(fn, data)
             ifile.AddToZip(dest_zip)
 
         print "Adding required binaries..."
-        for config in conf["commands"].values():
-            for command in config:
-                if not flashxml.filter_command(command, variant, platform, None):
-                    continue
-                if "source" in command and "target" in command:
-                    process_image(unpack_dir, dest_zip, command["source"], command["target"])
-        # Add additionnal files to the .zip if required in flashfiles.json
-        if "files" in conf:
-            for f in conf["files"].values():
-                if "source" in f and "target" in f:
-                    if not isinstance(f["target"], list):
-                        f["target"] = [f["target"]]
-                    process_image(unpack_dir, dest_zip, f["source"], f["target"])
+        for src, target in files:
+            process_image(unpack_dir, dest_zip, src, target)
     print "All done."
 
 
