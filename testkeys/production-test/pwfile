@@ -10,4 +10,6 @@
 [[[  uhlersoth  ]]] device/intel/build/testkeys/production-test/oem
 [[[  uhlersoth  ]]] device/intel/build/testkeys/production-test/KEK
 [[[  uhlersoth  ]]] device/intel/build/testkeys/production-test/PK
+[[[  uhlersoth  ]]] device/intel/build/testkeys/production-test/OAK
+[[[  uhlersoth  ]]] device/intel/build/testkeys/production-test/odm
 
