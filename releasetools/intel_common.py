@@ -22,6 +22,7 @@ import subprocess
 import shlex
 import shutil
 import imp
+import time
 
 sys.path.append("build/tools/releasetools")
 import common
@@ -599,4 +600,46 @@ def build_fls(unpack_dir, target, variant=None):
         raise exc
     p.communicate()
     assert p.returncode == 0, "cp to fasboot directory failed"
+
+
+def escaped_value(value):
+    result = ''
+    for char in value:
+        result += "%%%02x" % ord(char)
+    return result
+
+
+def get_efi_sig_list(pem_cert, guid_str, name):
+    tf = tempfile.NamedTemporaryFile(prefix="pem_cert_to_esl-"+name+"-")
+    if pem_cert:
+        cmd = ["cert-to-efi-sig-list", "-g", guid_str, pem_cert, tf.name]
+        p = common.Run(cmd)
+        p.communicate()
+        assert p.returncode == 0, "cert-to-efi-sig-list failed"
+    tf.seek(os.SEEK_SET, 0)
+    return tf
+
+
+def get_auth_data(timestamp, sign_pair, password, pem_cert, guid_str, name, payload = None):
+    esl = get_efi_sig_list(pem_cert, guid_str, name)
+
+    if payload:
+        esl.write(payload)
+        esl.seek(os.SEEK_SET, 0)
+
+    pem_key = pk8_to_pem(sign_pair + common.OPTIONS.private_key_suffix, password)
+
+    tf = tempfile.NamedTemporaryFile(prefix="auth_file-"+name+"-")
+    cmd = ["sign-efi-sig-list", "-t", time.ctime(timestamp), "-c",
+           sign_pair + common.OPTIONS.public_key_suffix,
+           "-g", guid_str, "-k", pem_key.name, name, esl.name, tf.name]
+    p = common.Run(cmd)
+    p.communicate()
+    assert p.returncode == 0, "sign-efi-sig-list failed"
+    tf.seek(os.SEEK_SET, 0)
+    pem_key.close()
+    esl.close()
+    data = tf.read()
+    tf.close()
+    return data
 
