@@ -80,7 +80,7 @@ class FlashFileXml:
 class FlashFileJson:
 
     def __init__(self, config):
-        self.flist = []
+        self.flist = {}
 
         self.configurations = config
         out_cfg = copy.deepcopy(config)
@@ -93,10 +93,10 @@ class FlashFileJson:
         self.flash = {'version': '2.0', 'osplatform': 'android',
                      'parameters': {}, 'configurations': out_cfg, 'commands': []}
 
-    def add_file(self, shortname, filename):
+    def add_file(self, shortname, filename, source):
         if filename in self.flist:
             return
-        self.flist.append(filename)
+        self.flist[filename] = source
         new = {'type': 'file', 'name': shortname, 'value': filename, 'description': filename}
         self.flash['parameters'][shortname] = new
 
@@ -123,7 +123,7 @@ class FlashFileJson:
                     cmd['pftname'] = []
                     for f in cmd['target']:
                         shortname = f.split('.')[0].lower()
-                        self.add_file(shortname, f)
+                        self.add_file(shortname, f, cmd['source'])
                         cmd['pftname'].append('${' + shortname + '}')
 
         for cmd in commands:
@@ -170,6 +170,9 @@ class FlashFileJson:
     def add_groups(self, groups):
         self.flash['groups'] = groups
 
+    def files(self):
+        return self.flist
+
     def finish(self):
         return json.dumps({'flash': self.flash}, indent=4, sort_keys=True)
 
@@ -207,6 +210,7 @@ def filter_command(cmd, variant, platform, subgroup):
 
 def parse_config(conf, variant, platform):
     results = []
+    files = []
 
     for c in conf['config']:
         print "Generating", c['filename']
@@ -219,6 +223,7 @@ def parse_config(conf, variant, platform):
             if 'groups' in conf:
                 f.add_groups(conf['groups'])
             results.append((c['filename'], f.finish()))
+            files = [[src, file] for file, src in f.files().items()]
             continue
 
         if c['filename'][-4:] == '.xml':
@@ -232,5 +237,5 @@ def parse_config(conf, variant, platform):
 
         f.parse_command(commands)
         results.append((c['filename'], f.finish()))
-    return results
+    return results, files
 
