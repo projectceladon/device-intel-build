@@ -47,11 +47,6 @@ SECTIONS
    *(.oemkeys)
   }
   . = ALIGN(4096);
-  .rela.dyn :
-  {
-   *(.rela.dyn)
-  }
-  . = ALIGN(4096);
   .dynamic  : { *(.dynamic) }
   . = ALIGN(4096);
   .rela :
