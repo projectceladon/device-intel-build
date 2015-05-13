@@ -187,14 +187,6 @@ def check_arg(arg, errortext):
         common.Usage(__doc__)
         sys.exit(1)
 
-def load_device_mapping(tfp_path):
-    try:
-        info = imp.find_module("device_mapping", [os.path.join(tfp_path, "RADIO")])
-    except ImportError:
-        return None
-    mod = imp.load_module("device_mapping", *info)
-    return mod.dmap
-
 def main(argv):
     def option_handler(o, a):
         if o in ("-B", "--brand"):
@@ -252,7 +244,7 @@ def main(argv):
     if OPTIONS.incremental:
         source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp)
 
-    dmap = load_device_mapping(tfp_dir)
+    dmap = intel_common.load_device_mapping_from_tfp(tfp_dir)
     if dmap:
         if OPTIONS.variant in dmap:
             if '__version__' in dmap: # Versions >= 1 have the version key
