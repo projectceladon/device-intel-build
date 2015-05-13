@@ -21,9 +21,26 @@ import sys
 import subprocess
 import shlex
 import shutil
+import imp
 
 sys.path.append("build/tools/releasetools")
 import common
+
+
+def load_device_mapping(path):
+    try:
+        mod = imp.load_module("device_mapping", open(path, "U"), path,
+                              (".py", "U", imp.PY_SOURCE))
+    except ImportError:
+        print "Device mapping not found"
+        return None
+
+    return mod.dmap
+
+
+def load_device_mapping_from_tfp(tfp_path):
+    return load_device_mapping(os.path.join(tfp_path, "RADIO",
+                                            "device_mapping.py"))
 
 
 def der_pub_from_pem_cert(cert_path):
