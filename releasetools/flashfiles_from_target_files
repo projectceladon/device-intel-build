@@ -67,7 +67,7 @@ added_targets = []
 def process_image(unpack_dir, dest_zip, source, target):
     for t in target:
         if t in added_targets:
-            return
+            continue
 
         print "-- Adding", t
 
