@@ -49,5 +49,14 @@ endif
 
 .PHONY: flashfiles
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
+else
+ifeq ($(USE_INTEL_FLASHFILES),sofia)
+#for sofia
+.PHONY: flashfiles
+flashfiles: droid
 
+.PHONY: blank_flashfiles
+blank_flashfiles:
+include device/intel/sofia3gr/flashfiles.mk
+endif
 endif
