@@ -14,8 +14,8 @@ The "meta" block in the configuration file specifies a few useful things:
       base path is used depends on how the key values are determined, as
       described below.
     * "types" enumerates the specific blob types we're going to put inside
-      this blobstore. It maps specific type names (currently "oemvars" and
-      "dtb") to the filename on the disk to look for, as explained in more
+      this blobstore. It maps specific type names (currently "oemvars", "dtb",
+      "bootvars") to the filename on the disk to look for, as explained in more
       detail below. We call this the "type filename".
 
 We need to determine the key values to store the blob data, such that the keys
@@ -65,7 +65,7 @@ the blobstore is still assembled. This is to support scenarios where not all
 boards require blob data of a specific type.
 """
 
-from blobstore import *
+import blobstore
 import os
 import sys, getopt
 import json
@@ -74,8 +74,9 @@ sys.path.append("device/intel/build/releasetools")
 import intel_common
 
 btypes = {
-    "oemvars" : BLOBTYPES.BlobTypeOemVars,
-    "dtb" : BLOBTYPES.BlobTypeDtb,
+    "oemvars" : blobstore.BLOB_TYPE_OEMVARS,
+    "dtb" : blobstore.BLOB_TYPE_DTB,
+    "bootvars" : blobstore.BLOB_TYPE_BOOTVARS
     }
 
 def main(argv):
@@ -155,20 +156,15 @@ def main(argv):
         sys.exit(0)
 
     #populate datastore
-    db = BlobStore()
-    db.create(args.output, len(blobs.keys()))
+    db = blobstore.BlobStore(args.output)
     for k, v in blobs.iteritems():
         device_id, blobtype = k
         if not os.path.exists(v):
             sys.stderr.write(v + " doesn't exist, skipping\n");
             continue
 
-        blob = open(v, "r").read()
-
-        if not db.putBlob(blob, len(blob), device_id, blobtype):
-            sys.stderr.write('failed to store blob\n')
-            sys.exit(2)
-    db.close()
+        db.add(device_id, blobtype, v)
+    db.commit()
 
 if __name__ == '__main__':
     main(sys.argv[1:])
