@@ -1,7 +1,7 @@
 ifdef BOARD_BLOBSTORE_CONFIG
 
 build_blobstore := device/intel/build/build_blobstore.py
-blobstore_deps := $(build_blobstore) $(BOARD_BLOBSTORE_CONFIG)
+blobstore_deps := $(build_blobstore) device/intel/build/blobstore.py $(BOARD_BLOBSTORE_CONFIG)
 ifdef BOARD_DEVICE_MAPPING
 blobstore_deps += $(BOARD_DEVICE_MAPPING)
 blobstore_extra_args := --device-map $(BOARD_DEVICE_MAPPING)

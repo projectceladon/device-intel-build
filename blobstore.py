@@ -1,369 +1,242 @@
+"""
+A blobstore is essentially a serialized hash table which maps board
+identification values to blobs of data. This hash table is stored inside
+the Android Boot Image (in the area reserved for 2ndstage bootloader)
+and lets us store various board-specific information for a large set
+of boards all in the same boot image. This lets us re-use the same boot image
+on a variety of different boards, a goal of the IRDA program.
+
+The original impetus for creating this data structure was to store three
+kinds of board-specific data:
+
+    1. Device-Tree Blobs (DTBs) for the SoFIA platform, which are different for
+       every board.
+    2. "oemvars" which are a set of board-specific EFI variables. Use of this
+       is generally being deprecated in favor of putting this data in ACPI,
+       but nevertheless we still use it for tuning the bootloader and camera-
+       specific values
+    3. "bootvars" which are inserted verbatim into the kernel command line.
+       Some boards may need special command line parameters, and we also use
+       this to populate androidboot.nnn variables to create the runtime
+       build fingerprint for IRDA devices.
+
+Different boards may need multiple blobs of different types, so the hash table
+is indexed by both the device identification string and also the enumerated
+blob type. The format is designed to allow for the introduction of new blob
+types without breaking older loaders.
+
+We can trust everything we put in the blobstore since it is part of the boot
+image and hence covered by the Google Verified Boot specification.
+
+At build time, we just need to assemble the blobstore's contents and stick it
+into the boot image. At runtime, the bootloader may need to pull values out
+of the blobstore, but never modify it. Retrieval of values from the blobstore
+should be as lightweight as possible.
+
+The structure of the blobstore is as follows:
+
++----------------------+
+| Blobstore Header     |
++----------------------+
+| Hash Table           |
++----------------------+
+| Meta Blocks          |
++----------------------+
+| Blobs Data           |
++----------------------+
+
+1. The header contains metadata about the entire blobstore and the size of
+the array-based hash table.
+
+struct blobstore {
+    char magic[8];
+    unsigned int version;
+    unsigned int total_size;
+    unsigned int hashmap_sz;
+    unsigned int hashmap[0]; /* of hashmap_sz */
+} __attribute__((packed));
+
+2. The hash table is an array of offsets, indexed by hash value modulo the
+size of the array. The offset is the location of the first of a linked list
+of metablocks that correspond to a particular hash value.
+
+3. The meta blocks are an intermediate node, one for every blob that is in
+the blobstore. They are structured as a linked list to handle hash collisions.
+Each meta block contains the key and type for the blob, an offset to the next
+item in the list (0 for the last entry), and the offset and size of the
+corresponding data.
+
+/* All of these are packed structure with little-endian values. */
+struct metablock {
+    char blob_key[BLOB_KEY_LENGTH];
+    unsigned int blob_type;
+    unsigned int next_item_offset;
+    unsigned int data_offset;
+    unsigned int data_size;
+} __attribute__((packed));
+
+So in order for the loader to do a lookup, given a key and blob type, it does
+the following:
+1) Obtain a hash value based on the key and type
+2) Use the hash table array to get the offset of the first meta block
+corresponding to that hash value. If there is no offset for that hash value
+in the array, the item is not found.
+3) Walk the list of meta blocks and compare the supplied key/type with what
+is in the meta block. Return the data and size if there is a match. Otherwise
+the item isn't found.
+
+No heap allocation or additional state variables are needed to do these lookups.
+"""
+
 import sys
 import os
 import struct
-from ctypes import *
-from collections import namedtuple
 
 BLOB_KEY_LENGTH = 64
-_BLOBTYPES = namedtuple('BlobTypes', 'BlobTypeDtb BlobTypeOemVars')
-BLOBTYPES = _BLOBTYPES(0, 1)
+MAGIC = "BLOBSTOR"
+VERSION = 1
 
-def ValidBlobType(blobType):
-    if(blobType >= BLOBTYPES.BlobTypeDtb and
-         blobType <= BLOBTYPES.BlobTypeOemVars):
-        return True
-    else:
-        return False
+s_metablock = struct.Struct("< %ds I I I I" % BLOB_KEY_LENGTH)
+s_blobstore = struct.Struct("< 8s I I I")
+s_hashitem = struct.Struct("< I")
 
-class SuperBlock:
-    _structFormat = struct.Struct('8s I I I I I')
-    _SuperBlockMagic = '####FFFF'
+BLOB_TYPE_DTB = 0
+BLOB_TYPE_OEMVARS = 1
+BLOB_TYPE_BOOTVARS = 2
 
-    def __init__(self, numberOfBlocks=0, blockSize=0):
-        self._magic = '####FFFF'
-        self._version = 1
-        self._numberOfBlocks = numberOfBlocks
-        self._blockSize = blockSize
-        self._blobsLocation = (self._structFormat.size +
-                               1 + (numberOfBlocks * blockSize))
-        self._blobsEndLocation = self._blobsLocation
+# We modulo this in hashing since the value is stored in an unsigned
+# 32-bit type
+MAXINT = 2 ** 32
 
-    def getOnDiskSize(self):
-        return self._structFormat.size
-
-    def getNumberOfBlocks(self):
-        return self._numberOfBlocks
-
-    def getBlobsEndLocation(self):
-        return self._blobsEndLocation
-
-    def expandBlobsEndLocation(self, size):
-        self._blobsEndLocation += size
-
-    def validateMagic(self):
-        if(self._magic != self._SuperBlockMagic):
-            raise Exception('SuperBlock Magic invalid')
-
-    def read(self, _file):
-        if (_file is None):
-            raise Exception('fileHandle is invalid')
-
-        _file.seek(0, 0)
-        data = _file.read(self.getOnDiskSize())
-        (self._magic,
-         self._version,
-         self._numberOfBlocks,
-         self._blockSize,
-         self._blobsLocation,
-         self._blobsEndLocation) = self._structFormat.unpack(data)
-
-        self.validateMagic()
-
-    def write(self, _file):
-        if(_file is None):
-            raise Exception('filehandle is invalid')
-        _file.seek(0, 0)
-
-        self.validateMagic()
-        packed_data = self._structFormat.pack(self._magic,
-                                              self._version,
-                                              self._numberOfBlocks,
-                                              self._blockSize,
-                                              self._blobsLocation,
-                                              self._blobsEndLocation)
-        _file.write(packed_data)
-        _file.flush()
-
-    def printInfo(self):
-        print 'SuperBlock:'
-        print '_magic: %s' % self._magic
-        print '_version: %d' % self._version
-        print '_numberOfBlocks: %d' % self._numberOfBlocks
-        print '_blockSize: %d' % self._blockSize
-        print '_blobsLocation: %d' % self._blobsLocation
-        print '_blobsEndLocation: %d' % self._blobsEndLocation
-        print '..............'
-
-
-class MetaBlob:
-    _structFormat = struct.Struct('I I I')
-    _onDiskSize = _structFormat.size
-
-    def __init__(self, blobType=-1, blobLocation=0, blobSize=0):
-        self._blobType = blobType
-        self._blobLocation = blobLocation
-        self._blobSize = blobSize
-        self._used = 'false'
-
-    def onDiskSize(self):
-        return self._onDiskSize
-
-    def setBlob(self, blobLocation=0, blobSize=0):
-        self._blobLocation = blobLocation
-        self._blobSize = blobSize
-        self._used = 'true' if (
-            self._blobLocation > 0 and self._blobSize > 0) else 'false'
-
-    def packInto(self, buf, offset):
-        if (buf == None):
-            raise Exception('invalid buf')
-
-        self._structFormat.pack_into(
-            buf, offset, self._blobType, self._blobLocation, self._blobSize)
-        return
-
-    def unpackFrom(self, buf, offset):
-        if (buf == None):
-            raise Exception('invalid buf')
-        (self._blobType,
-         self._blobLocation,
-         self._blobSize) = self._structFormat.unpack_from(buf, offset)
-        self._used = 'true' if (
-            self._blobLocation > 0 and self._blobSize > 0) else 'false'
-
-    def printInfo(self):
-        print 'MetaBlob:'
-        print '_blobType %s' % self._blobType
-        print '_blobLocation %d' % self._blobLocation
-        print '_blobSize %d' % self._blobSize
-        print '......................'
-        return
+def hash_blob_key(key, btype, sz):
+    hash_val = 0
+    for c in key:
+        hash_val = (hash_val * 31 + ord(c)) % MAXINT
+    hash_val = (hash_val * 31 + btype) % MAXINT
+    return hash_val % sz
 
 
 class MetaBlock:
-    _structFormat = struct.Struct('8s I I 64s')
-    _MetaBlockMagic = 'FFFF####'
-    _metaBlobsTypeUnknown = 0
-    _onDiskSize = _structFormat.size + (MetaBlob._onDiskSize * len(BLOBTYPES))
-    _metaBlobsSize = MetaBlob._onDiskSize * len(BLOBTYPES)
 
-    def __init__(self, blockNumber=0):
-        self._magic = 'FFFF####'
-        self._blockId = 0
-        self._blockNumber = blockNumber
-        self._blobKey = chr(0) * BLOB_KEY_LENGTH
-        self._metaBlobs = [None]*len(BLOBTYPES)
-        self._used = 'false'
-        for blobType in BLOBTYPES:
-            blob = MetaBlob(blobType, 0, 0)
-            self._metaBlobs[blobType] = blob
+    def __init__(self, key, btype, mb_offset, data_offset, data_size):
+        self.key = key
+        self.btype = btype
+        self.next_offset = 0
+        self.data_offset = data_offset
+        self.data_size = data_size
+        self.mb_offset = mb_offset
 
-    def getBlobInfo(self, blobType):
-        if(not ValidBlobType(blobType)):
-            return (-1,0)
-        return (self._metaBlobs[blobType]._blobLocation,
-                self._metaBlobs[blobType]._blobSize)
-
-    def setBlob(self, blobKey, blobType, blobLocation, blobSize):
-        if(not ValidBlobType(blobType)):
-            return
-        self._blobKey = blobKey
-        if(blobLocation > 0 and blobSize > 0):
-            self._used = 'true'
-        self._metaBlobs[blobType].setBlob(blobLocation, blobSize)
-
-    def validateMagic(self):
-        if(self._magic != self._MetaBlockMagic):
-            raise Exception('MataBlock magic Invalid')
-
-    def packBlobs(self):
-        offset = 0
-        buf = create_string_buffer(MetaBlock._metaBlobsSize)
-        for blob in self._metaBlobs:
-            blob.packInto(buf, offset)
-            offset += blob.onDiskSize()
-        return buf
-
-    def unpackBlobs(self, packedBuf):
-        if(packedBuf == None):
-            raise Exception('MataBlock magic Invalid')
-        offset = 0
-        for blob in self._metaBlobs:
-            blob.unpackFrom(packedBuf, offset)
-            offset += blob.onDiskSize()
-        return
-
-    def read(self, _file, blockLocation):
-        if (_file == None):
-            raise Exception('filehandle is invalid')
-        _file.seek(blockLocation, 0)
-        data = _file.read(self._structFormat.size)
-
-        (self._magic,
-         self._blockId,
-         self._blockNumber,
-         self._blobKey) = self._structFormat.unpack(data)
-
-        self.validateMagic()
-
-        blobsBuf = _file.read(MetaBlock._metaBlobsSize)
-        self.unpackBlobs(blobsBuf)
-        for blob in self._metaBlobs:
-            if(blob._used == 'true'):
-                self._used = 'true'
-                break
-
-        return
-
-    def write(self, _file, blockLocation):
-        if(_file == None):
-            raise Exception('fileHandle is invalid')
-        _file.seek(blockLocation, 0)
-
-        self.validateMagic()
-
-        packed_data = self._structFormat.pack(self._magic,
-                                              self._blockId,
-                                              self._blockNumber,
-                                              self._blobKey)
-        _file.write(packed_data)
-        packedBlobs = self.packBlobs()
-        _file.write(packedBlobs)
-        _file.flush()
-        return
-
-    def printInfo(self):
-        print 'metaBlock:'
-        print '_magic: %s' % self._magic
-        print '_blockId: %d' % self._blockId
-        print '_blockNumber: %d' % self._blockNumber
-        print '_blobKey: %s' % self._blobKey
-        print 'Blobs:'
-        for blob in self._metaBlobs:
-            blob.printInfo()
-        print '_used: %s' % self._used
-        print '...............'
-
+    def __repr__(self):
+        return "<%s-%d: (%d %d %d %d)>" % (self.key, self.btype, self.mb_offset,
+                self.next_offset, self.data_offset, self.data_size)
 
 class BlobStore:
 
-    def __init__(self):
-        self._file = None
-        self._superBlock = None
-        self._blocksList = {}
-        self._freeBlocksList = []
+    def __init__(self, path):
+        self.items = {}
+        self.path = path
 
-    def calcBlockLocation(self, blockNumber):
-        return self._superBlock.getOnDiskSize() + 1 \
-            + ((blockNumber - 1) * self._superBlock._blockSize)
+    def add(self, key, btype, path):
+        if len(key) >= BLOB_KEY_LENGTH:
+            raise Exception("Key is too long");
 
-    def load(self, path):
-        print 'Loading BlobStore...'
-        if os.path.exists(path):
-            self._file = open(path, 'rb+')
-        else:
-            print 'failure to load db'
-            raise Exception('failed to load db')
+        # follow any symlinks
+        dk = (key, btype)
+        if dk in self.items:
+            raise Exception("Duplicate entry in the database: "+ str(dk))
+        self.items[dk] = os.path.realpath(path)
 
-        # read superblock
-        self._superBlock = SuperBlock()
-        self._superBlock.read(self._file)
+    def commit(self):
+        num_entries = len(self.items)
 
-        # read all metablocks
-        for blockNumber in range(1, self._superBlock._numberOfBlocks + 1):
-            block = MetaBlock(blockNumber)
-            blockLocation = self.calcBlockLocation(blockNumber)
-            block.read(self._file, blockLocation)
-            if(block._used == 'false'):
-                self._freeBlocksList.append(block)
+        # Seems like a reasonable heuristic for a modulo array-based table
+        hash_sz = num_entries * 2 + 1
+
+        # Offset from the beginning where metablocks are stored, after the
+        # hash table array
+        mb_start = s_blobstore.size + (s_hashitem.size * hash_sz)
+        mb_pos = mb_start
+
+        # Offset from the beginning where data will be stored. Every
+        # entry in the table has 1 metablock associates with it
+        data_start = mb_start + (s_metablock.size * num_entries)
+        data_pos = data_start
+
+        # Map hash values to a list of metablocks for that hash.
+        # We'll use this to create the hash table array itself.
+        # Each entry, points to a list of metablocks.
+        # The offset of the first metablock is what gets put in the table,
+        # with the rest connected by a linked list.
+        mbs = {}
+
+        # Order which metablocks need to be written out, a list of
+        # MetaBlock objects.
+        mblist = []
+
+        # Order in which data blobs need to be written out, a list of file paths
+        datalist = []
+
+        # Map paths to offsets. Used to filter duplicates so we can efficiently
+        # support many-to-one mapping
+        datadict = {}
+
+        # Compute hashes for all the items. Duplicates are filtered
+        # Also determine the total size of all the blobs. The blobs need to
+        # be serialized in the same order they are in datalist.
+        total_dsize = 0
+        for k, path in self.items.iteritems():
+            key, btype = k
+            hashval = hash_blob_key(key, btype, hash_sz)
+            dsize = os.stat(path).st_size
+
+            if hashval not in mbs:
+                mbs[hashval] = []
+
+            if path not in datadict:
+                mb = MetaBlock(key, btype, mb_pos, data_pos, dsize)
+                total_dsize = total_dsize + dsize
+                datalist.append(path)
+                datadict[path] = data_pos
+                data_pos = data_pos + dsize
             else:
-                self._blocksList.update({block._blobKey:block})
+                mb = MetaBlock(key, btype, mb_pos, datadict[path], dsize)
 
-    def create(self, path, size):
-        # Create the file
-        print 'Creating BlobStore...'
-        self._file = open(path, 'wb+')
-        if (self._file is None):
-            raise Exception('failed to create database')
+            mbs[hashval].append(mb)
+            mblist.append(mb)
 
-        # create superBlock
-        print 'creating superBlock...'
-        self._superBlock = SuperBlock(size, MetaBlock._onDiskSize)
-        self._superBlock.write(self._file)
+            # Update the next pointer if we had a collision
+            if len(mbs[hashval]) > 1:
+                prev = mbs[hashval][-2]
+                prev.next_offset = mb_pos
 
-        # write metablocks
-        print 'creating metablocks...'
-        for blockNumber in range(1, size + 1):
-            metablock = MetaBlock(blockNumber)
-            blockLocation = self.calcBlockLocation(blockNumber)
-            metablock.write(self._file, blockLocation)
-            self._freeBlocksList.append(metablock)
+            mb_pos = mb_pos + s_metablock.size
 
-    def getFreeBlock(self):
-        return self._freeBlocksList.pop(0)
+        assert mb_pos == data_start
+        total_size = data_start + total_dsize
+        assert data_pos == total_size
 
-    def addToBlocksList(self, block):
-        block._used = 'true'
-        self._blocksList.update({block._blobKey:block})
+        # Write the superblock
+        fp = open(self.path, "wb")
+        fp.write(s_blobstore.pack(MAGIC, VERSION, total_size, hash_sz))
 
-    def getBlob(self, blobKey, blobType):
-        if not ValidBlobType(blobType):
-            print 'Invalid blobType'
-            return (None, 0)
+        # Write the hash table: create an empty array, populate nonzero entries,
+        # serialize it
+        hlist = [0 for i in range(hash_sz)]
+        for index, buckets in mbs.iteritems():
+            hlist[index] = buckets[0].mb_offset
 
-        blobKeyFixed = blobKey.ljust(BLOB_KEY_LENGTH, '\0')
+        for offset in hlist:
+            fp.write(s_hashitem.pack(offset))
 
-        matchedBlock = self._blocksList.get(blobKeyFixed)
-        if(matchedBlock is None):
-            print 'No Blob found with given key %s' % blobKey
-            return (None, 0)
+        # Write all the metablocks
+        for mb in mblist:
+            fp.write(s_metablock.pack(mb.key, mb.btype, mb.next_offset,
+                     mb.data_offset, mb.data_size))
 
-        blobLocation, blobSize = matchedBlock.getBlobInfo(blobType)
-        if not (blobLocation > 0 and blobSize > 0):
-            raise Exception('Invalid blobLocation or Size')
+        # Finally, write all the data
+        for path in datalist:
+            with open(path) as dfp:
+                fp.write(dfp.read())
 
-        self._file.seek(blobLocation, 0)
-        blob = self._file.read(blobSize)
-        if (blob is None):
-            print 'Unable to retrieve the blob'
-        return (blob, blobSize)
+        fp.close()
 
-    def putBlob(self, blob, blobSize, blobKey, blobType):
-
-        blobKeyFixed = blobKey.ljust(BLOB_KEY_LENGTH, '\0')
-        if not ValidBlobType(blobType):
-            print 'Invalid blob Type'
-            return False
-
-        if blobSize <= 0:
-            print 'Invalid blobSize'
-            return False
-
-        matchedBlock = self._blocksList.get(blobKeyFixed)
-        if matchedBlock is None:
-            block = self.getFreeBlock()
-        else:
-            block = matchedBlock
-
-        if block is None:
-            print 'no more storage available'
-            raise Exception('No more space')
-
-        blobLocation = self._superBlock.getBlobsEndLocation()
-        block.setBlob(blobKeyFixed, blobType, blobLocation, blobSize)
-        self._superBlock.expandBlobsEndLocation(blobSize)
-
-        # write blob to file first
-        self._file.seek(blobLocation, 0)
-        self._file.write(blob)
-        self._file.flush()
-
-        # persist meta block
-        self.addToBlocksList(block)
-        blockLocation = self.calcBlockLocation(block._blockNumber)
-        block.write(self._file, blockLocation)
-        self._superBlock.write(self._file)
-        return True
-
-    def close(self):
-        if (self._file is not None):
-            self._file.close()
-
-    def printInfo(self):
-        self._superBlock.printInfo()
-        print '------used blocked-----'
-        for block in self._blocksList:
-            block.printInfo()
-        print '-----free blocks------'
-        for block in self._freeBlocksList:
-            block.printInfo()
