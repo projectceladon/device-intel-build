@@ -15,6 +15,8 @@ class IniParser:
             return True
         if s.lower() == 'false':
             return False
+        if s.lower() == 'null':
+            return None
         if s.isdigit():
             return int(s)
         return s
