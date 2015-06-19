@@ -14,6 +14,8 @@ class FlashFileJson:
         self.flash = {'osplatform': 'android',
                       'parameters': {}, 'configurations': {},
                       'commands': [], 'groups': {}}
+        self.gloption = {}
+        self.preconditions = {}
         self.variant = variant
         self.section = section
 
@@ -65,18 +67,60 @@ class FlashFileJson:
 
         conf['groupsState'][group] = self.group_default(group, c)
 
-    def parse_global_cmd_option(self):
-        self.gloption = {}
+    def parse_global_cmd_option(self, opt):
+        tool = opt[:-len('-command-options')]
+        self.gloption[tool] = {}
+        for parameter in self.ip.get(self.section, opt).split():
+            p, v = parameter.split('=')
+            self.gloption[tool][p] = self.ip.fix_type(v)
 
+    def parse_precondition(self, precondition, tool):
+        prec = {}
+        section = 'precondition.' + precondition
+        to_copy = ['description', 'expression', 'skipOnFailure' ]
+        prec['section'] = self.ip.copy_option(section, to_copy)
+        if self.ip.has_option(section, 'exception'):
+            prec['exception'] = self.ip.get(section, 'exception')
+        cmd_name = 'command.' + precondition
+        if cmd_name in self.ip.seclist:
+            to_copy = ['tool', 'description', 'variable']
+            cmd = self.ip.copy_option(cmd_name, to_copy)
+            cmd = self.add_global_cmd_option(cmd)
+            prec['cmd'] = cmd
+        self.preconditions[tool] = prec
+
+    def parse_global_cmd_precondition(self, opt):
+        tool = opt[:-len('-command-preconditions')]
+        for parameter in self.ip.get(self.section, opt).split():
+            self.parse_precondition(parameter, tool)
+
+    def parse_global_option(self):
         for opt in self.ip.options(self.section):
-            if not opt.endswith('-command-options'):
+            if opt.endswith('-command-options'):
+                self.parse_global_cmd_option(opt)
+            elif opt.endswith('-command-preconditions'):
+                self.parse_global_cmd_precondition(opt)
+            else:
                 continue
 
-            tool = opt[:-len('-command-options')]
-            self.gloption[tool] = {}
-            for parameter in self.ip.get(self.section, opt).split():
-                p, v = parameter.split('=')
-                self.gloption[tool][p] = self.ip.fix_type(v)
+    def add_global_cmd_option(self, cmd):
+        if cmd['tool'] in self.gloption:
+            cmd = dict(self.gloption[cmd['tool']].items() + cmd.items())
+        return cmd
+
+    def add_global_cmd_precondition(self, cmd, cmd_set):
+        if cmd['tool'] in self.preconditions:
+            prec = self.preconditions[cmd['tool']]
+            if 'exception' in prec and cmd_set == prec['exception']:
+                return cmd
+            cmd['precondition'] = prec['section']
+
+            if 'cmd' in prec:
+                new = prec['cmd'].copy()
+                new['restrict'] = cmd['restrict']
+                self.flash['commands'].append(new)
+
+        return cmd
 
     def parse_cmd(self, cmd_set, configuration):
 
@@ -96,23 +140,30 @@ class FlashFileJson:
                 args = self.parse_args(args, section)
                 new['args'] = ' '.join(args)
 
-            if new['tool'] in self.gloption:
-                new = dict(self.gloption[new['tool']].items() + new.items())
-
+            new = self.add_global_cmd_precondition(new, cmd_set)
+            new = self.add_global_cmd_option(new)
             self.flash['commands'].append(new)
 
-    def add_parameter(self, config):
-        if not self.ip.has_option('configuration.' + config, 'parameters'):
-            return
-
-        parameters = self.ip.get('configuration.' + config, 'parameters')
-        plist = [p.split(':') for p in parameters.split()]
-        pdict = {f: p for f, p in plist}
-
-        self.flash['configurations'][config]['parameters'] = pdict
+    def add_parameter(self, section, parameter=None):
+        if self.ip.has_option(section, 'parameters'):
+            parameters = self.ip.get(section, 'parameters')
+            plist = [p.split(':') for p in parameters.split()]
+            pdict = {f: p for f, p in plist}
+            self.flash['configurations'][section.split('.')[1]]['parameters'] = pdict
+        else:
+            to_copy = ['name', 'type', 'description', 'filter', 'computedValue', 'value']
+            new = self.ip.copy_option(section, to_copy)
+            if self.ip.has_option(section, 'tool'):
+                to_copy = ['description', 'tool']
+                subcommand = self.ip.copy_option(section, to_copy)
+                if self.ip.has_option(section, 'arg'):
+                    subcommand['args'] = self.ip.get(section, 'arg')
+                subcommand = self.add_global_cmd_option(subcommand)
+                new['subCommand'] = subcommand
+            self.flash['parameters'][parameter] = new
 
     def parse(self):
-        self.parse_global_cmd_option()
+        self.parse_global_option()
 
         version = self.ip.get(self.section, 'version')
         self.flash['version'] = version
@@ -120,6 +171,9 @@ class FlashFileJson:
         for section, g in self.ip.sectionsfilter('group.'):
             to_copy = ['name', 'description']
             self.flash['groups'][g] = self.ip.copy_option(section, to_copy)
+
+        for section, p in self.ip.sectionsfilter('parameter.'):
+            self.add_parameter(section, p)
 
         for config in self.ip.get(self.section, 'configurations').split():
             section = 'configuration.' + config
@@ -129,7 +183,8 @@ class FlashFileJson:
 
             for s in self.ip.get(section, 'sets').split():
                 self.parse_cmd(s, config)
-            self.add_parameter(config)
+            if self.ip.has_option('configuration.' + config, 'parameters'):
+                self.add_parameter('configuration.' + config)
 
     def files(self):
         return self.flist
