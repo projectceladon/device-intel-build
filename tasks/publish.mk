@@ -44,6 +44,15 @@ publish_liveimage:
 	@echo "Warning: Unable to fulfill publish_liveimage makefile request"
 endif
 
+.PHONY: publish_gptimage
+ifdef GPTIMAGE_BIN
+publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
+	@$(ACP) $(GPTIMAGE_BIN) $(publish_dest)
+else
+publish_gptimage:
+	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
+endif
+
 .PHONY: publish_otapackage
 publish_otapackage: publish_mkdir_dest $(INTERNAL_OTA_PACKAGE_TARGET)
 	@$(ACP) $(INTERNAL_OTA_PACKAGE_TARGET) $(publish_dest)
@@ -70,7 +79,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile
+publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
