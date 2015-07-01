@@ -99,13 +99,14 @@ class FlashFileJson:
             to_copy = ['name', 'description']
             self.flash['groups'][g] = self.ip.copy_option(section, to_copy)
 
-        for section, c in self.ip.sectionsfilter('configuration.'):
+        for config in self.ip.get(self.section, 'configurations').split():
+            section = 'configuration.' + config
             to_copy = ['startState', 'brief', 'description', 'default']
-            self.flash['configurations'][c] = self.ip.copy_option(section, to_copy)
-            self.flash['configurations'][c]['name'] = c
+            self.flash['configurations'][config] = self.ip.copy_option(section, to_copy)
+            self.flash['configurations'][config]['name'] = config
 
             for s in self.ip.get(section, 'sets').split():
-                self.parse_cmd(s, c)
+                self.parse_cmd(s, config)
 
     def files(self):
         return self.flist
