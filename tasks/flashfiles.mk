@@ -109,14 +109,14 @@ INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
 # to device/intel/common or make it something set by a BoardConfig.mk var.
 # The scripts should be in a common location as well, although the hope is
 # that they will instead be superseded by flashfiles_from_target_files
-FLS_FLASHFILES_CONFIG ?= device/intel/sofia3gr/support/fls_flashfiles.json
+FLS_FLASHFILES_CONFIG ?= device/intel/common/boot/sofia/support/$(TARGET_PROJECT)_fls_flashfiles.json
 FLASHFILES_JSON := $(PRODUCT_OUT)/fls/fls/flash.json
-$(eval FLS_FLASHFILES_T2F := $(shell ./device/intel/sofia3gr/support/flashdep.py $(FLS_FLASHFILES_CONFIG)))
+$(eval FLS_FLASHFILES_T2F := $(shell ./device/intel/common/boot/sofia/support/flashdep.py $(FLS_FLASHFILES_CONFIG)))
 FLASHFILES_DEPS := $(foreach item,$(FLS_FLASHFILES_T2F),$(call word-colon,2,$(item)))
 
 $(FLASHFILES_JSON): $(FLS_FLASHFILES_CONFIG) $(FLASHFILES_DEPS)
 	$(hide) mkdir -p $(@D)
-	$(hide) ./device/intel/sofia3gr/support/flashxml.py -c $< \
+	$(hide) ./device/intel/common/boot/sofia/support/flashxml.py -c $< \
 			-p $(TARGET_PRODUCT) -b $(BUILD_NUMBER) \
 			-d $(@D) -t "$(FLS_FLASHFILES_T2F)"
 
