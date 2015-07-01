@@ -19,10 +19,12 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(blobstore_deps)
 else ifdef BOARD_DTB_FILE
 # Non-scalable SoFIA targets
 
+ifneq ($(USE_IMC_STYLE_BUILD),true)
 LOCAL_DTB_PATH := $(LOCAL_KERNEL_PATH)/$(BOARD_DTB_FILE)
 
 $(INSTALLED_2NDBOOTLOADER_TARGET): $(LOCAL_DTB_PATH) | $(ACP)
 	$(hide) $(ACP) -fp $(LOCAL_DTB_PATH) $@
+endif
 
 else ifdef BOARD_OEM_VARS
 # Non-scalable EFI targets that use oemvars
