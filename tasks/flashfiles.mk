@@ -1,10 +1,11 @@
-ifeq ($(USE_INTEL_FLASHFILES),true)
-
 name := $(TARGET_PRODUCT)
 ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
+
+
+ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := device/intel/build/releasetools/flashfiles_from_target_files
 odf := device/intel/build/releasetools/ota_deployment_fixup
 
@@ -37,7 +38,7 @@ $(INTEL_OTA_PACKAGES): $(INTERNAL_OTA_PACKAGE_TARGET) $(BUILT_TARGET_FILES_PACKA
 
 otapackage: $(INTEL_OTA_PACKAGES)
 
-else
+else # FLASHFILE_VARIANTS
 INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
 
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDOSFS) $(MCOPY)
@@ -45,10 +46,7 @@ $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDO
 	$(hide) $(fftf) $(BUILT_TARGET_FILES_PACKAGE) $@
 
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
-endif
-
-.PHONY: flashfiles
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
+endif # FLASHFILE_VARIANTS
 
 # $1 is ifwi variable suffix
 # $2 is the folder where ifwi are published on buildbot
@@ -98,17 +96,40 @@ PUB_EFI_EMMC_BIN := stage2
 
 $(foreach ifwi,$(IFWI_LIST),$(eval $(call ifwi_target,$(ifwi),$(PUB_$(ifwi)))))
 
-else
-ifeq ($(USE_INTEL_FLASHFILES),sofia)
-#for sofia
-.PHONY: flashfiles
-flashfiles: droid
+endif # USE_INTEL_FLASHFILES
 
-.PHONY: blank_flashfiles
-blank_flashfiles:
-include device/intel/sofia3gr/flashfiles.mk
-endif
-endif
+# FIXME: We need to extend flashfiles_from_target_files so that it can
+# create flashfiles instead of this completely different logic which doesn't
+# support the creation of production-signed flashfiles
+ifeq ($(USE_SOFIA_FLASHFILES),true)
+
+INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
+
+# FIXME: Shouldn't hard-code a particular product directory, either move
+# to device/intel/common or make it something set by a BoardConfig.mk var.
+# The scripts should be in a common location as well, although the hope is
+# that they will instead be superseded by flashfiles_from_target_files
+FLS_FLASHFILES_CONFIG ?= device/intel/sofia3gr/support/fls_flashfiles.json
+FLASHFILES_JSON := $(PRODUCT_OUT)/fls/fls/flash.json
+$(eval FLS_FLASHFILES_T2F := $(shell ./device/intel/sofia3gr/support/flashdep.py $(FLS_FLASHFILES_CONFIG)))
+FLASHFILES_DEPS := $(foreach item,$(FLS_FLASHFILES_T2F),$(call word-colon,2,$(item)))
+
+$(FLASHFILES_JSON): $(FLS_FLASHFILES_CONFIG) $(FLASHFILES_DEPS)
+	$(hide) mkdir -p $(@D)
+	$(hide) ./device/intel/sofia3gr/support/flashxml.py -c $< \
+			-p $(TARGET_PRODUCT) -b $(BUILD_NUMBER) \
+			-d $(@D) -t "$(FLS_FLASHFILES_T2F)"
+
+$(INTEL_FACTORY_FLASHFILES_TARGET): $(FLASHFILES_DEPS) $(FLASHFILES_JSON)
+	$(hide) rm -rf $@
+	$(hide) zip -j $@ $(FLASHFILES_DEPS) $(FLASHFILES_JSON)
+
+$(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
+endif # USE_SOFIA_FLASHFILES
+
+.PHONY: flashfiles
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
+
 ifeq ($(USE_INTEL_FLASHFILES),false)
 publish_ifwi:
 	@echo "Warning: Unable to fulfill publish_ifwi makefile request"
