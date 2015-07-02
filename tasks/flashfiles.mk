@@ -83,15 +83,15 @@ endef
 .PHONY: ifwi
 .PHONY: publish_ifwi
 
-IFWI_LIST := EFI_IFWI_BIN IFWI_RVP_BIN IFWI_x32_BIN EFI_AFU_BIN AFU_x32_BIN BOARD_SFU_UPDATE CAPSULE_x32 EFI_EMMC_BIN
+IFWI_LIST := EFI_IFWI_BIN IFWI_RVP_BIN IFWI_2GB_BIN EFI_AFU_BIN AFU_2GB_BIN BOARD_SFU_UPDATE CAPSULE_2GB EFI_EMMC_BIN
 
 PUB_EFI_IFWI_BIN := dediprog
 PUB_IFWI_RVP_BIN := dediprog
-PUB_IFWI_x32_BIN := dediprog
+PUB_IFWI_2GB_BIN := dediprog
 PUB_EFI_AFU_BIN  := afu
-PUB_AFU_x32_BIN  := afu
+PUB_AFU_2GB_BIN  := afu
 PUB_BOARD_SFU_UPDATE := capsule
-PUB_CAPSULE_x32 := capsule
+PUB_CAPSULE_2GB := capsule
 PUB_EFI_EMMC_BIN := stage2
 
 $(foreach ifwi,$(IFWI_LIST),$(eval $(call ifwi_target,$(ifwi),$(PUB_$(ifwi)))))
