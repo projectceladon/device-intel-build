@@ -31,6 +31,7 @@ import shutil
 import iniparser
 import flash_cmd_generator
 import flashxml
+import flashflsxml
 import json
 
 # Sources:
@@ -78,6 +79,9 @@ def process_image(unpack_dir, dest_zip, source, target):
         bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=OPTIONS.variant)
         ifile = common.File(target, bdata)
     elif source == "images":
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
+    elif source == "fls_images":
+        intel_common.build_fls(unpack_dir, target, variant=OPTIONS.variant)
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
     elif source == "provdatazip":
         variant = ""
@@ -129,11 +133,16 @@ def main(argv):
             ip = iniparser.IniParser()
             ip.parse(f)
         configs, files = flash_cmd_generator.parse_config(ip, variant, platform)
-    else:
+    elif os.path.exists(flashfile + ".json"):
         print "Reading JSON configuration..."
         with open(flashfile + ".json", "r") as f:
             conf = json.loads(f.read())
         configs, files = flashxml.parse_config(conf, variant, platform)
+    elif os.path.exists(flashfile + "_fls.json"):
+        print "Reading JSON FLS configuration..."
+        with open(flashfile + "_fls.json", "r") as f:
+            conf = json.loads(f.read())
+        configs, files = flashflsxml.parse_config(conf, variant, platform)
 
     with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
         print "Generating JSON flash configuration files..."

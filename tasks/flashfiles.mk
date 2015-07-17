@@ -48,6 +48,8 @@ $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDO
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
 endif # FLASHFILE_VARIANTS
 
+ifneq ($(BOARD_HAS_NO_IFWI),true)
+
 # $1 is ifwi variable suffix
 # $2 is the folder where ifwi are published on buildbot
 
@@ -96,36 +98,12 @@ PUB_EFI_EMMC_BIN := stage2
 
 $(foreach ifwi,$(IFWI_LIST),$(eval $(call ifwi_target,$(ifwi),$(PUB_$(ifwi)))))
 
+else
+publish_ifwi:
+	@echo "Info: board has no ifwi to publish"
+endif # BOARD_HAS_NO_IFWI
+
 endif # USE_INTEL_FLASHFILES
-
-# FIXME: We need to extend flashfiles_from_target_files so that it can
-# create flashfiles instead of this completely different logic which doesn't
-# support the creation of production-signed flashfiles
-ifeq ($(USE_SOFIA_FLASHFILES),true)
-
-INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
-
-# FIXME: Shouldn't hard-code a particular product directory, either move
-# to device/intel/common or make it something set by a BoardConfig.mk var.
-# The scripts should be in a common location as well, although the hope is
-# that they will instead be superseded by flashfiles_from_target_files
-FLS_FLASHFILES_CONFIG ?= device/intel/common/boot/sofia/support/$(TARGET_PROJECT)_fls_flashfiles.json
-FLASHFILES_JSON := $(PRODUCT_OUT)/fls/fls/flash.json
-$(eval FLS_FLASHFILES_T2F := $(shell ./device/intel/common/boot/sofia/support/flashdep.py $(FLS_FLASHFILES_CONFIG)))
-FLASHFILES_DEPS := $(foreach item,$(FLS_FLASHFILES_T2F),$(call word-colon,2,$(item)))
-
-$(FLASHFILES_JSON): $(FLS_FLASHFILES_CONFIG) $(FLASHFILES_DEPS)
-	$(hide) mkdir -p $(@D)
-	$(hide) ./device/intel/common/boot/sofia/support/flashxml.py -c $< \
-			-p $(TARGET_PRODUCT) -b $(BUILD_NUMBER) \
-			-d $(@D) -t "$(FLS_FLASHFILES_T2F)"
-
-$(INTEL_FACTORY_FLASHFILES_TARGET): $(FLASHFILES_DEPS) $(FLASHFILES_JSON)
-	$(hide) rm -rf $@
-	$(hide) zip -j $@ $(FLASHFILES_DEPS) $(FLASHFILES_JSON)
-
-$(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
-endif # USE_SOFIA_FLASHFILES
 
 .PHONY: flashfiles
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
