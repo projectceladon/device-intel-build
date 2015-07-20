@@ -18,13 +18,25 @@ class FlashFileJson:
         self.section = section
 
     def add_file(self, longname, filename, shortname):
-        if longname in self.flist:
+        if shortname in self.flash['parameters']:
             return
-        self.flist.append(longname)
-        new = {'type': 'file',
-               'name': shortname,
-               'value': filename,
-               'description': filename}
+        fsection = 'file.' + filename
+        if fsection in self.ip.sections():
+            new = {'type': 'file',
+                   'name': shortname,
+                   'options': {}}
+
+            for option in self.ip.options(fsection):
+                value = self.ip.get(fsection, option)
+                new['options'][option] = {'description': value,
+                                          'value': value}
+                self.flist.append(longname.rsplit(':')[0] + ':' + value)
+        else:
+            new = {'type': 'file',
+                   'name': shortname,
+                   'value': filename,
+                   'description': filename}
+            self.flist.append(longname)
         self.flash['parameters'][shortname] = new
 
     def parse_args(self, args, cmd_sec):
@@ -89,6 +101,16 @@ class FlashFileJson:
 
             self.flash['commands'].append(new)
 
+    def add_parameter(self, config):
+        if not self.ip.has_option('configuration.' + config, 'parameters'):
+            return
+
+        parameters = self.ip.get('configuration.' + config, 'parameters')
+        plist = [p.split(':') for p in parameters.split()]
+        pdict = {f: p for f, p in plist}
+
+        self.flash['configurations'][config]['parameters'] = pdict
+
     def parse(self):
         self.parse_global_cmd_option()
 
@@ -107,6 +129,7 @@ class FlashFileJson:
 
             for s in self.ip.get(section, 'sets').split():
                 self.parse_cmd(s, config)
+            self.add_parameter(config)
 
     def files(self):
         return self.flist
