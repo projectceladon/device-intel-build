@@ -35,6 +35,12 @@ publish_flashfiles:
 	@echo "Warning: Unable to fulfill publish_flashfiles makefile request"
 endif
 
+.PHONY:publish_ifwi
+ifeq ($(USE_INTEL_FLASHFILES),false)
+publish_ifwi:
+	@echo "Warning: Unable to fulfill publish_ifwi makefile request"
+endif
+
 .PHONY: publish_liveimage
 ifdef INTEL_LIVEIMAGE_TARGET
 publish_liveimage: publish_mkdir_dest $(INTEL_LIVEIMAGE_TARGET)
@@ -42,6 +48,15 @@ publish_liveimage: publish_mkdir_dest $(INTEL_LIVEIMAGE_TARGET)
 else
 publish_liveimage:
 	@echo "Warning: Unable to fulfill publish_liveimage makefile request"
+endif
+
+.PHONY: publish_gptimage
+ifdef GPTIMAGE_BIN
+publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
+	@$(ACP) $(GPTIMAGE_BIN) $(publish_dest)
+else
+publish_gptimage:
+	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
 endif
 
 .PHONY: publish_otapackage
@@ -70,7 +85,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile
+publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -103,5 +118,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS)
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)

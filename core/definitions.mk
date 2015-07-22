@@ -97,3 +97,5 @@ $(hide) $(EFI_OBJCOPY) $(PRIVATE_OBJCOPY_FLAGS) \
 $(hide) $(SBSIGN) --key $1 --cert $2 --output $@ $(@:.efi=.efiunsigned)
 endef
 
+# Hook up the prebuilts generation mechanism
+include device/intel/common/external/external.mk
