@@ -119,7 +119,7 @@ def hash_blob_key(key, btype, sz):
 class MetaBlock:
 
     def __init__(self, key, btype, mb_offset, data_offset, data_size):
-        self.key = key
+        self.key = unicode(key).encode('utf-8')
         self.btype = btype
         self.next_offset = 0
         self.data_offset = data_offset
