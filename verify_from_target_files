@@ -86,12 +86,35 @@ Sample output:
 (bootloader) hash: d0448a1e91030e5c37277e4a77eabefc36fc8e6c
 (bootloader) target: /recovery
 (bootloader) hash: 411c61de23f6f73934b79eda4f64779706c220f4
+* For EFI devices :
 (bootloader) target: /bootloader/EFI/BOOT/bootx64.efi
 (bootloader) hash: 2773c4c039dc37b96171f6ef131f04dd8faf73e1
 (bootloader) target: /bootloader/loader.efi
 (bootloader) hash: 2773c4c039dc37b96171f6ef131f04dd8faf73e1
 (bootloader) target: /bootloader/fastboot.img
 (bootloader) hash: b0b3d122c4dca255ed2a75268ef30f6cbbc11085
+* For Non-EFI ( Example - Sofia and variants ) :
+(bootloader) target: /boot_signed
+(bootloader) hash: 0ab1df5e94d964e5fa33d05ec0ee19514e6dcd33
+(bootloader) target: /recovery_signed
+(bootloader) hash: 52e7d0e8ad4ab729102511e65d32b9f61e7e6127
+(bootloader) target: /system_signed
+(bootloader) hash: 295282400188ec1900576231d8b4bc8379a0dc1a
+(bootloader) target: /psi_flash_signed
+(bootloader) hash: daff3cff77b988b9e0292285fa9a14b62469f9bb
+(bootloader) target: /slb_signed
+(bootloader) hash: ed08467146ce7080c21a46abed07bf3730ab103f
+(bootloader) target: /ucode_patch_signed
+(bootloader) hash: 5c1409292aacc0d4e111f274f57e76bc35556a10
+(bootloader) target: /mvconfig_smp_signed
+(bootloader) hash: 4de287fdf2fc895507c7ea4c28ae18af847c687d
+(bootloader) target: /secvm_signed
+(bootloader) hash: 607bd9b4b5817d3ea0e0eaaafbd62c1576267fba
+(bootloader) target: /mobilevisor_signed
+(bootloader) hash: 5de7bd93ccbafbb449e9bbbd1eecfed3c5bf4091
+(bootloader) target: /splash_img_signed
+(bootloader) hash: 91802c6f1b87d3b3cfdd53c2ecc8e0660533bee1
+*
 (bootloader) target: /system
 (bootloader) hash: d417239a25df718d73b6326e6c93a7fc1b00afb2
 OKAY [134.307s]
@@ -140,32 +163,52 @@ def main(argv):
         common.Usage(__doc__)
         sys.exit(1)
 
+    print "Extracting target files package..."
+    unpack_dir, tfp = common.UnzipTemp(args[0])
+    success = True
+    OPTIONS.info_dict = common.LoadInfoDict(tfp)
+    platform_efi = intel_common.CheckIfSocEFI(unpack_dir)
+
+    print "Extracting bootloader archive..."
+    data = intel_common.GetBootloaderImageFromTFP(unpack_dir,
+            variant=OPTIONS.variant)
+    image = common.File("bootloader.img", data).WriteToTemp()
+    if not platform_efi:
+        additional_data = intel_common.GetBootloaderImagesfromFls(unpack_dir,
+            variant=OPTIONS.variant)
+        bootloader_img = tempfile.mkdtemp(prefix="bootloader-")
+        OPTIONS.tempfiles.append(bootloader_img)
+    else:
+        esp_root = tempfile.mkdtemp(prefix="bootloader-")
+        OPTIONS.tempfiles.append(esp_root)
+    intel_common.add_dir_to_path("/sbin")
+    bootloader_sizes = ""
+
+    if platform_efi:
+        subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
+    else:
+        subprocess.check_output(["cp", image.name, bootloader_img + "/bootloader" ]);
+        for imgname, imgdata in additional_data.iteritems():
+            img_array = imgname.split(".",1)
+            curr_img = img_array[0]
+            img = common.File(curr_img,imgdata).WriteToTemp()
+            partition = intel_common.img_to_partition[imgname]
+            subprocess.check_output(["cp", img.name, bootloader_img + "/" + partition]);
+            if imgname in intel_common.size_required:
+                bootloader_sizes += ":" + str(len(imgdata))
+            img.close()
+    image.close();
+
     for app in [_SIMG2IMG, _FASTBOOT]:
         if not os.path.exists(app):
             print "Can't find", app
             print "Run lunch and 'm fastboot otatools'"
             sys.exit(1)
 
-    print "Running 'fastboot oem get-hashes'..."
-    fastboot_data = subprocess.check_output([_FASTBOOT, "oem", "get-hashes"],
+    print "Running 'fastboot oem get-hashes" + bootloader_sizes + "'..."
+    fastboot_data = subprocess.check_output([_FASTBOOT, "oem", "get-hashes" + bootloader_sizes],
             stderr=subprocess.STDOUT)
     hashdict = process_fastboot_data(fastboot_data)
-
-    print "Extracting target files package..."
-    unpack_dir, tfp = common.UnzipTemp(args[0])
-    success = True
-    OPTIONS.info_dict = common.LoadInfoDict(tfp)
-
-    print "Extracting bootloader archive..."
-    data = intel_common.GetBootloaderImageFromTFP(unpack_dir,
-            variant=OPTIONS.variant)
-    image = common.File("bootloader.img", data).WriteToTemp()
-    esp_root = tempfile.mkdtemp(prefix="bootloader-")
-    OPTIONS.tempfiles.append(esp_root)
-    intel_common.add_dir_to_path("/sbin")
-    subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
-    image.close();
-
 
     sys.stdout.write("Checking boot images...\n")
     for bootimage in ["boot", "recovery"]:
@@ -173,18 +216,30 @@ def main(argv):
             success = False
 
     sys.stdout.write("Checking bootloader...\n")
-    for dpath, dname, fnames in os.walk(esp_root):
+    if platform_efi :
+        bootloader_root = esp_root
+        devpath_prefix = "/bootloader/"
+    else :
+        bootloader_root = bootloader_img
+        devpath_prefix = "/"
+    for dpath, dname, fnames in os.walk(bootloader_root):
         for fname in fnames:
             # Capsule update file -- gets consumed and deleted by the firmware
             # at first boot, shouldn't try to check it
             if (fname == "BIOSUPDATE.fv"):
                 continue
             abspath = os.path.join(dpath, fname)
-            relpath = os.path.relpath(abspath, esp_root)
+            relpath = os.path.relpath(abspath, bootloader_root)
 
             h, s = get_hash_and_size_from_file(abspath)
+            devpath = devpath_prefix + relpath
+            #FIXME Right now in flashfiles we flash fwu_image.fls onto
+            #the fw_update partition. If we move to fastboot flash bootloader
+            #we will have to change to comparing with fw_update to bootloader.
+            #Skip comparing bootloader until this is figured out.
+            if (devpath == '/bootloader' and not platform_efi):
+                continue
 
-            devpath = "/bootloader/" + relpath
             if devpath not in hashdict:
                 print "FAILED: no hash reported for", devpath
                 success = False
