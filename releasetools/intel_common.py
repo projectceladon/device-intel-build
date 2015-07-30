@@ -23,10 +23,34 @@ import shlex
 import shutil
 import imp
 import time
+import collections
+import fnmatch
 
 sys.path.append("build/tools/releasetools")
 import common
 
+#FIXME Need to create the hash img_to_partition such that it can
+#scale to multiple platforms.
+""" Sofia3GR bootloader partition names and image names do not match.
+    img_to_partition maps the image name to partition so the hashes
+    are compared correctly. """
+
+img_to_partition = {
+        "psi_flash"    : "psi",
+        "slb"          : "slb",
+        "ucode_patch"  : "ucode_patch",
+        "mvconfig_smp" : "mvconfig" ,
+        "secvm"        : "secvm" ,
+        "mobilevisor"  : "hypervisor",
+        "splash_img"   : "splash",
+        "fwu_image"    : "fw_update"
+}
+
+nonefi_bootloader = ["psi_flash", "slb", "ucode_patch", "mvconfig_smp",
+                    "secvm", "mobilevisor", "splash_img","fwu_image" ]
+
+size_required    = ["psi_flash", "slb", "ucode_patch", "mvconfig_smp",
+                    "secvm", "mobilevisor", "splash_img"]
 
 def load_device_mapping(path):
     try:
@@ -208,10 +232,12 @@ def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None, base_variant=Non
 
 
 def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, variant=None, base_variant=None):
+    info_dict = common.OPTIONS.info_dict
     if extra_files == None:
         extra_files = []
+    platform_efi = CheckIfSocEFI(unpack_dir)
 
-    if variant:
+    if variant and platform_efi:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant +".zip")
         if base_variant and (os.path.isfile(provdata_name) == False):
             provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + base_variant +".zip")
@@ -231,26 +257,36 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
                     print "Adding extra bootloader file", relpath
                     extra_files.append((fullpath, relpath))
 
-    bootloader = tempfile.NamedTemporaryFile(delete=False)
-    filename = bootloader.name
-    bootloader.close()
-
-    fastboot = GetFastbootImage(unpack_dir)
-    if fastboot:
-        fastboot_file = fastboot.WriteToTemp()
-        extra_files.append((fastboot_file.name,"fastboot.img"))
-
-    tdos = GetTdosImage(unpack_dir)
-    if tdos:
-        tdos_file = tdos.WriteToTemp()
-        extra_files.append((tdos_file.name,"tdos.img"))
-
-    if not autosize:
-        size = int(open(os.path.join(unpack_dir, "RADIO", "bootloader-size.txt")).read().strip())
+    if not platform_efi:
+        if variant:
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
+        else:
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
+        provdata, provdata_zip = common.UnzipTemp(provdata_name)
+        filename = os.path.join(provdata, "bootloader")
     else:
-        size = 0
-    MakeVFATFilesystem(os.path.join(unpack_dir, "RADIO", "bootloader.zip"),
-            filename, size=size, extra_files=extra_files)
+        bootloader = tempfile.NamedTemporaryFile(delete=False)
+        filename = bootloader.name
+        bootloader.close()
+
+        fastboot = GetFastbootImage(unpack_dir)
+        if fastboot:
+            fastboot_file = fastboot.WriteToTemp()
+            extra_files.append((fastboot_file.name,"fastboot.img"))
+
+        tdos = GetTdosImage(unpack_dir)
+        if tdos:
+            tdos_file = tdos.WriteToTemp()
+            extra_files.append((tdos_file.name,"tdos.img"))
+
+        if not autosize:
+            size = int(open(os.path.join(unpack_dir, "RADIO", "bootloader-size.txt")).read().strip())
+        else:
+            size = 0
+
+        MakeVFATFilesystem(os.path.join(unpack_dir, "RADIO", "bootloader.zip"),
+                filename, size=size, extra_files=extra_files)
+
     bootloader = open(filename)
     data = bootloader.read()
     bootloader.close()
@@ -706,3 +742,62 @@ def get_auth_data(timestamp, sign_pair, password, pem_cert, guid_str, name, payl
     tf.close()
     return data
 
+
+def CheckIfSocEFI(unpack_dir):
+    """ Non-EFI SOC (Sofia and its variants), have fftf_build.opt file
+    in the TFP which is used to check if the DUT is efi or not. """
+
+    fftf_build_file = os.path.join(unpack_dir, "RADIO", "fftf_build.opt")
+    if os.path.exists(fftf_build_file) :
+        fftf_file = open(fftf_build_file)
+        target2file = fftf_file.read().strip()
+        t2f = init_t2f_dict(target2file)
+        if(t2f["SOC_FIRMWARE_TYPE"] == "slb") :
+            return False
+    return True
+
+
+def GetBootloaderImagesfromFls(unpack_dir, variant=None):
+    """ Non-EFI bootloaders (example Sofia and its variants), comprise of
+    various partitions. For sofia we list this in nonefi_bootloader[]. Extract
+    and return the *LoadMap.bin files from the *.fls files. """
+
+    bootloader_list = nonefi_bootloader
+    if variant:
+        provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
+    else:
+        provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
+    provdata, provdata_zip = common.UnzipTemp(provdata_name)
+    additional_data_hash = collections.OrderedDict()
+
+    for curr_loader in bootloader_list :
+        loader_fls = curr_loader + "_signed.fls"
+        loader_filepath = os.path.join(provdata, loader_fls)
+        if not os.path.exists(loader_filepath):
+            loader_fls = curr_loader + ".fls"
+            loader_filepath = os.path.join(provdata, loader_fls)
+        assert os.path.exists(loader_filepath), "Either signed or unsigned fls need to be present in TFP"
+        extract = tempfile.mkdtemp(prefix=curr_loader)
+        common.OPTIONS.tempfiles.append(extract)
+        flstool = os.path.join(provdata, "FlsTool")
+        cmd = [flstool, "-x", loader_filepath, "-o", extract]
+        try:
+            p = common.Run(cmd)
+        except Exception as exc:
+            print "Error: Unable to execute command: {}".format(' '.join(cmd))
+            raise exc
+        p.communicate()
+        assert p.returncode == 0, "FlsTool failed to extract LoadMap.bin"
+
+        for current_file in os.listdir(extract):
+            if fnmatch.fnmatch(current_file, '*LoadMap0.bin'):
+                 loader_datafile = current_file
+
+        assert loader_datafile is not None, "Error in extracting the LoadMap.bin"
+        loader_abspath = os.path.join(extract ,loader_datafile)
+        loader_file = open(loader_abspath)
+        loader_data = loader_file.read()
+        additional_data_hash[curr_loader] = loader_data
+        loader_file.close()
+
+    return additional_data_hash
