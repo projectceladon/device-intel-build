@@ -257,14 +257,39 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
     os.unlink(filename)
     return data
 
+def GetBootloaderImageFromOut(product_out, intermediate_dir, filename, autosize=False, extra_files=None):
+    if extra_files == None:
+        extra_files = []
+
+    fastboot = os.path.join(product_out, "fastboot.img")
+    if os.path.exists(fastboot):
+        print "add fastboot.img to bootloader"
+        extra_files.append((fastboot, "fastboot.img"))
+
+    tdos = os.path.join(product_out, "tdos.img")
+    if os.path.exists(tdos):
+        print "add tdos.img to bootloader"
+        extra_files.append((tdos, "tdos.img"))
+
+    if not autosize:
+        bl_size = os.path.join(intermediate_dir, "../", "bootloader-size.txt")
+        size = int(open(bl_size).read().strip())
+    else:
+        size = 0
+
+    MakeVFATFilesystem(intermediate_dir, filename, size=size, extra_files=extra_files, zipped=False)
 
 def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size=0,
-        extra_files=[]):
+        extra_files=[], zipped=True):
     """Create a VFAT filesystem image with all the files in the provided
     root zipfile. The size of the filesystem, if not provided by the
     caller, will be 101% the size of the containing files"""
 
-    root, root_zip = common.UnzipTemp(root_zip)
+    if zipped:
+        root, root_zip = common.UnzipTemp(root_zip)
+    else:
+        root = root_zip
+
     for fn_src, fn_dest in extra_files:
         fn_dest = os.path.join(root, fn_dest)
         if not os.path.exists(os.path.dirname(fn_dest)):
