@@ -23,6 +23,9 @@ Usage: flashfiles_from_target_files [options] <input_target_files_zip> <output_f
   -V  (--variant) <variant_name>
       Generate a single variant-specific flash files from target file.
 
+  -f (--fast)
+      Generate a Fast flashfiles (take images directly from out/, and
+      use hardlink instead of doing a big zip)
 """
 
 import sys
@@ -55,6 +58,7 @@ import intel_common
 OPTIONS = common.OPTIONS
 OPTIONS.variants = None
 OPTIONS.unified_variants = False
+OPTIONS.fast = False
 
 flashfile_content = []
 variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img"]
@@ -117,8 +121,8 @@ class VariantIpGenerator:
                                               '{}:{}'.format(os.path.splitext(item)[0], variant))
         return variant_configs
 
-def getBuildProp(unpack_dir, prop):
-    with open(os.path.join(unpack_dir, "SYSTEM", "build.prop"), "r") as fp:
+def getBuildProp(path, prop):
+    with open(os.path.join(path, "build.prop"), "r") as fp:
         for line in fp.readlines():
             if line.startswith(prop):
                 return line.split("=")[1].strip()
@@ -139,6 +143,10 @@ def getProvdataVariants(unpack_dir):
         if m and m.group('variant'):
             variants.append(m.group('variant'))
     return variants
+
+def getIntermediates(product_out, component, subdir):
+    return os.path.join(product_out, "obj", "PACKAGING",
+                        component + "_intermediates", subdir)
 
 def process_image(unpack_dir, dest_zip, source, target, variant=None):
     # Determine naming for target being inserted into zipfile
@@ -187,35 +195,74 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None):
         ifile.AddToZip(dest_zip)
     flashfile_content.append(target_out)
 
+def process_image_fast(product_out, flashfiles_out, source, target):
+    if target in flashfile_content:
+        return
+
+    print "-- Adding", target, source
+    outfile = os.path.join(flashfiles_out, target)
+
+    if source == "bootloader":
+        bdir = getIntermediates(product_out, "bootloader_zip", "root")
+        intel_common.GetBootloaderImageFromOut(product_out, bdir, outfile)
+    elif source == "images" or source == "radio" or source.startswith("boot:") or source == "fastboot":
+        os.link(os.path.join(product_out, target), outfile)
+    elif source == "provdatazip":
+        infile = os.path.join(getIntermediates(product_out, "flashfiles", "root"), target)
+        if not os.path.isfile(infile):
+            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata"), target)
+        os.link(infile, outfile)
+    elif source == "bootloaderzip":
+        infile = os.path.join(getIntermediates(product_out, "bootloader_zip", "root"), target)
+        os.link(infile, outfile)
+    elif source == "fls_images":
+        print("Sofia is not supported yet, fastflashfiles are not available")
+    else:
+        raise Exception("unknown source image type " + source)
+
+    flashfile_content.append(target)
+
 def main(argv):
     def option_handler(o, a):
         if o in ("-V", "--variant"):
             OPTIONS.variants = [a]
         elif o in ("-U", "--unified-variants"):
             OPTIONS.unified_variants = True
+        elif o in ("-f", "--fast"):
+            OPTIONS.fast = True
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "V:U",
-            extra_long_opts = ["variant=","unified-variants"],
+            extra_opts = "V:Uf",
+            extra_long_opts = ["variant=","unified-variants","fast"],
             extra_option_handler = option_handler)
     if len(args) < 2 or (OPTIONS.variants and OPTIONS.unified_variants):
         common.Usage(__doc__)
         sys.exit(1)
 
-    print "Unzipping target-files..."
-    unpack_dir, input_zip = common.UnzipTemp(args[0])
-    OPTIONS.info_dict = common.LoadInfoDict(input_zip)
-    if OPTIONS.unified_variants:
-        OPTIONS.variants = getProvdataVariants(unpack_dir)
+    if OPTIONS.fast:
+        product_out = args[0]
+        system = os.path.join(product_out, "system")
+        build_type = getBuildProp(system, "ro.build.type")
+        platform = getBuildProp(system, "ro.product.name")
 
-    build_type = getBuildProp(unpack_dir, "ro.build.type")
-    platform = getBuildProp(unpack_dir, "ro.product.name")
+        flashfile = getIntermediates(product_out, "flashfiles", "flashfiles")
+    else:
+        print "Unzipping target-files..."
+        unpack_dir, input_zip = common.UnzipTemp(args[0])
+        OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+        if OPTIONS.unified_variants:
+            OPTIONS.variants = getProvdataVariants(unpack_dir)
+
+        system = os.path.join(unpack_dir, "SYSTEM")
+        build_type = getBuildProp(system, "ro.build.type")
+        platform = getBuildProp(system, "ro.product.name")
+
+        flashfile = os.path.join(unpack_dir, "RADIO", "flashfiles")
 
     # Retrieve "generic" PFT instructions from target file package
-    flashfile = os.path.join(unpack_dir, "RADIO", "flashfiles")
     if os.path.isfile(flashfile + ".ini"):
         print "Reading INI configuration..."
         with open(flashfile + ".ini", "r") as f:
@@ -236,26 +283,37 @@ def main(argv):
         print "Exiting, Missing correct flashfile configuration for generating Flashfiles."
         sys.exit(1)
 
-    with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
-        # Using "generic" instructions as reference, grab required files & insert into flashfile zip
+    if OPTIONS.fast:
+        fastff_dir = args[1]
         print "Adding required binaries..."
         for src, target in files:
-            if OPTIONS.variants:
-                for variant in OPTIONS.variants:
-                    process_image(unpack_dir, dest_zip, src, target, variant)
-            else:
-                process_image(unpack_dir, dest_zip, src, target)
-        # If mega flashfile is enabled, create multi-variant version of PFT instructions
-        if OPTIONS.unified_variants:
-            print "Adding variant specific configurations to ip..."
-            vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files)
-            vip.generate_variant_ip()
-            configs, files = flash_cmd_generator.parse_config(vip.variant_ip, build_type, platform)
-        # Write flash_cmd_generator parsed PFT flashing instructions to file & insert into flashfile zip
+            process_image_fast(product_out, fastff_dir, src, target)
+
         print "Generating JSON flash configuration files..."
         for fn, data in configs:
-            ifile = common.File(fn, data)
-            ifile.AddToZip(dest_zip)
+            with open(os.path.join(fastff_dir,fn), 'w') as file:
+                file.write(data)
+    else:
+        with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
+            # Using "generic" instructions as reference, grab required files & insert into flashfile zip
+            print "Adding required binaries..."
+            for src, target in files:
+                if OPTIONS.variants:
+                    for variant in OPTIONS.variants:
+                        process_image(unpack_dir, dest_zip, src, target, variant)
+                else:
+                    process_image(unpack_dir, dest_zip, src, target)
+            # If mega flashfile is enabled, create multi-variant version of PFT instructions
+            if OPTIONS.unified_variants:
+                print "Adding variant specific configurations to ip..."
+                vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files)
+                vip.generate_variant_ip()
+                configs, files = flash_cmd_generator.parse_config(vip.variant_ip, build_type, platform)
+            # Write flash_cmd_generator parsed PFT flashing instructions to file & insert into flashfile zip
+            print "Generating JSON flash configuration files..."
+            for fn, data in configs:
+                ifile = common.File(fn, data)
+                ifile.AddToZip(dest_zip)
     print "All done."
 
 if __name__ == '__main__':

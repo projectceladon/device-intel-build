@@ -60,6 +60,32 @@ $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDO
 	$(hide) mkdir -p $(dir $@)
 	$(hide) $(fftf) $(FLASHFILES_ADD_ARGS) $(BUILT_TARGET_FILES_PACKAGE) $@
 
+ifeq ($(FLASHFILE_VARIANTS),)
+# Fast flashfiles is for engineering purpose only
+# Should not be used on end-user product
+.PHONY: fast_flashfiles
+
+FAST_FLASHFILES_DIR := $(PRODUCT_OUT)/fast_flashfiles
+
+FAST_FLASHFILES_DEPS := \
+    $(INSTALLED_BOOTIMAGE_TARGET) \
+    $(INSTALLED_RADIOIMAGE_TARGET) \
+    $(INSTALLED_RECOVERYIMAGE_TARGET) \
+    $(INSTALLED_SYSTEMIMAGE) \
+    $(INSTALLED_USERDATAIMAGE_TARGET) \
+    $(INSTALLED_CACHEIMAGE_TARGET) \
+    $(INSTALLED_VENDORIMAGE_TARGET) \
+    $(USERFASTBOOT_BOOTIMAGE) \
+
+fast_flashfiles: $(fftf) $(MKDOSFS) $(MCOPY) $(FAST_FLASHFILES_DEPS) | $(ACP)
+	$(hide) rm -rf $(FAST_FLASHFILES_DIR)
+	$(hide) mkdir -p $(FAST_FLASHFILES_DIR)
+	$(hide) $(fftf) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
+
+droid: fast_flashfiles
+flashfiles: fast_flashfiles
+endif
+
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
 
 ifneq ($(BOARD_HAS_NO_IFWI),true)
