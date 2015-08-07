@@ -26,6 +26,10 @@ Usage: flashfiles_from_target_files [options] <input_target_files_zip> <output_f
   -f (--fast)
       Generate a Fast flashfiles (take images directly from out/, and
       use hardlink instead of doing a big zip)
+
+  -M (--mv_config_default)
+      Specify the default mv configuration to flash
+      This option is mandatory for Sofia targets only
 """
 
 import sys
@@ -59,6 +63,7 @@ OPTIONS = common.OPTIONS
 OPTIONS.variants = None
 OPTIONS.unified_variants = False
 OPTIONS.fast = False
+OPTIONS.mv_config_default = None
 
 flashfile_content = []
 variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img"]
@@ -173,7 +178,7 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None):
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
     elif source == "provdatazip":
         suffix = "_" + variant if variant else ""
-        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix), target)
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix), os.path.basename(target))
     elif source == "bootloaderzip":
         ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
     elif source.startswith("boot:"):
@@ -201,6 +206,8 @@ def process_image_fast(product_out, flashfiles_out, source, target):
 
     print "-- Adding", target, source
     outfile = os.path.join(flashfiles_out, target)
+    if not os.path.exists(os.path.dirname(outfile)):
+        os.mkdir(os.path.dirname(outfile))
 
     if source == "bootloader":
         bdir = getIntermediates(product_out, "bootloader_zip", "root")
@@ -208,9 +215,9 @@ def process_image_fast(product_out, flashfiles_out, source, target):
     elif source == "images" or source == "radio" or source.startswith("boot:") or source == "fastboot":
         os.link(os.path.join(product_out, target), outfile)
     elif source == "provdatazip":
-        infile = os.path.join(getIntermediates(product_out, "flashfiles", "root"), target)
+        infile = os.path.join(getIntermediates(product_out, "flashfiles", "root"), os.path.basename(target))
         if not os.path.isfile(infile):
-            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata"), target)
+            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata"), os.path.basename(target))
         os.link(infile, outfile)
     elif source == "bootloaderzip":
         infile = os.path.join(getIntermediates(product_out, "bootloader_zip", "root"), target)
@@ -232,13 +239,15 @@ def main(argv):
             OPTIONS.unified_variants = True
         elif o in ("-f", "--fast"):
             OPTIONS.fast = True
+        elif o in ("-M", "--mv_config_default"):
+            OPTIONS.mv_config_default = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "V:Uf",
-            extra_long_opts = ["variant=","unified-variants","fast"],
+            extra_opts = "V:UfM:",
+            extra_long_opts = ["variant=","unified-variants","fast","mv_config_default="],
             extra_option_handler = option_handler)
     if len(args) < 2 or (OPTIONS.variants and OPTIONS.unified_variants):
         common.Usage(__doc__)
@@ -277,10 +286,13 @@ def main(argv):
             conf = json.loads(f.read())
         configs, files = flashxml.parse_config(conf, build_type, platform)
     elif os.path.isfile(flashfile + "_fls.json") and not OPTIONS.unified_variants:
+        if not OPTIONS.mv_config_default:
+            common.Usage(__doc__)
+            sys.exit(1)
         print "Reading JSON FLS configuration..."
         with open(flashfile + "_fls.json", "r") as f:
             conf = json.loads(f.read())
-        configs, files = flashflsxml.parse_config(conf, build_type, platform)
+        configs, files = flashflsxml.parse_config(conf, build_type, platform, OPTIONS.mv_config_default)
     else:
         print "Exiting, Missing correct flashfile configuration for generating Flashfiles."
         sys.exit(1)

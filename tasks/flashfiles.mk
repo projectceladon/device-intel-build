@@ -25,7 +25,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	  $(hide) mkdir -p $(dir $@)
 	  $(eval y = $(subst -, ,$(basename $(@F))))
 	  $(eval DEV = $(word 3, $(y)))
-	  $(hide) $(fftf) --variant=$(DEV) $(BUILT_TARGET_FILES_PACKAGE) $@
+	  $(hide) $(fftf) --variant=$(DEV) --mv_config_default=$(notdir $(MV_CONFIG_DEFAULT_TYPE)) $(BUILT_TARGET_FILES_PACKAGE) $@
   endif
 
   # Generate OTA fixup files
@@ -58,7 +58,7 @@ INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
 
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDOSFS) $(MCOPY)
 	$(hide) mkdir -p $(dir $@)
-	$(hide) $(fftf) $(FLASHFILES_ADD_ARGS) $(BUILT_TARGET_FILES_PACKAGE) $@
+	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(MV_CONFIG_DEFAULT_TYPE)) $(BUILT_TARGET_FILES_PACKAGE) $@
 
 ifeq ($(FLASHFILE_VARIANTS),)
 # Fast flashfiles is for engineering purpose only
@@ -80,7 +80,7 @@ FAST_FLASHFILES_DEPS := \
 fast_flashfiles: $(fftf) $(MKDOSFS) $(MCOPY) $(FAST_FLASHFILES_DEPS) | $(ACP)
 	$(hide) rm -rf $(FAST_FLASHFILES_DIR)
 	$(hide) mkdir -p $(FAST_FLASHFILES_DIR)
-	$(hide) $(fftf) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
+	$(fftf) --mv_config_default=$(notdir $(MV_CONFIG_DEFAULT_TYPE)) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
 
 # add dependencies
 droid: fast_flashfiles
