@@ -47,7 +47,7 @@ def main(argv):
     def option_handler(o, a):
         if o in ("-u", "--bootable"):
             OPTIONS.bootable = True
-        if o in (-"V", "--variant"):
+        elif o in ("-V", "--variant"):
             OPTIONS.variant = a
         else:
             return False
@@ -82,7 +82,6 @@ def main(argv):
     f.write(data)
     f.close()
 
-    common.Cleanup()
 
 if __name__ == '__main__':
     try:
