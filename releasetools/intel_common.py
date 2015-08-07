@@ -613,15 +613,15 @@ def sign_fls(flstool, sign, script, output, psi, eblsec):
 def build_fls(unpack_dir, target, variant=None):
     """Build fls flash file out of tfp"""
 
-    target2file = open(os.path.join(unpack_dir, "RADIO", "fftf_build.opt")).read().strip()
-    t2f = init_t2f_dict(target2file)
-
     sign, target2tag = check_signed_fls(target)
     tag = get_tag(target2tag)
-    flstool = t2f["FLSTOOL"]
     provdata_zip  = 'provdata_%s.zip' % variant if variant else 'provdata.zip'
     provdata_name = os.path.join(unpack_dir, "RADIO", provdata_zip)
     provdata, provdata_zip = common.UnzipTemp(provdata_name)
+
+    target2file = open(os.path.join(provdata, "fftf_build.opt")).read().strip()
+    t2f = init_t2f_dict(target2file)
+    flstool = t2f["FLSTOOL"]
 
     prg = os.path.join(provdata, os.path.basename(t2f["INTEL_PRG_FILE"]))
     out = os.path.join(unpack_dir, "IMAGES", target2tag + '.fls')
