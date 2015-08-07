@@ -2,11 +2,12 @@
 
 import os
 import json
+import re
 
 # main Class to generate json file from json configuration file
 class FlashFileJson:
 
-    def __init__(self, config):
+    def __init__(self, config, mv_config_default):
         self.flist = {}
         self.flash = {'version': '2.1',
                       'groups': {},
@@ -15,11 +16,16 @@ class FlashFileJson:
                       'configurations': {},
                       'commands': []}
         self.prop = {}
+        self.mv_args = {}
+        self.mv_config_default = mv_config_default
 
-    def add_file(self, shortname, filename, source):
+    def add_file(self, shortname, target, source):
+        filename = os.path.basename(target)
         if filename in self.flist:
             return
-        self.flist[filename] = source
+        if "mvconfig_" in filename and re.split("mvconfig_|_signed|\.fls", filename)[1] != self.mv_config_default:
+            target = "mvconfigs/" + filename
+        self.flist[target] = source
         new = {'type': 'file', 'name': shortname, 'value': filename, 'description': filename}
         self.flash['parameters'][shortname] = new
 
@@ -40,9 +46,16 @@ class FlashFileJson:
         new = {'tool': tool,
                'args': args,
                'description': description,
-               'timeout': 600000,
+               'timeout': timeout,
                'retry': retry,
                'mandatory': mandatory,
+               'restrict': restrict}
+        self.flash['commands'].append(new)
+
+    def add_popup(self, ptype, description, restrict):
+        new = {'tool': 'popup',
+               'type': ptype,
+               'description': description,
                'restrict': restrict}
         self.flash['commands'].append(new)
 
@@ -56,42 +69,39 @@ class FlashFileJson:
 
     def parse_command(self, commands):
 
-        up_args = ''
-        smp_args = ''
-
         for cmd in commands:
             if cmd['type'] in ['fls']:
-                if (cmd['core'] in ['up,smp']) or (cmd['core'] in ['up']):
-                    fname = os.path.basename(cmd['target'])
-                    shortname = fname.split('.')[0].lower()
-                    self.add_file(shortname, fname, cmd['source'])
-                    cmd['pftname'] = '${' + shortname + '}'
-                    up_args = up_args + ' ' + cmd['pftname']
+                fname = os.path.basename(cmd['target'])
+                shortname = fname.split('.')[0].lower()
+                self.add_file(shortname, cmd['target'], cmd['source'])
+                cmd['pftname'] = '${' + shortname + '}'
 
-                if (cmd['core'] in ['up,smp']) or (cmd['core'] in ['smp']):
-                    fname = os.path.basename(cmd['target'])
-                    shortname = fname.split('.')[0].lower()
-                    self.add_file(shortname, fname, cmd['source'])
-                    cmd['pftname'] = '${' + shortname + '}'
-                    smp_args = smp_args + ' ' + cmd['pftname']
+                if 'core' in cmd:
+                    for s in cmd['core'].split(','):
+                        self.mv_args[s + '_fls_config'] += cmd['pftname'] + ' '
+                else:
+                    for mv in self.mv_args:
+                        self.mv_args[mv] += cmd['pftname'] + ' '
 
             if cmd['type'] == 'prop':
                 self.add_buildproperties(cmd['target'])
                 continue
 
-        params = (cmd.get('timeout', 60000), cmd.get('retry', 2), cmd.get('mandatory', True))
         tools = 'flsDownloader'
-        up_desc = cmd.get('desc', 'Flashing ' + 'UP' + 'FLS' + ' image')
-        smp_desc = cmd.get('desc', 'Flashing ' + 'SMP' + 'FLS' + ' image')
-        self.add_command(tools, up_args, up_desc, 'up_fls_config', params)
-        self.add_command(tools, smp_args, smp_desc, 'smp_fls_config', params)
-        smp_erase_desc = cmd.get('desc', 'Erase & Flashing ' + 'SMP' + 'FLS' + ' image')
-        self.add_command(tools, '--erase-mode=2 ' + smp_args, smp_desc, 'smp_fls_erase_config', params)
+        params = (cmd.get('timeout', 60000), cmd.get('retry', 2), cmd.get('mandatory', True))
+        for config_name in self.flash['configurations']:
+            c = self.flash['configurations'][config_name]
+            mv_desc = "Flashing " + c['name'] + " image"
+            if 'erase' in config_name:
+                self.mv_args[config_name] = '--erase-mode=1 ' + self.mv_args[config_name]
+                self.add_popup('warn', "This configuration will erase *all* your NVM, including calibration data. Unplug now your board to abort", config_name)
+            self.add_command(tools, self.mv_args[config_name], mv_desc, config_name, params)
 
 
     def parse_configuration(self, configurations):
         for config in configurations:
-            if config['config_name'] in ['smp_fls_config']:
+            self.mv_args[config['config_name']] = ""
+            if config['config_name'].split("_fls_config")[0] == self.mv_config_default:
                 default = True
             else:
                 default = False
@@ -105,14 +115,14 @@ class FlashFileJson:
         return json.dumps({'flash': self.flash, 'build_info': self.prop}, indent=4, sort_keys=True)
 
 
-def parse_config(conf, variant, platform):
+def parse_config(conf, variant, platform, mv_config_default):
 
     results = []
     files = []
 
     for c in conf['config']:
         if c['filename'][-5:] == '.json':
-            f = FlashFileJson(c)
+            f = FlashFileJson(c, mv_config_default)
         elif c['filename'][-4:] == '.xml':
             print "warning: xml format not supported. Skipping."
             continue
@@ -129,11 +139,11 @@ def parse_config(conf, variant, platform):
         commands = conf['commands']
         commands = [cmd for cmd in commands if not 'restrict' in cmd or c['name'] in cmd['restrict']]
 
-        f.parse_command(commands)
-
         if c['filename'][-5:] == '.json':
             configurations = conf['configurations']
             f.parse_configuration(configurations)
+
+        f.parse_command(commands)
 
         results.append((c['filename'], f.finish()))
         files = [[src, file] for file, src in f.files().items()]
