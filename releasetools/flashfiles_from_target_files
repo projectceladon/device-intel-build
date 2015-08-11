@@ -216,7 +216,9 @@ def process_image_fast(product_out, flashfiles_out, source, target):
         infile = os.path.join(getIntermediates(product_out, "bootloader_zip", "root"), target)
         os.link(infile, outfile)
     elif source == "fls_images":
-        print("Sofia is not supported yet, fastflashfiles are not available")
+        intermediate = getIntermediates(product_out, "flashfiles", "provdata")
+        
+        intel_common.build_fls_out(product_out, intermediate, target, outfile, variant=OPTIONS.variants)
     else:
         raise Exception("unknown source image type " + source)
 

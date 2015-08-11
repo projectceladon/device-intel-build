@@ -82,8 +82,10 @@ fast_flashfiles: $(fftf) $(MKDOSFS) $(MCOPY) $(FAST_FLASHFILES_DEPS) | $(ACP)
 	$(hide) mkdir -p $(FAST_FLASHFILES_DIR)
 	$(hide) $(fftf) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
 
+# add dependencies
 droid: fast_flashfiles
 flashfiles: fast_flashfiles
+
 endif
 
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
