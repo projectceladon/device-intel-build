@@ -56,6 +56,8 @@ class IniParser:
                 continue
             if l.find('=') > 1:
                 self.new_option(l)
+                continue
+            raise Exception('INI Parsing error, offending line is ' + l)
 
     def sectionsfilter(self, start):
         return [(s, s[len(start):])
