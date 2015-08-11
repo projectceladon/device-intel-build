@@ -509,3 +509,94 @@ def add_dir_to_path(dir_name, end=True):
         path_env_var = dir_name + ":" + path_env_var
     os.environ['PATH'] = path_env_var
 
+# dictionnary to translate Makefile "target" name to filename
+def init_t2f_dict(t2f_list):
+    d = {}
+    for l in t2f_list.split():
+        target, fname = l.split(':')
+        d[target] = fname
+    return d
+
+def build_fls(unpack_dir, target, variant=None):
+    """Build fls flash file out of tfp"""
+
+    target2file = open(os.path.join(unpack_dir, "RADIO", "fftf_build.opt")).read().strip()
+    t2f = init_t2f_dict(target2file)
+
+    if target[-11:] == "_signed.fls":
+        sign_fls = True
+        target2tag = target[:-11]
+    elif target[-4:] == ".fls":
+        sign_fls = False
+        target2tag = target[:-4]
+    else:
+        assert False, "Unknown target type"
+        return
+
+    if target2tag == "system":
+        tag = "SYSTEM"
+    elif target2tag == "userdata":
+        tag = "USERDATA"
+    elif target2tag == "cache":
+        tag = "CACHE"
+    elif target2tag == "boot":
+        tag = "BOOT_IMG"
+    elif target2tag == "recovery":
+        tag = "RECOVERY"
+    else:
+        assert False, "Unknown target"
+        return
+
+    flstool = t2f["FLSTOOL"]
+    provdata_zip  = 'provdata_%s.zip' % variant if variant else 'provdata.zip'
+    provdata_name = os.path.join(unpack_dir, "RADIO", provdata_zip)
+    provdata, provdata_zip = common.UnzipTemp(provdata_name)
+
+    cmd = [flstool, "--prg", os.path.join(provdata, os.path.basename(t2f["INTEL_PRG_FILE"])),
+                    "--output", os.path.join(unpack_dir, "IMAGES", target2tag + '.fls'),
+                    "--tag", tag]
+
+    if (t2f["PSI_RAM_FLS"] != '') and (t2f["EBL_FLS"] != ''):
+        cmd.extend(["--psi", os.path.join(provdata, os.path.basename(t2f["PSI_RAM_FLS"]))])
+        cmd.extend(["--ebl-sec", os.path.join(provdata, os.path.basename(t2f["EBL_FLS"]))])
+
+    cmd.append(os.path.join(unpack_dir, "IMAGES", target2tag + '.img'))
+    cmd.extend(["--replace", "--to-fls2"])
+
+    try:
+        p = common.Run(cmd)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
+    p.communicate()
+    assert p.returncode == 0, "FlsTool failed"
+
+    if sign_fls:
+        cmd = [flstool, "--sign", os.path.join(unpack_dir, "IMAGES", target2tag + '.fls'),
+                        "--script", t2f["SYSTEM_FLS_SIGN_SCRIPT"],
+                        "--output", os.path.join(unpack_dir, "IMAGES", target)]
+
+        if (t2f["PSI_RAM_SIGNED_FLS"] != '') and (t2f["EBL_SIGNED_FLS"] != ''):
+            cmd.extend(["--psi", os.path.join(provdata, os.path.basename(t2f["PSI_RAM_SIGNED_FLS"]))])
+            cmd.extend(["--ebl-sec", os.path.join(provdata, os.path.basename(t2f["EBL_SIGNED_FLS"]))])
+
+        cmd.append("--replace")
+
+        try:
+            p = common.Run(cmd)
+        except Exception as exc:
+            print "Error: Unable to execute command: {}".format(' '.join(cmd))
+            raise exc
+        p.communicate()
+        assert p.returncode == 0, "fls signing failed"
+
+    cmd = ["cp", os.path.join(unpack_dir, "IMAGES", target2tag + '.img'), os.path.join(t2f["FASTBOOT_IMG_DIR"], target2tag + '.bin')]
+
+    try:
+        p = common.Run(cmd)
+    except Exception as exc:
+        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        raise exc
+    p.communicate()
+    assert p.returncode == 0, "cp to fasboot directory failed"
+
