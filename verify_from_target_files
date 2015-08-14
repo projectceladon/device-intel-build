@@ -189,12 +189,9 @@ def main(argv):
     else:
         subprocess.check_output(["cp", image.name, bootloader_img + "/bootloader" ]);
         for imgname, imgdata in additional_data.iteritems():
-            img_array = imgname.split(".",1)
-            curr_img = img_array[0]
-            img = common.File(curr_img,imgdata).WriteToTemp()
-            partition = intel_common.img_to_partition[imgname]
-            subprocess.check_output(["cp", img.name, bootloader_img + "/" + partition]);
-            if imgname in intel_common.size_required:
+            img = common.File(imgname,imgdata).WriteToTemp()
+            subprocess.check_output(["cp", img.name, bootloader_img + "/" + imgname]);
+            if imgname != 'fw_update':
                 bootloader_sizes += ":" + str(len(imgdata))
             img.close()
     image.close();

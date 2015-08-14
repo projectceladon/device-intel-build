@@ -25,32 +25,12 @@ import imp
 import time
 import collections
 import fnmatch
+import time
+import json
 
 sys.path.append("build/tools/releasetools")
 import common
 
-#FIXME Need to create the hash img_to_partition such that it can
-#scale to multiple platforms.
-""" Sofia3GR bootloader partition names and image names do not match.
-    img_to_partition maps the image name to partition so the hashes
-    are compared correctly. """
-
-img_to_partition = {
-        "psi_flash"    : "psi",
-        "slb"          : "slb",
-        "ucode_patch"  : "ucode_patch",
-        "mvconfig_smp" : "mvconfig" ,
-        "secvm"        : "secvm" ,
-        "mobilevisor"  : "hypervisor",
-        "splash_img"   : "splash",
-        "fwu_image"    : "fw_update"
-}
-
-nonefi_bootloader = ["psi_flash", "slb", "ucode_patch", "mvconfig_smp",
-                    "secvm", "mobilevisor", "splash_img","fwu_image" ]
-
-size_required    = ["psi_flash", "slb", "ucode_patch", "mvconfig_smp",
-                    "secvm", "mobilevisor", "splash_img"]
 
 def load_device_mapping(path):
     try:
@@ -743,6 +723,39 @@ def get_auth_data(timestamp, sign_pair, password, pem_cert, guid_str, name, payl
     return data
 
 
+def get_bootloader_list(unpack_dir):
+    """ Return an sorted list of the bootloader components by parsing the
+        flashfiles_fls.json file. """
+
+    bootloader_list = []
+    flashfls_path = os.path.join(unpack_dir, "RADIO", "flashfiles_fls.json")
+
+    with open(flashfls_path, 'r') as flashfls_json:
+        data = json.loads(flashfls_json.read())
+    for cmd in data['commands']:
+        if (cmd['type'] == "fls" and cmd['source'] == "provdatazip"):
+            if (cmd['partition'] != 'oem'):
+                bootloader_list.append(cmd['partition'])
+
+    return sorted(bootloader_list)
+
+
+def get_partition_target_hash(unpack_dir):
+    """ Return a hash comprising of the mapping of partition name
+        to target name. """
+
+    partition_target = {}
+    flashfls_path = os.path.join(unpack_dir, "RADIO", "flashfiles_fls.json")
+
+    with open(flashfls_path, 'r') as flashfls_json:
+        data = json.loads(flashfls_json.read())
+    for cmd in data['commands']:
+        if cmd['type'] == "fls" :
+            partition_target[cmd['partition']] = cmd['target']
+
+    return partition_target
+
+
 def CheckIfSocEFI(unpack_dir):
     """ Non-EFI SOC (Sofia and its variants), have fftf_build.opt file
     in the TFP which is used to check if the DUT is efi or not. """
@@ -759,24 +772,21 @@ def CheckIfSocEFI(unpack_dir):
 
 def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     """ Non-EFI bootloaders (example Sofia and its variants), comprise of
-    various partitions. For sofia we list this in nonefi_bootloader[]. Extract
-    and return the *LoadMap.bin files from the *.fls files. """
+    various partitions. The partitions are obtained from get_bootloader_list().
+    Extract and return the *LoadMap.bin files from the *.fls files. """
 
-    bootloader_list = nonefi_bootloader
+    bootloader_list = get_bootloader_list(unpack_dir)
     if variant:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
     else:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
     provdata, provdata_zip = common.UnzipTemp(provdata_name)
     additional_data_hash = collections.OrderedDict()
+    partition_to_target = get_partition_target_hash(unpack_dir)
 
-    for curr_loader in bootloader_list :
-        loader_fls = curr_loader + "_signed.fls"
-        loader_filepath = os.path.join(provdata, loader_fls)
-        if not os.path.exists(loader_filepath):
-            loader_fls = curr_loader + ".fls"
-            loader_filepath = os.path.join(provdata, loader_fls)
-        assert os.path.exists(loader_filepath), "Either signed or unsigned fls need to be present in TFP"
+    for loader_partition in bootloader_list :
+        curr_loader = partition_to_target[loader_partition]
+        loader_filepath = os.path.join(provdata, curr_loader)
         extract = tempfile.mkdtemp(prefix=curr_loader)
         common.OPTIONS.tempfiles.append(extract)
         flstool = os.path.join(provdata, "FlsTool")
@@ -797,7 +807,7 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
         loader_abspath = os.path.join(extract ,loader_datafile)
         loader_file = open(loader_abspath)
         loader_data = loader_file.read()
-        additional_data_hash[curr_loader] = loader_data
+        additional_data_hash[loader_partition] = loader_data
         loader_file.close()
 
     return additional_data_hash
