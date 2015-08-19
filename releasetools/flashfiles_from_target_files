@@ -327,7 +327,7 @@ def main(argv):
         print "Reading JSON FLS configuration..."
         with open(flashfile + "_fls.json", "r") as f:
             conf = json.loads(f.read())
-        configs, files = flashflsxml.parse_config(conf, build_type, platform, OPTIONS.mv_config_default)
+        configs, files = flashflsxml.parse_config(conf, build_type, platform, OPTIONS.mv_config_default, system)
     else:
         print "Exiting, Missing correct flashfile configuration for generating Flashfiles."
         sys.exit(1)

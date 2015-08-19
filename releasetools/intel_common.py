@@ -16,7 +16,7 @@
 
 
 import tempfile
-import os
+import os, errno
 import sys
 import subprocess
 import shlex
@@ -640,7 +640,7 @@ def build_fls(unpack_dir, target, variant=None):
 
     target2file = open(os.path.join(provdata, "fftf_build.opt")).read().strip()
     t2f = init_t2f_dict(target2file)
-    flstool = t2f["FLSTOOL"]
+    flstool = os.path.join(provdata, os.path.basename(t2f["FLSTOOL"]))
 
     prg = os.path.join(provdata, os.path.basename(t2f["INTEL_PRG_FILE"]))
     out = os.path.join(unpack_dir, "IMAGES", target2tag + '.fls')
@@ -650,10 +650,17 @@ def build_fls(unpack_dir, target, variant=None):
     run_fls(flstool, prg, out, tag, infile, psi, eblsec)
 
     if sign:
-        script = t2f["SYSTEM_FLS_SIGN_SCRIPT"]
+        script = os.path.join(provdata, os.path.basename(t2f["SYSTEM_FLS_SIGN_SCRIPT"]))
         out_signed = os.path.join(unpack_dir, "IMAGES", target)
 
         sign_fls(flstool, out, script, out_signed, psi, eblsec)
+
+    try:
+        os.makedirs(os.path.join(t2f["FASTBOOT_IMG_DIR"]))
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(os.path.join(t2f["FASTBOOT_IMG_DIR"])):
+            pass
+        else: raise
 
     shutil.copyfile(os.path.join(unpack_dir, "IMAGES", target2tag + '.img'),
                     os.path.join(t2f["FASTBOOT_IMG_DIR"], target2tag + '.bin'))
