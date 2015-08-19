@@ -60,9 +60,9 @@ class FlashFileJson:
                'restrict': [restrict]}
         self.flash['commands'].append(new)
 
-    def add_buildproperties(self, buildprop):
+    def add_buildproperties(self, path):
 
-        with open(os.path.join(os.environ['ANDROID_PRODUCT_OUT'], buildprop), 'r') as f:
+        with open(os.path.join(path, 'build.prop'), 'r') as f:
             for line in f.readlines():
                 if not line.startswith("#") and line.count("=") == 1:
                     name, value = line.strip().split("=")
@@ -93,10 +93,6 @@ class FlashFileJson:
                     params = (cmd.get('timeout', self.default_params['timeout']), cmd.get('retry', self.default_params['retry']), cmd.get('mandatory', self.default_params['mandatory']))
                     self.add_command('flsTool', ' -x ${' + shortname + '} --replace -o ${' + shortname_temp + '}', 'Extract image parts from ' + fname, 'fastboot_config', params)
                     self.add_command('fastboot', ' flash ' +  cmd['partition'] + ' ${' + shortname_temp + '}/'  + fname_temp, 'Flashing ' +  cmd['partition'] + ' with fastboot', 'fastboot_config', params)
-
-            if cmd['type'] == 'prop':
-                self.add_buildproperties(cmd['target'])
-                continue
 
         tools = 'flsDownloader'
         for config_name in self.flash['configurations']:
@@ -132,7 +128,7 @@ class FlashFileJson:
         return json.dumps({'flash': self.flash, 'build_info': self.prop}, indent=4, sort_keys=True)
 
 
-def parse_config(conf, variant, platform, mv_config_default):
+def parse_config(conf, variant, platform, mv_config_default, prop_path):
 
     results = []
     files = []
@@ -156,6 +152,7 @@ def parse_config(conf, variant, platform, mv_config_default):
         commands = conf['commands']
         commands = [cmd for cmd in commands if not 'restrict' in cmd or c['name'] in cmd['restrict']]
 
+        f.add_buildproperties(prop_path)
         if c['filename'][-5:] == '.json':
             configurations = conf['configurations']
             f.parse_configuration(configurations)
