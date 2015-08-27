@@ -85,11 +85,8 @@ class VariantIpGenerator:
 
         # Remove variant 'additional-files' from list to avoid Phone Flash Tool issues
         if ip.has_option('global', 'additional-files'):
-            exclude_files = ip.get('global', 'additional-files').split()
-            for variant_item in variant_files:
-                for exclude_item in exclude_files:
-                    if variant_item in exclude_item:
-                        self.variant_files.remove(variant_item)
+            exclude_files = set(ip.get('global', 'additional-files').split())
+            self.variant_files = sorted(set(self.variant_files) - exclude_files)
 
     def generate_variant_ip(self):
         # Add variant files to ip
@@ -104,11 +101,25 @@ class VariantIpGenerator:
             self.variant_ip.sec[section]['configurations'] = ' '.join(config_list)
 
     def __add_variant_files(self):
+        # add all files from provdata into the variant files as well
+        commands_with_arg = [c for c,_ in self.ip.sectionsfilter('command.')
+                             if self.ip.has_option(c, 'arg')]
+        all_files = set([])
+        for command in commands_with_arg:
+            args = self.ip.get(command, 'arg').split()
+            all_files |= set([self.ip.get(command, a[1:]) for a in args if a.startswith('$')])
+
+        all_filenames = set(a.split(':')[-1] for a in all_files)
+        provdata_files = set(f[len('provdatazip:'):] for f in all_files
+                             if f.startswith('provdatazip:'))
+        if self.ip.has_option('global', 'additional-files'):
+            provdata_files -= set(self.ip.get('global', 'additional-files').split())
+        self.variant_files = sorted((provdata_files | set(self.variant_files)) & all_filenames)
+
         for item in self.variant_files:
             self.variant_ip.new_section('[file.{}]'.format(item))
             for variant in self.variants:
-                item_name, item_extension = os.path.splitext(item)
-                self.variant_ip.append_option(variant, item_name + "_" + variant + item_extension)
+                self.variant_ip.append_option(variant, variantFilename(item, variant))
 
     def __add_variant_configs(self, config):
         variant_configs = []
@@ -125,6 +136,10 @@ class VariantIpGenerator:
                 self.variant_ip.append_option('parameters',
                                               '{}:{}'.format(os.path.splitext(item)[0], variant))
         return variant_configs
+
+def variantFilename(filename, variant):
+    base, suffix = os.path.splitext(filename)
+    return base + "_" + variant + suffix
 
 def getBuildProp(path, prop):
     with open(os.path.join(path, "build.prop"), "r") as fp:
@@ -153,13 +168,10 @@ def getIntermediates(product_out, component, subdir):
     return os.path.join(product_out, "obj", "PACKAGING",
                         component + "_intermediates", subdir)
 
-def process_image(unpack_dir, dest_zip, source, target, variant=None):
-    # Determine naming for target being inserted into zipfile
-    if OPTIONS.unified_variants and variant and target in variant_files:
-        target_name, target_extension = os.path.splitext(target)
-        target_out = target_name + "_" + variant + target_extension
-    else:
+def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out=None):
+    if target_out is None:
         target_out = target
+
     # Determine if target is already inserted into zipfile
     if target_out in flashfile_content:
         return
@@ -309,20 +321,25 @@ def main(argv):
                 file.write(data)
     else:
         with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
+            # If mega flashfile is enabled, create multi-variant version of PFT instructions
+            cmd_files = []
+            if OPTIONS.unified_variants:
+                print "Adding variant specific configurations to ip..."
+                vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files)
+                vip.generate_variant_ip()
+                configs, cmd_files = flash_cmd_generator.parse_config(vip.variant_ip, build_type, platform)
+                cmd_files = set([i for _,i in cmd_files])
             # Using "generic" instructions as reference, grab required files & insert into flashfile zip
             print "Adding required binaries..."
             for src, target in files:
                 if OPTIONS.variants:
                     for variant in OPTIONS.variants:
-                        process_image(unpack_dir, dest_zip, src, target, variant)
+                        target_out = None
+                        if variantFilename(target, variant) in cmd_files:
+                            target_out = variantFilename(target, variant)
+                        process_image(unpack_dir, dest_zip, src, target, variant, target_out)
                 else:
                     process_image(unpack_dir, dest_zip, src, target)
-            # If mega flashfile is enabled, create multi-variant version of PFT instructions
-            if OPTIONS.unified_variants:
-                print "Adding variant specific configurations to ip..."
-                vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files)
-                vip.generate_variant_ip()
-                configs, files = flash_cmd_generator.parse_config(vip.variant_ip, build_type, platform)
             # Write flash_cmd_generator parsed PFT flashing instructions to file & insert into flashfile zip
             print "Generating JSON flash configuration files..."
             for fn, data in configs:
