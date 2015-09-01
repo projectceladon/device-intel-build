@@ -175,9 +175,16 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None):
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "RADIO", target))
     else:
         raise Exception("unknown source image type " + source)
-    # Add file to zip, using target_out for naming
-    ifile.name = target_out
-    ifile.AddToZip(dest_zip)
+    # Add file to zip, using target_out for naming.  According to the
+    # documentation the File.AddToZip() interface is not suitable for
+    # file larger than 2GiB and common.ZipWrite() must be used
+    # instead.
+    if ifile.size >= (1 << 31):
+        tmpfile = ifile.WriteToTemp()
+        common.ZipWrite(dest_zip, tmpfile.name, target_out)
+    else:
+        ifile.name = target_out
+        ifile.AddToZip(dest_zip)
     flashfile_content.append(target_out)
 
 def main(argv):
