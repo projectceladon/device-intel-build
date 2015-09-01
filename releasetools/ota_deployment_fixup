@@ -63,6 +63,7 @@ OPTIONS.lunch = None
 OPTIONS.incremental = False
 OPTIONS.variant = False
 OPTIONS.base_variant = False
+OPTIONS.source_info_dict = None
 
 # TODO: fetch default for this out default_system_dev_certificate in the TFP
 # once a TFP is a required argument
@@ -141,7 +142,8 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
 
     # This script needs to be inserted into the main script at the
     # end of VerifyEnd section
-    vscript = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
+    vscript = edify_generator.EdifyGenerator(3, OPTIONS.info_dict,
+              fstab=OPTIONS.source_info_dict["fstab"])
 
     for tf, sf in patch_list:
         vscript.PatchCheck("/"+tf.name, tf.sha1, sf.sha1)
@@ -149,7 +151,8 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
 
     # This script needs to be inserted into the main script at the
     # beginning of InstallEnd section
-    script = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
+    script = edify_generator.EdifyGenerator(3, OPTIONS.info_dict,
+              fstab=OPTIONS.source_info_dict["fstab"])
 
     if delete_files:
         script.Print("Removing unnecessary firmware files...")
@@ -241,8 +244,11 @@ def main(argv):
 
     print "Decompressing target-files-packages..."
     tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp)
+    OPTIONS.info_dict = common.LoadInfoDict(tfp_zip)
+
     if OPTIONS.incremental:
         source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp)
+        OPTIONS.source_info_dict = common.LoadInfoDict(source_tfp_zip)
 
     dmap = intel_common.load_device_mapping_from_tfp(tfp_dir)
     if dmap:
