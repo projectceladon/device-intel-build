@@ -2,17 +2,25 @@
 
 set -e
 
-if [ -z "$1" ]; then
-    PACKAGE="$OUT/ota-dev.zip"
-else
-    PACKAGE="$1"
-fi
+PACKAGE="$OUT/ota-dev.zip"
+dutID=$(adb devices | grep -v 'List' | awk '{print ($1)}')
+UPDATE_CMD=update_from_mos
 
-GET_PROGRESS="adb shell tail /cache/recovery/uncrypt_status"
-GET_START="adb shell getprop init.svc.uncrypt"
-MAX_WAIT=30
-
-if [ ! "$2" ]; then dutID=$(adb devices | grep -v 'List' | awk '{print ($1)}'); else dutID=$2; fi
+function usage {
+    echo "Usage: ${0} [-h] [-p package_name.zip] [-r] [-s dutID]"
+    echo "    Flash the update package to the device and apply it"
+    echo "Options:"
+    echo "    -h : print this help message"
+    echo "    -p <package_name>: name of package to apply, default
+    package is $OUT/ota-dev.zip"
+    echo "    -r : use sideload method: reboot to recovery first and
+    push the package via sideload, default behavior is to push the
+    package when the device is in MOS, uncrypting it if needed, then
+    rebooting to recovery (as the fota app will do)"
+    echo "    -s <dutID>: id of the DUT in case more than one device
+    is connected to the host"
+    exit 1
+}
 
 function wait_for_adb {
     while [ -z "$(adb devices | grep $dutID | awk '{print($1)}')" ]; do
@@ -20,17 +28,21 @@ function wait_for_adb {
     done
 }
 
+function adb_root {
+    echo "Waiting for device : $dutID"
+    wait_for_adb
+    echo "Setting root permissions..."
+    adb -s $dutID root
+    sleep 1
+    wait_for_adb
+}
+
 function wait_for_uncrypt {
+    GET_PROGRESS="adb -s $dutID shell tail /cache/recovery/uncrypt_status"
+
     echo "Uncrypting $(basename $PACKAGE)..."
-    i=0
-    go="stopped"
-    while [ "$go" = "stopped" ]; do
-	sleep 1 && go=$($GET_START | sed 's/\r//g')
-	if [ $((++i)) -gt $MAX_WAIT ]; then
-	    echo "Error: uncrypt did not start"
-	    exit -1
-	fi
-    done
+    # returns when the file /cache/recovery/uncrypt_status is created
+    adb -s $dutID shell "while [ ! -f /cache/recovery/uncrypt_status ];do sleep 1; done"
     progress=0
     while [ $progress -ne 100 ]; do
 	progress=$($GET_PROGRESS | tail -1 | sed 's/\r//g')
@@ -40,19 +52,49 @@ function wait_for_uncrypt {
     echo " done!"
 }
 
-echo "Waiting for device : $dutID"
-wait_for_adb
-echo "Setting root permissions..."
-adb -s $dutID root
-sleep 1
-wait_for_adb
+function update_from_mos {
+    adb_root
+    echo "Copying OTA image $(basename $PACKAGE) to device..."
+    adb -s $dutID push $PACKAGE /data/local/tmp/update.zip
+    adb -s $dutID shell "mkdir -p /cache/recovery"
+    adb -s $dutID shell "echo \"/data/local/tmp/update.zip\" > /cache/recovery/uncrypt_file"
+    adb -s $dutID shell start uncrypt
+    wait_for_uncrypt
+    echo "Setting parameters and rebooting into recovery console..."
+    adb -s $dutID shell "echo \"--update_package=@/cache/recovery/block.map\" > /cache/recovery/command"
+    adb -s $dutID shell start pre-recovery
+}
 
-echo "Copying OTA image $(basename $PACKAGE) to device..."
-adb -s $dutID push $PACKAGE /data/local/tmp/update.zip
-adb -s $dutID shell "mkdir -p /cache/recovery"
-adb -s $dutID shell "echo \"/data/local/tmp/update.zip\" > /cache/recovery/uncrypt_file"
-adb -s $dutID shell start uncrypt
-wait_for_uncrypt
-echo "Setting parameters and rebooting into recovery console..."
-adb -s $dutID shell "echo \"--update_package=@/cache/recovery/block.map\" > /cache/recovery/command"
-adb -s $dutID shell start pre-recovery
+function update_from_ros {
+    adb_root
+    echo "Rebooting device $dutID to sideload..."
+    adb -s $dutID reboot sideload-auto-reboot
+    sleep 1
+    wait_for_adb
+    adb -s $dutID sideload $PACKAGE
+}
+
+while getopts ":s:p:rh" opt; do
+    case $opt in
+        h)
+            usage
+            ;;
+        p)
+            PACKAGE=$OPTARG
+            ;;
+        r)
+            UPDATE_CMD=update_from_ros
+            ;;
+        s)
+            dutID=$OPTARG
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG"
+            usage
+            ;;
+    esac
+done
+
+# Run the update command, default (update_from_mos) is using the same
+# flow as the fota app will do
+$UPDATE_CMD
