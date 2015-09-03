@@ -201,9 +201,10 @@ class RSA extends SignatureSpi {
 			sigTemp = File.createTempFile("sig", "");
 			sigTemp.deleteOnExit();
 
-			FileOutputStream sigDigestStream = new FileOutputStream(sigDigestTemp.getAbsolutePath());
-			sigDigestStream.write(sigDigest);
-			sigDigestStream.close();
+			try (FileOutputStream sigDigestStream = new FileOutputStream(sigDigestTemp.getAbsolutePath())) {
+				sigDigestStream.write(sigDigest);
+				sigDigestStream.close();
+			}
 		} catch (FileNotFoundException e) {
 			throw new SignatureException("File error creating temp files");
 		} catch (IOException e) {
@@ -232,12 +233,13 @@ class RSA extends SignatureSpi {
 		try {
 			Process process = pb.start();
 			int status = process.waitFor();
-			BufferedReader stdout = new BufferedReader(new InputStreamReader(process.getInputStream()));
-			while (stdout.ready()) {
-				System.err.println(stdout.readLine());
-			}
-			if (status != 0) {
-				throw new SignatureException("SignFile failed: " + status);
+			try (BufferedReader stdout = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+				while (stdout.ready()) {
+					System.err.println(stdout.readLine());
+				}
+				if (status != 0) {
+					throw new SignatureException("SignFile failed: " + status);
+				}
 			}
 		} catch (IOException e) {
 			throw new SignatureException("Something went wrong in starting process or "
@@ -254,18 +256,19 @@ class RSA extends SignatureSpi {
 		 * signature : key length bytes (little-endian)
 		 */
 		try {
-			InputStream sigStream = new FileInputStream(sigTemp.getAbsolutePath());
-			byte[] sigBytes = new byte[(IntelECSSProviderParams.MAX_SIGNATURE_SIZE / 8) * 2 + 4];
-			int sigBytesLen = sigStream.read(sigBytes);
-			if (((sigBytesLen - 4) % 128) != 0) {
-				throw new SignatureException("Invalid signature result length. Must be a multiple of 1024 bits");
+			try (InputStream sigStream = new FileInputStream(sigTemp.getAbsolutePath())) {
+				byte[] sigBytes = new byte[(IntelECSSProviderParams.MAX_SIGNATURE_SIZE / 8) * 2 + 4];
+				int sigBytesLen = sigStream.read(sigBytes);
+				if (((sigBytesLen - 4) % 128) != 0) {
+					throw new SignatureException("Invalid signature result length. Must be a multiple of 1024 bits");
+				}
+				int sigLen = (sigBytesLen - 4) / 2;
+				byte[] returnVal = new byte[sigLen];
+				for (int i = 0; i < returnVal.length; i++) {
+					returnVal[i] = sigBytes[sigBytesLen - 1 - i];
+				}
+				return returnVal;
 			}
-			int sigLen = (sigBytesLen - 4) / 2;
-			byte[] returnVal = new byte[sigLen];
-			for (int i = 0; i < returnVal.length; i++) {
-				returnVal[i] = sigBytes[sigBytesLen - 1 - i];
-			}
-			return returnVal;
 		} catch (FileNotFoundException e) {
 			throw new SignatureException("Signature block not written by SignFile");
 		} catch (IOException e) {
