@@ -83,10 +83,14 @@ class FlashFileJson:
             prec['exception'] = self.ip.get(section, 'exception')
         cmd_name = 'command.' + precondition
         if cmd_name in self.ip.seclist:
-            to_copy = ['tool', 'description', 'variable']
+            to_copy = ['tool', 'description', 'variable', 'mandatory',
+                       'group', 'defaultValue']
             cmd = self.ip.copy_option(cmd_name, to_copy)
             cmd = self.add_global_cmd_option(cmd)
             prec['cmd'] = cmd
+            if 'group' in cmd:
+                for config in self.ip.get(self.section, 'configurations').split():
+                    self.add_group(cmd['group'], config)
         self.preconditions[tool] = prec
 
     def parse_global_cmd_precondition(self, opt):
@@ -163,6 +167,13 @@ class FlashFileJson:
             self.flash['parameters'][parameter] = new
 
     def parse(self):
+        for config in self.ip.get(self.section, 'configurations').split():
+            section = 'configuration.' + config
+            to_copy = ['startState', 'brief', 'description', 'default']
+
+            self.flash['configurations'][config] = self.ip.copy_option(section, to_copy)
+            self.flash['configurations'][config]['name'] = config
+
         self.parse_global_option()
 
         version = self.ip.get(self.section, 'version')
@@ -178,8 +189,6 @@ class FlashFileJson:
         for config in self.ip.get(self.section, 'configurations').split():
             section = 'configuration.' + config
             to_copy = ['startState', 'brief', 'description', 'default']
-            self.flash['configurations'][config] = self.ip.copy_option(section, to_copy)
-            self.flash['configurations'][config]['name'] = config
 
             for s in self.ip.get(section, 'sets').split():
                 self.parse_cmd(s, config)
