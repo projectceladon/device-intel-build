@@ -41,15 +41,16 @@ class FlashFileJson:
             self.flist.append(longname)
         self.flash['parameters'][shortname] = new
 
-    def parse_args(self, args, cmd_sec):
-        for index, a in enumerate(args):
+    def parse_variables(self, string, cmd_sec):
+        for index, a in enumerate(string):
             if a.startswith('$'):
                 longname = self.ip.get(cmd_sec, a[1:])
                 filename = longname.split(':')[-1]
                 shortname = filename.split('.')[0].lower()
                 self.add_file(longname, filename, shortname)
-                args[index] = '${' + shortname + '}'
-        return args
+                string[index] = '${' + shortname + '}'
+                self.var_filter.append(a[1:])
+        return string
 
     def group_default(self, group, c):
         cfg_sec = 'configuration.' + c
@@ -129,20 +130,26 @@ class FlashFileJson:
     def parse_cmd(self, cmd_set, configuration):
 
         for section, c in self.ip.sectionsfilter('command.' + cmd_set + '.'):
+            self.var_filter = []
             if self.ip.has_option(section, 'variant'):
+                self.var_filter = ['variant']
                 if self.variant not in self.ip.get(section, 'variant').split():
                     continue
-            to_copy = ['tool', 'description', 'mandatory', 'timeout',
-                       'retry', 'duration', 'group', 'state']
-            new = self.ip.copy_option(section, to_copy)
+            new = {'restrict': [configuration]}
+
+            for opt in self.ip.options(section):
+                val = self.ip.get(section, opt)
+                if not type(val) is str:
+                    new[opt] = val
+                    continue
+                val = self.parse_variables(val.split(), section)
+                new[opt] = ' '.join(val)
+
+            for variable in self.var_filter:
+                del new[variable]
+
             if 'group' in new:
                 self.add_group(new['group'], configuration)
-
-            new['restrict'] = [configuration]
-            if self.ip.has_option(section, 'arg'):
-                args = self.ip.get(section, 'arg').split()
-                args = self.parse_args(args, section)
-                new['args'] = ' '.join(args)
 
             new = self.add_global_cmd_precondition(new, cmd_set)
             new = self.add_global_cmd_option(new)
@@ -220,7 +227,7 @@ class FlashFileCmd:
         if self.ip.get(section, 'tool') != 'fastboot':
             return
 
-        args = self.ip.get(section, 'arg').split()
+        args = self.ip.get(section, 'args').split()
 
         for index, a in enumerate(args):
             if a.startswith('$'):
