@@ -27,6 +27,9 @@ import collections
 import fnmatch
 import time
 import json
+import zipfile
+import re
+import random
 
 sys.path.append("build/tools/releasetools")
 import common
@@ -215,7 +218,7 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
     info_dict = common.OPTIONS.info_dict
     if extra_files == None:
         extra_files = []
-    platform_efi = CheckIfSocEFI(unpack_dir)
+    platform_efi = CheckIfSocEFI(unpack_dir, variant)
 
     if variant and platform_efi:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant +".zip")
@@ -734,7 +737,7 @@ def get_bootloader_list(unpack_dir):
         data = json.loads(flashfls_json.read())
     for cmd in data['commands']:
         if (cmd['type'] == "fls" and cmd['source'] == "provdatazip"):
-            if (cmd['partition'] != 'oem'):
+            if (cmd['partition'] != 'oem' and (cmd['partition'] not in bootloader_list)):
                 bootloader_list.append(cmd['partition'])
 
     return sorted(bootloader_list)
@@ -750,23 +753,58 @@ def get_partition_target_hash(unpack_dir):
     with open(flashfls_path, 'r') as flashfls_json:
         data = json.loads(flashfls_json.read())
     for cmd in data['commands']:
-        if cmd['type'] == "fls" :
-            partition_target[cmd['partition']] = cmd['target']
+        if (cmd['type'] == "fls"):
+            # FIXME We do not compare the image partitions with
+            # smp_profiling images in the TFP assuming smp_profiling
+            # images are never flashed on the device being verified
+            # Remove this assumption.
+
+            if (cmd.get('core') != 'smp_profiling'):
+                partition_target[cmd['partition']] = cmd['target']
 
     return partition_target
 
 
-def CheckIfSocEFI(unpack_dir):
-    """ Non-EFI SOC (Sofia and its variants), have fftf_build.opt file
-    in the TFP which is used to check if the DUT is efi or not. """
+def get_provdata_variants(unpack_dir):
+    """ Return a list of variants for a TFP. """
 
-    fftf_build_file = os.path.join(unpack_dir, "RADIO", "fftf_build.opt")
-    if os.path.exists(fftf_build_file) :
-        fftf_file = open(fftf_build_file)
-        target2file = fftf_file.read().strip()
+    variants = []
+    working_path = os.path.join(unpack_dir, "RADIO")
+    # Use regex analysis of provdata files to determine current variants
+    regex = re.compile('provdata_(?P<variant>\w+).zip')
+    for f in os.listdir(working_path):
+        m = regex.match(os.path.basename(f))
+        if m and m.group('variant'):
+            variants.append(m.group('variant'))
+    return variants
+
+
+def CheckIfSocEFI(unpack_dir, variant):
+    """ Non-EFI SOC (Sofia and its variants), have fftf_build.opt file
+    in the provdata which is used to check if the DUT is efi or not.
+    If the variant is not provided as an option, get the variant list
+    and read the fftf_build.opt in the first variant in the list. """
+
+    if not variant:
+        variants_list = get_provdata_variants(unpack_dir)
+        if not variants_list:
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
+        else:
+            variant = variants_list[0]
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
+    else:
+        provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
+
+    provdata = zipfile.ZipFile(provdata_name, 'r')
+    fftf_build_file = 'fftf_build.opt'
+
+    if (fftf_build_file in provdata.namelist()):
+        target2file = provdata.read(fftf_build_file)
         t2f = init_t2f_dict(target2file)
-        if(t2f["SOC_FIRMWARE_TYPE"] == "slb") :
+        provdata.close()
+        if (t2f["SOC_FIRMWARE_TYPE"] == "slb"):
             return False
+    provdata.close()
     return True
 
 
@@ -784,7 +822,7 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     additional_data_hash = collections.OrderedDict()
     partition_to_target = get_partition_target_hash(unpack_dir)
 
-    for loader_partition in bootloader_list :
+    for loader_partition in bootloader_list:
         curr_loader = partition_to_target[loader_partition]
         loader_filepath = os.path.join(provdata, curr_loader)
         extract = tempfile.mkdtemp(prefix=curr_loader)
