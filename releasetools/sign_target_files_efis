@@ -174,7 +174,7 @@ def zero_pad(data, size):
 
 
 # Useful: http://bbs.pediy.com/upload/bbs/unpackfaq/ARTeam%20PE_appendix1_offsets.htm
-def get_section_offset(data, name):
+def get_section(data, name):
     pe_header_offset = struct.unpack_from("<I", data, 0x3c)[0]
     num_sections = struct.unpack_from("<H", data, pe_header_offset + 0x6)[0]
     opt_header_size = struct.unpack_from("<H", data, pe_header_offset +0x14)[0]
@@ -184,55 +184,25 @@ def get_section_offset(data, name):
         section_offset = section_table_offset + (i * 0x28)
         section_table_data = struct.unpack_from("<8sIIIIIIHHI", data, section_offset)
 
-        section_name, _, _, _, section_offset, _, _, _, _, _ = section_table_data
+        section_name, section_size, _, _, section_offset, _, _, _, _, _ = section_table_data
         if section_name != name:
             continue
         print "Found", section_name, "at offset", hex(section_offset)
-        return section_offset
+        return (section_offset, section_size)
 
     raise common.ExternalError("Section not found")
 
 
-def generate_keystore(oem_key_pair, keystore_certs, password):
-    verity_keys_der = [intel_common.der_pub_from_pem_cert(i + OPTIONS.public_key_suffix)
-                       for i in keystore_certs]
-    tf = tempfile.NamedTemporaryFile(prefix="keystore")
-    cmd = ["keystore_signer", oem_key_pair + OPTIONS.private_key_suffix,
-            oem_key_pair + OPTIONS.public_key_suffix, tf.name]
-    cmd.extend([i.name for i in verity_keys_der])
-    p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    p.communicate()
-    [i.close() for i in verity_keys_der]
-    assert p.returncode == 0, "keystore generation failed"
-    tf.seek(os.SEEK_SET, 0)
-    data = tf.read()
-    tf.close()
-    return data
-
-
-def replace_keys(data, oem_key_pair, keystore_certs, password):
-    off = get_section_offset(data, ".oemkeys")
-    oem_keystore_table = struct.unpack_from("<IIII", data, off)
-    oem_keystore_size, oem_key_size, oem_keystore_offset, oem_key_offset = oem_keystore_table
-
-    # Turn relative offsets into offsets from beginning of data
-    oem_keystore_offset = oem_keystore_offset + off
-    oem_key_offset = oem_key_offset + off
+def replace_keys(data, oem_key_pair, password):
+    (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
 
     oem_key_data_der_file = intel_common.pem_cert_to_der_cert(oem_key_pair +
             OPTIONS.public_key_suffix)
-    oem_key_data = zero_pad(oem_key_data_der_file.read(), oem_key_size)
+    oem_key_data = zero_pad(oem_key_data_der_file.read(), oemkeys_size)
     oem_key_data_der_file.close()
 
-    oem_keystore_data = zero_pad(generate_keystore(oem_key_pair,
-                keystore_certs, password), oem_keystore_size)
-
-    print "OEM key and keystore sizes:", oem_key_size, oem_keystore_size
-
-    data = (data[:oem_keystore_offset] + oem_keystore_data +
-            data[oem_keystore_offset + oem_keystore_size:])
-    data = (data[:oem_key_offset] + oem_key_data +
-            data[oem_key_offset + oem_key_size:])
+    data = (data[:oemkeys_offset] + oem_key_data +
+            data[oemkeys_offset + oemkeys_size:])
     return data
 
 
@@ -253,8 +223,7 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
             password = None
             if OPTIONS.oem_key in passwords:
                 password = passwords[OPTIONS.oem_key]
-            data = replace_keys(data, OPTIONS.oem_key,
-                    OPTIONS.keystore_certs, password)
+            data = replace_keys(data, OPTIONS.oem_key, password)
 
         if path in OPTIONS.key_map:
             print "Re-signing", path
@@ -331,8 +300,6 @@ def main(argv):
         elif o in ("-K", "--oem-key"):
             OPTIONS.oem_key = a
             OPTIONS.all_keys.add(a)
-        elif o in ("-O", "--oem-keystore"):
-            OPTIONS.keystore_certs.append(a)
         elif o in ("-L", "--kernelflinger"):
             OPTIONS.kernelflinger = a
         else:
@@ -342,8 +309,7 @@ def main(argv):
     args = common.ParseOptions(argv, __doc__,
             extra_opts = "k:R:F:O:K:L:",
             extra_long_opts = ["key-mapping=",
-                "replace=", "first-stage=", "oem-key=", "oem-keystore=",
-                "kernelflinger="],
+                "replace=", "first-stage=", "oem-key=", "kernelflinger="],
             extra_option_handler = option_handler)
 
     if not OPTIONS.kernelflinger:
@@ -352,9 +318,6 @@ def main(argv):
     # Do some sanity checks on provided options
     if set(OPTIONS.key_map.keys()) & set(OPTIONS.replace.keys()):
         raise common.ExternalError("The same loaders can't be in --replace and --key_mapping\n")
-
-    if bool(OPTIONS.oem_key) != bool(OPTIONS.keystore_certs):
-        raise common.ExternalError("--oem-key and --oem-keystore need to be used together\n");
 
     if OPTIONS.oem_key and OPTIONS.kernelflinger not in OPTIONS.key_map:
         raise common.ExternalError("Replacement kernelflinger keys supplied, but no key mapping for kernelflinger supplied\n")

@@ -109,8 +109,7 @@ function sign_tfp {
 
     ./device/intel/build/releasetools/sign_target_files_efis \
             --verbose \
-            --oem-key $PRODKEYS/oem \
-            --oem-keystore $PRODKEYS/verity \
+            --oem-key $PRODKEYS/verity \
             --key-mapping loader.efi=$PRODKEYS/DB \
             $t1 $2
     rm $t1
