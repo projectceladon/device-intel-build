@@ -66,7 +66,7 @@ OPTIONS.fast = False
 OPTIONS.mv_config_default = None
 
 flashfile_content = []
-variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img"]
+variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img", "cse_spi.bin"]
 
 class VariantIpGenerator:
     def __init__(self, ip, configs, variants, variant_files):
@@ -94,6 +94,8 @@ class VariantIpGenerator:
         # Cycle through output "sections"
         for section in self.output_sections:
             config_list = []
+            if not self.ip.has_option(section, 'configurations'):
+                continue
             # Add variant configs for each configuration "section"
             for config in self.ip.get(section, 'configurations').split():
                 config_list.extend(self.__add_variant_configs(config))
@@ -102,12 +104,14 @@ class VariantIpGenerator:
 
     def __add_variant_files(self):
         # add all files from provdata into the variant files as well
-        commands_with_arg = [c for c,_ in self.ip.sectionsfilter('command.')
-                             if self.ip.has_option(c, 'args')]
+        commands = [c for c,_ in self.ip.sectionsfilter('command.')]
         all_files = set([])
-        for command in commands_with_arg:
-            args = self.ip.get(command, 'args').split()
-            all_files |= set([self.ip.get(command, a[1:]) for a in args if a.startswith('$')])
+        for command in commands:
+            for option in self.ip.options(command):
+                opt_arg = self.ip.get(command, option)
+                if type(opt_arg) != str:
+                    continue
+                all_files |= set([self.ip.get(command, a[1:]) for a in opt_arg.split() if a.startswith('$')])
 
         all_filenames = set(a.split(':')[-1] for a in all_files)
         provdata_files = set(f[len('provdatazip:'):] for f in all_files
@@ -127,7 +131,10 @@ class VariantIpGenerator:
         to_copy = ['startState', 'sets', 'brief', 'description']
         for variant in self.variants:
             variant_configs.append('{}_{}'.format(config, variant))
-            self.variant_ip.new_section('[configuration.{}]'.format(variant_configs[-1]))
+            new_section = 'configuration.{}'.format(variant_configs[-1])
+            if new_section in self.variant_ip.sections():
+                continue
+            self.variant_ip.new_section("["+new_section+"]")
             config_dict = self.ip.copy_option(section, to_copy)
             config_dict['name'] = 'configuration.{}'.format(variant_configs[-1])
             for key in config_dict.keys():
@@ -185,8 +192,8 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
         ifile = common.File(target, bdata)
     elif source == "images":
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
-    elif source == "fls_images":                                                  
-        intel_common.build_fls(unpack_dir, target, variant=variant)               
+    elif source == "fls_images":
+        intel_common.build_fls(unpack_dir, target, variant=variant)
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
     elif source == "provdatazip":
         suffix = "_" + variant if variant else ""
@@ -358,4 +365,3 @@ if __name__ == '__main__':
         sys.exit(1)
     finally:
         common.Cleanup()
-
