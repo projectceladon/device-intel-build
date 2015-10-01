@@ -46,7 +46,7 @@ class FlashFileJson:
             if a.startswith('$'):
                 longname = self.ip.get(cmd_sec, a[1:])
                 filename = longname.split(':')[-1]
-                shortname = filename.split('.')[0].lower()
+                shortname = filename.split('.')[0]
                 self.add_file(longname, filename, shortname)
                 string[index] = '${' + shortname + '}'
                 self.var_filter.append(a[1:])
@@ -173,6 +173,13 @@ class FlashFileJson:
                 new['subCommand'] = subcommand
             self.flash['parameters'][parameter] = new
 
+    def clean_config_parameters(self):
+        for config in self.flash['configurations']:
+            if self.flash['configurations'][config].has_key('parameters'):
+                for param in self.flash['configurations'][config]['parameters'].keys():
+                    if not self.flash['parameters'].has_key(param):
+                        del self.flash['configurations'][config]['parameters'][param]
+
     def parse(self):
         for config in self.ip.get(self.section, 'configurations').split():
             section = 'configuration.' + config
@@ -201,6 +208,8 @@ class FlashFileJson:
                 self.parse_cmd(s, config)
             if self.ip.has_option('configuration.' + config, 'parameters'):
                 self.add_parameter('configuration.' + config)
+
+        self.clean_config_parameters()
 
     def files(self):
         return self.flist
