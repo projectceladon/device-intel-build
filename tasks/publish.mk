@@ -47,7 +47,7 @@ PUB_KERNEL_MODULES = $(PUB_KERNEL_DBG_PATH)/kernel_modules-$(TARGET_BUILD_VARIAN
 $(PUB_KERNEL_MODULES): copy_modules
 	@echo "Publish Kernel Modules"
 	$(hide) mkdir -p $(@D)
-	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $@ -C $(LOCAL_KERNEL_PATH)/modules .
+	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
 
 .PHONY: publish_kernel_debug
 publish_kernel_debug: $(PUB_KERNEL_DBG) $(PUB_KERNEL_MODULES)
