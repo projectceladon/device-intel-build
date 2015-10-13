@@ -30,6 +30,7 @@ import json
 import zipfile
 import re
 import random
+from cStringIO import StringIO
 
 sys.path.append("build/tools/releasetools")
 import common
@@ -127,10 +128,79 @@ def WriteFileToDest(img, dest):
     fid.close()
 
 
-def patch_or_verbatim_exists(path, ota_zip):
-    filepath = os.path.join("bootloader", path)
-    patchpath = os.path.join("patch", "bootloader", path + ".p")
+def patch_or_verbatim_exists(filepath, ota_zip):
+    patchpath = os.path.join("patch", filepath + ".p")
     return filepath in ota_zip.namelist() or patchpath in ota_zip.namelist()
+
+
+def AddFWImageFile(input_zip, output_zip, variant=None):
+    # AddFWImageFile is called to read the fwu_image from provdata
+    # This function is invoked by base target as well as specific variants
+    # When called by ota_from_target_files for specifc variants an empty
+    # fwu_image is written into output_zip.
+    fwu_image = ""
+    if variant:
+        provdata_name = os.path.join("RADIO", "provdata_" + variant + ".zip")
+    else:
+        provdata_name = os.path.join("RADIO", "provdata.zip")
+
+    if not zipfile.is_zipfile(str(input_zip)) and variant is not None:
+        fwu_image = readfile_from_provdata(input_zip, "fwu_image.bin", variant)
+    else:
+        if provdata_name in input_zip.namelist():
+            with zipfile.ZipFile(StringIO(input_zip.read(provdata_name))) as provdata_zip:
+                fwu_image = provdata_zip.read("fwu_image.bin")
+    common.ZipWriteStr(output_zip, "fwu_image.bin", fwu_image)
+
+def readfile_from_provdata(tmpdir, path, variant=None):
+    if variant:
+        provdata = "provdata_" + variant + ".zip"
+    else:
+        provdata = "provdata.zip"
+    provdata_name = os.path.join(tmpdir, "RADIO", provdata)
+    provdata_dir = os.path.join(tmpdir, "RADIO")
+
+    if provdata in os.listdir(provdata_dir):
+        with zipfile.ZipFile(provdata_name) as provdata_zip:
+            data = provdata_zip.read(path)
+        return data
+
+
+def ComputeFWUpdatePatches(source_tfp_dir, target_tfp_dir, variant=None,
+                             existing_ota_zip=None):
+    patch_list = None
+    verbatim = None
+    output_files = None
+
+    # In case an already "fixed up" ota package is passed - Do nothing
+    if existing_ota_zip and patch_or_verbatim_exists("fwu_image.bin", existing_ota_zip):
+        return verbatim, patch_list, output_files
+
+    src_fwupdate_data = readfile_from_provdata(source_tfp_dir, "fwu_image.bin", variant)
+    if not src_fwupdate_data:
+        return verbatim, patch_list, output_files
+
+    tgt_fwupdate_data = readfile_from_provdata(target_tfp_dir, "fwu_image.bin", variant)
+    if not tgt_fwupdate_data:
+        return verbatim, patch_list, output_files
+
+    src_fwupdate = common.File("fwu_image.bin", src_fwupdate_data)
+    tgt_fwupdate = common.File("fwu_image.bin", tgt_fwupdate_data)
+
+    diffs = [common.Difference(tgt_fwupdate, src_fwupdate)]
+    common.ComputeDifferences(diffs)
+
+    tf, sf, d = diffs[0].GetPatch()
+    verbatim = False
+    # If the patch size is almost as big as the actual file
+    # the fwu_image will be included in the OTA verbatim.
+    if d is None or len(d) > tf.size * 0.95:
+        print "Firmware update image will be included verbatim"
+        verbatim = True
+    else:
+        patch_list = (tf,sf)
+        output_files = d
+    return verbatim, patch_list, output_files
 
 
 def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
@@ -156,7 +226,8 @@ def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
     patch_list = []
 
     for fn in sorted(target_data.keys()):
-        if existing_ota_zip and patch_or_verbatim_exists(fn, existing_ota_zip):
+        filepath = os.path.join('bootloader', fn)
+        if existing_ota_zip and patch_or_verbatim_exists(filepath, existing_ota_zip):
             continue
 
         tf = target_data[fn]
