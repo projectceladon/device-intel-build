@@ -127,8 +127,28 @@ def process_updater_script(data, unpack_dir):
 
     return '\n'.join(linesout)
 
+def patch_edify_script(verify_script, script_data, install_script):
+    # Patches the existing edify script_data with the verify_script,
+    # which is the script to be inserted at the end of the VerifyEnd
+    # section and the install_script, which is the script to be inserted
+    # at the beginning of the InstallEnd section.
+    lines = script_data.split("\n")
+    for i in range(len(lines)):
+        if verify_end_str in lines[i]:
+            verify_index = i
+            break
 
-def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_zip,
+    # All lines up to the verification line
+    lines1 = lines[:verify_index]
+    # The verification line
+    vline = [lines[verify_index]]
+    # All lines after the verification line
+    lines2 = lines[(verify_index + 1):]
+
+    newlines = lines1 + verify_script + vline + install_script + lines2;
+    return "\n".join(newlines)
+
+def compute_new_bootloader_patches_efi(source_tfp_dir, target_tfp_dir, ota_zip,
         output_zip, script_data):
     print "Computing new bootloader patches..."
     output_files, delete_files, patch_list, verbatim_targets = \
@@ -169,21 +189,55 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_zip,
         script.UnpackPackageDir("bootloader", "/bootloader")
     script = script.script
 
-    lines = script_data.split("\n")
-    for i in range(len(lines)):
-        if verify_end_str in lines[i]:
-            verify_index = i
-            break
+    edify_patch = patch_edify_script(vscript, script_data, script)
+    return edify_patch
 
-    # All lines up to the verification line
-    lines1 = lines[:verify_index]
-    # The verification line
-    vline = [lines[verify_index]]
-    # All lines after the verification line
-    lines2 = lines[(verify_index + 1):]
+def compute_new_bootloader_patches_sofia(source_tfp_dir, target_tfp_dir, ota_zip,
+        output_zip, script_data):
+    print "Computing new fwupdater patches..."
+    verbatim, fwu_patch, output_file = \
+            intel_common.ComputeFWUpdatePatches(source_tfp_dir,
+                                                target_tfp_dir,
+                                                variant=OPTIONS.variant,
+                                                existing_ota_zip=ota_zip)
+    # The verify_script needs to be inserted into the main edify script
+    # at the end of VerifyEnd section. The verify_script edify code ensures
+    # fwupdate partition is in an expected state before the OTA system makes
+    # any changes.
+    verify_script = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
 
-    newlines = lines1 + vscript + vline + script + lines2;
-    return "\n".join(newlines)
+    fwu_type, fwu_device = common.GetTypeAndDevice("/fwupdate", OPTIONS.info_dict)
+    if not verbatim and fwu_patch:
+      (tf, sf) = fwu_patch
+      verify_script.PatchCheck("%s:%s:%d:%s:%d:%s" %
+                             (fwu_type, fwu_device, sf.size,
+                              sf.sha1, tf.size, tf.sha1))
+      common.ZipWriteStr(output_zip, "patch/fwu_image.bin.p", output_file)
+
+    verify_script = verify_script.script
+
+    # The install_script needs to be inserted into the main script at the
+    # beginning of InstallEnd section. The install_script edify code applies
+    # the patch diffs.
+    install_script = edify_generator.EdifyGenerator(3, OPTIONS.info_dict)
+
+    if verbatim:
+        install_script.Print("Adding FWImage verbatim...")
+        intel_common.AddFWImageFile(target_tfp_dir, output_zip, OPTIONS.variant)
+
+        #Set progress bar to end of FLS extraction
+        install_script.SetProgress(0.6)
+        install_script.WriteRawImage("/fwupdate", "fwu_image.bin");
+    elif fwu_patch:
+        install_script.Print("Patching firmware files...")
+        install_script.ApplyPatch("%s:%s:%d:%s:%d:%s" % (fwu_type, fwu_device, sf.size,
+                                                  sf.sha1, tf.size, tf.sha1),
+                           "-", tf.size, tf.sha1, sf.sha1,
+                           "patch/fwu_image.bin.p")
+
+    install_script = install_script.script
+    edify_patch = patch_edify_script(verify_script, script_data, install_script)
+    return edify_patch
 
 def check_arg(arg, errortext):
     if not arg:
@@ -277,6 +331,8 @@ def main(argv):
     check_arg(OPTIONS.brand and OPTIONS.product and OPTIONS.device and OPTIONS.fish_name,
               "Missing one of -B, -P, -D, -f and cannot get this info from target-files")
 
+    platform_efi, sofia = intel_common.CheckIfSocEFI(tfp_dir, OPTIONS.variant)
+    OPTIONS.info_dict = common.LoadInfoDict(tfp_zip)
     print "Processing OTA update contents.."
     _, temp_zip = tempfile.mkstemp(suffix=".zip")
     shutil.copyfile(input_zip.filename, temp_zip)
@@ -287,9 +343,14 @@ def main(argv):
         elif zi.filename == "META-INF/com/google/android/updater-script":
             sdata = input_zip.read(zi)
             sdata = process_updater_script(sdata, tfp_dir)
-            if OPTIONS.incremental:
+            if OPTIONS.incremental and platform_efi:
                 output_zip = zipfile.ZipFile(temp_zip, "a")
-                sdata = compute_new_bootloader_patches(source_tfp_dir,
+                sdata = compute_new_bootloader_patches_efi(source_tfp_dir,
+                        tfp_dir, input_zip, output_zip, sdata)
+                output_zip.close()
+            elif OPTIONS.incremental and not platform_efi:
+                output_zip = zipfile.ZipFile(temp_zip, "a")
+                sdata = compute_new_bootloader_patches_sofia(source_tfp_dir,
                         tfp_dir, input_zip, output_zip, sdata)
                 output_zip.close()
             replace_in_zip(temp_zip, sdata, zi.filename)
@@ -297,6 +358,10 @@ def main(argv):
             new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
                     variant=OPTIONS.variant)
             replace_in_zip(temp_zip, new_bi, zi.filename)
+        elif zi.filename == "fwu_image.bin" and not platform_efi:
+            output_zip = zipfile.ZipFile(temp_zip, "a")
+            intel_common.AddFWImageFile(tfp_zip, output_zip, variant=OPTIONS.variant)
+            output_zip.close()
 
     print "Signing fixed-up package", args[1]
     passwords = common.GetKeyPasswords([OPTIONS.package_key])
