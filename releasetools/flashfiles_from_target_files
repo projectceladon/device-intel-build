@@ -103,10 +103,10 @@ class VariantIpGenerator:
     def __add_variant_files(self):
         # add all files from provdata into the variant files as well
         commands_with_arg = [c for c,_ in self.ip.sectionsfilter('command.')
-                             if self.ip.has_option(c, 'arg')]
+                             if self.ip.has_option(c, 'args')]
         all_files = set([])
         for command in commands_with_arg:
-            args = self.ip.get(command, 'arg').split()
+            args = self.ip.get(command, 'args').split()
             all_files |= set([self.ip.get(command, a[1:]) for a in args if a.startswith('$')])
 
         all_filenames = set(a.split(':')[-1] for a in all_files)
