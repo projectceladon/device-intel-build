@@ -335,7 +335,7 @@ def main(argv):
                 if OPTIONS.variants:
                     for variant in OPTIONS.variants:
                         target_out = None
-                        if variantFilename(target, variant) in cmd_files:
+                        if variantFilename(target, variant) in cmd_files or target in variant_files:
                             target_out = variantFilename(target, variant)
                         process_image(unpack_dir, dest_zip, src, target, variant, target_out)
                 else:
