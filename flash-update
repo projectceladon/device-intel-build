@@ -5,9 +5,10 @@ set -e
 PACKAGE="$OUT/ota-dev.zip"
 dutID=$(adb devices | grep -v 'List' | awk '{print ($1)}')
 UPDATE_CMD=update_from_mos
+OFF=""
 
 function usage {
-    echo "Usage: ${0} [-h] [-p package_name.zip] [-r] [-s dutID]"
+    echo "Usage: ${0} [-h] [-p package_name.zip] [-r] [-s dutID] [-o]"
     echo "    Flash the update package to the device and apply it"
     echo "Options:"
     echo "    -h : print this help message"
@@ -19,6 +20,8 @@ function usage {
     rebooting to recovery (as the fota app will do)"
     echo "    -s <dutID>: id of the DUT in case more than one device
     is connected to the host"
+    echo "    -o : turn off the device after applying the OTA instead
+    of rebooting it"
     exit 1
 }
 
@@ -63,7 +66,7 @@ function update_from_mos {
     adb -s $dutID shell start uncrypt
     wait_for_uncrypt
     echo "Setting parameters and rebooting into recovery console..."
-    adb -s $dutID shell "echo \"--update_package=@/cache/recovery/block.map\" > /cache/recovery/command"
+    adb -s $dutID shell "echo \"${OFF}--update_package=@/cache/recovery/block.map\" > /cache/recovery/command"
     adb -s $dutID shell start pre-recovery
 }
 
@@ -76,7 +79,7 @@ function update_from_ros {
     adb -s $dutID sideload $PACKAGE
 }
 
-while getopts ":s:p:rh" opt; do
+while getopts ":s:p:orh" opt; do
     case $opt in
         h)
             usage
@@ -89,6 +92,9 @@ while getopts ":s:p:rh" opt; do
             ;;
         s)
             dutID=$OPTARG
+            ;;
+        o)
+            OFF="--shutdown_after\n"
             ;;
         \?)
             echo "Invalid option: -$OPTARG"
