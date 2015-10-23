@@ -373,15 +373,15 @@ def main(argv):
     print "Building destination target-files-package"
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
-            output_zip.write(output_bz_file, zi.filename)
+            common.ZipWrite(output_zip, output_bz_file, zi.filename)
         elif zi.filename == "RADIO/fastboot.img":
-            output_zip.writestr(zi, fastboot.data)
+            common.ZipWriteStr(output_zip, zi, fastboot.data)
         elif zi.filename == "RADIO/tdos.img":
-            output_zip.writestr(zi, tdos.data)
+            common.ZipWriteStr(output_zip, zi, tdos.data)
         else:
-            output_zip.writestr(zi, input_zip.read(zi))
+            common.ZipWriteStr(output_zip, zi, input_zip.read(zi))
 
-    output_zip.close()
+    common.ZipClose(output_zip)
     print "All done."
 
 if __name__ == '__main__':
