@@ -32,6 +32,8 @@ $(PUB_SYSTEM_SYMBOLS): systemtarball
 .PHONY: publish_system_symbols
 publish_system_symbols: $(PUB_SYSTEM_SYMBOLS)
 
+.PHONY: publish_kernel_debug
+ifeq ($(TARGET_PREBUILT_KERNEL),)
 # Publish Kernel debug
 PUB_KERNEL_DBG := vmlinux.bz2 System.map.bz2
 PUB_KERNEL_DBG_PATH := $(publish_dest)/kernel
@@ -49,9 +51,12 @@ $(PUB_KERNEL_MODULES): copy_modules
 	$(hide) mkdir -p $(@D)
 	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
 
-.PHONY: publish_kernel_debug
 publish_kernel_debug: $(PUB_KERNEL_DBG) $(PUB_KERNEL_MODULES)
 	@echo "Publish kernel debug: $(notdir $^)"
+else
+publish_kernel_debug:
+	@echo "Publish kernel debug: skipped"
+endif
 
 # Are we doing an 'sdk' type lunch target
 PUBLISH_SDK := $(strip $(filter sdk sdk_x86,$(TARGET_PRODUCT)))
