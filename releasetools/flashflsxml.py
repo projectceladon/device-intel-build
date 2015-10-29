@@ -31,7 +31,7 @@ class FlashFileJson:
             target = "mvconfigs/" + filename
         if file_type == "file":
             self.flist[target] = source
-        new = {'type': file_type, 'name': shortname, 'value': filename, 'description': filename}
+        new = {'type': file_type, 'name': shortname, 'value': target, 'description': filename}
         self.flash['parameters'][shortname] = new
 
     def add_configuration(self, config, default):
