@@ -241,6 +241,12 @@ class FlashFileCmd:
         for index, a in enumerate(args):
             if a.startswith('$'):
                 filename = self.ip.get(section, a[1:])
+                filename_l = filename.split(":")
+                file_section = "file." + filename_l[-1]
+                if file_section in self.ip.sections():
+                    suffix = self.ip.get(self.section, "suffix")
+                    filename_l[-1] = self.ip.get(file_section, suffix)
+                    filename = ":".join(filename_l)
                 self.flist.append(filename)
                 filename = filename.split(':')[-1]
                 args[index] = filename
