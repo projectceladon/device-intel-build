@@ -30,7 +30,8 @@ class IniParser:
 
     def append_option(self, option, data):
         option = option.strip()
-        data = data.strip()
+        if type(data) == str:
+            data = data.strip()
         if option in self.cursec:
             self.cursec[option] = ' '.join([self.cursec[option], data])
         else:
@@ -81,8 +82,14 @@ class IniParser:
     def get(self, section, option):
         return self.sec[section][option]
 
-    def copy_option(self, section, opt_list):
+    def delete_section(self, section):
+        del self.sec[section]
+        self.seclist.remove(section)
+
+    def copy_option(self, section, opt_list=None):
         option = {}
+        if not opt_list:
+            opt_list = self.options(section)
         for opt in opt_list:
             if self.has_option(section, opt):
                 option[opt] = self.get(section, opt)

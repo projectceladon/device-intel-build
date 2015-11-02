@@ -95,6 +95,10 @@ class VariantIpGenerator:
         for section in self.output_sections:
             config_list = []
             if not self.ip.has_option(section, 'configurations'):
+                # For outputs without "configurations" like
+                # installer.cmd, we will have to generate one output
+                # file per variant.
+                self.__add_variant_output(section)
                 continue
             # Add variant configs for each configuration "section"
             for config in self.ip.get(section, 'configurations').split():
@@ -124,6 +128,18 @@ class VariantIpGenerator:
             self.variant_ip.new_section('[file.{}]'.format(item))
             for variant in self.variants:
                 self.variant_ip.append_option(variant, variantFilename(item, variant))
+
+    def __add_variant_output(self, output):
+        copy = self.variant_ip.copy_option(output);
+        for v in self.variants:
+            l = output.split(".")
+            l[len(l) - 2] += "_" + v
+            new_section = "[" + '.'.join(l) + "]"
+            self.variant_ip.new_section(new_section)
+            for k in copy.keys():
+                self.variant_ip.append_option(k, copy[k])
+            self.variant_ip.append_option("suffix", v)
+        self.variant_ip.delete_section(output)
 
     def __add_variant_configs(self, config):
         variant_configs = []
