@@ -744,7 +744,8 @@ def get_bootloader_list(unpack_dir):
         data = json.loads(flashfls_json.read())
     for cmd in data['commands']:
         if (cmd['type'] == "fls" and cmd['source'] == "provdatazip"):
-            if (cmd['partition'] != 'oem' and (cmd['partition'] not in bootloader_list)):
+            if (cmd['partition'] != 'oem' and cmd['partition'] != 'modem'
+                                          and (cmd['partition'] not in bootloader_list)):
                 bootloader_list.append(cmd['partition'])
 
     return sorted(bootloader_list)
@@ -814,6 +815,33 @@ def CheckIfSocEFI(unpack_dir, variant):
     provdata.close()
     return True
 
+def CheckIfSofialte(unpack_dir, variant):
+    """ Non-EFI SOC (Sofia and its variants), have fftf_build.opt file
+    in the provdata which is used to check if the DUT is sofialte or not.
+    INTEL_PRG_FILE: hardware/intel/sofia_lte-fls/sltmrdV34/modem_cfg_emmc.prg """
+
+    if not variant:
+        variants_list = get_provdata_variants(unpack_dir)
+        if not variants_list:
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
+        else:
+            variant = variants_list[0]
+            provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
+    else:
+        provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
+
+    provdata = zipfile.ZipFile(provdata_name, 'r')
+    fftf_build_file = 'fftf_build.opt'
+
+    if (fftf_build_file in provdata.namelist()):
+        target2file = provdata.read(fftf_build_file)
+        t2f = init_t2f_dict(target2file)
+        provdata.close()
+        print "checking " + t2f["INTEL_PRG_FILE"] + "..."
+        if ("sofia_lte" in t2f["INTEL_PRG_FILE"]):
+            return True
+    provdata.close()
+    return False
 
 def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     """ Non-EFI bootloaders (example Sofia and its variants), comprise of
@@ -829,6 +857,8 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     additional_data_hash = collections.OrderedDict()
     partition_to_target = get_partition_target_hash(unpack_dir)
 
+    platform_sflte = CheckIfSofialte(unpack_dir, variant)
+
     for loader_partition in bootloader_list:
         curr_loader = partition_to_target[loader_partition]
         loader_filepath = os.path.join(provdata, curr_loader)
@@ -843,13 +873,45 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
             raise exc
         p.communicate()
         assert p.returncode == 0, "FlsTool failed to extract LoadMap.bin"
+        if platform_sflte :
+           #for bootloader in RADIO/provdata.zip use binary_merge SecureBlock.bin + LoadMap.bin to check
+           for current_file in os.listdir(extract):
+               if fnmatch.fnmatch(current_file, '*LoadMap0.bin'):
+                    loader_mapdatafile = current_file
 
-        for current_file in os.listdir(extract):
-            if fnmatch.fnmatch(current_file, '*LoadMap0.bin'):
-                 loader_datafile = current_file
+           assert loader_mapdatafile is not None, "Error in extracting the LoadMap.bin"
+           for current_file in os.listdir(extract):
+               if fnmatch.fnmatch(current_file, '*SecureBlock.bin'):
+                    loader_scublockfile = current_file
 
-        assert loader_datafile is not None, "Error in extracting the LoadMap.bin"
-        loader_abspath = os.path.join(extract ,loader_datafile)
+           assert loader_scublockfile is not None, "Error in extracting the SecureBlock.bin"
+           binary_merge = "hardware/intel/sofia_lte-fls/tools/binary_merge"
+           cmd = [binary_merge, "-o", os.path.join(extract, "hashcheck.secbin"),
+                                "-b 1 -p 0"]
+           cmd.append(os.path.join(extract, loader_scublockfile))
+           cmd.append(os.path.join(extract, loader_mapdatafile))
+           print "execute 3.command: {}".format(' '.join(cmd))
+           try:
+               p = common.Run(cmd)
+           except Exception as exc:
+               print "Error: Unable to execute command: {}".format(' '.join(cmd))
+               raise exc
+           p.communicate()
+           assert p.returncode == 0, "binary_merge failed"
+           for current_file in os.listdir(extract):
+               if fnmatch.fnmatch(current_file, 'hashcheck.secbin'):
+                    loader_datafile = current_file
+           assert loader_datafile is not None, "Error in extracting the hashcheck.secbin"
+           if (loader_partition == 'psi') or (loader_partition == 'bootloader'):
+               loader_datafile = loader_mapdatafile
+           loader_abspath = os.path.join(extract ,loader_datafile)
+        else:
+           for current_file in os.listdir(extract):
+               if fnmatch.fnmatch(current_file, '*LoadMap0.bin'):
+                    loader_datafile = current_file
+           loader_abspath = os.path.join(extract ,loader_datafile)
+           assert loader_datafile is not None, "Error in extracting the LoadMap.bin"
+
         loader_file = open(loader_abspath)
         loader_data = loader_file.read()
         additional_data_hash[loader_partition] = loader_data
