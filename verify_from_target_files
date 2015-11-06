@@ -191,7 +191,7 @@ def main(argv):
         for imgname, imgdata in additional_data.iteritems():
             img = common.File(imgname,imgdata).WriteToTemp()
             subprocess.check_output(["cp", img.name, bootloader_img + "/" + imgname]);
-            if imgname != 'fw_update':
+            if imgname != 'fw_update' and imgname != 'bootloader':
                 bootloader_sizes += ":" + str(len(imgdata))
             img.close()
     image.close();
