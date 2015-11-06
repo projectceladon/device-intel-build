@@ -66,7 +66,7 @@ OPTIONS.fast = False
 OPTIONS.mv_config_default = None
 
 flashfile_content = []
-variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img", "cse_spi.bin"]
+variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img", "cse_spi.bin", "firmware-info.txt"]
 
 class VariantIpGenerator:
     def __init__(self, ip, configs, variants, variant_files):
