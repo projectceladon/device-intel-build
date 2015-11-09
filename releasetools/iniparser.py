@@ -69,6 +69,13 @@ class IniParser:
     def sections(self):
         return self.seclist
 
+    def copy(self):
+        copy = IniParser()
+        for section in self.sections():
+            copy.sec[section] = self.copy_option(section)
+            copy.seclist.append(section)
+        return copy
+
     def options(self, section):
         return self.sec[section].keys()
 
@@ -81,6 +88,13 @@ class IniParser:
 
     def get(self, section, option):
         return self.sec[section][option]
+
+    def rename_section(self, section, new_name):
+        val = self.sec[section]
+        self.delete_section(section)
+        self.seclist.append(new_name)
+        self.sec[new_name] = val
+        self.cursec = self.sec[new_name]
 
     def delete_section(self, section):
         del self.sec[section]

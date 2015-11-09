@@ -217,6 +217,28 @@ class FlashFileJson:
     def finish(self):
         return json.dumps({'flash': self.flash}, indent=4, sort_keys=True)
 
+    def merge_jsons(self, j1, j2):
+        for key in set(j1.keys()) & set(j2.keys()):
+            if type(j2[key]) == unicode:
+                j2[key] = j2[key].encode('utf-8')
+            if type(j1[key]) != type(j2[key]):
+                raise TypeError("Can't merge keys %s of different type (%s,%s)"%(key,type(j1[key]),type(j2[key])))
+            if type(j1[key]) == list:
+                j1[key].extend(j2[key])
+                continue
+            if type(j1[key]) == dict:
+                self.merge_jsons(j1[key], j2[key])
+                continue
+            if j1[key] != j2[key]:
+                raise ValueError("key %s has different values (%s,%s)"%(key, j1[key], j2[key]))
+
+        for key in set(j2.keys()) - set(j1.keys()):
+            j1[key] = j2[key]
+
+    def merge(self, output):
+        j = json.loads(output)['flash']
+        self.merge_jsons(self.flash, j)
+        return self.finish()
 
 # main Class to generate installer cmd file from ini configuration file
 class FlashFileCmd:
@@ -267,32 +289,42 @@ class FlashFileCmd:
         return self.flist
 
 
-def parse_config(ip, variant, platform):
-    results = []
+def parse_config(ips, variant, platform):
+    results = {}
     files = []
 
-    if ip.has_option('global', 'additional-files'):
-        files = ip.get('global', 'additional-files').split()
+    for ip in ips:
+        if ip.has_option('global', 'additional-files'):
+            files += ip.get('global', 'additional-files').split()
 
-    for section, filename in ip.sectionsfilter('output.'):
-        if ip.has_option(section, 'enable') and not ip.get(section, 'enable'):
-            continue
+        for section, filename in ip.sectionsfilter('output.'):
+            if ip.has_option(section, 'enable') and not ip.get(section, 'enable'):
+                continue
 
-        if filename.endswith('.json'):
-            f = FlashFileJson(section, ip, variant)
-        elif filename.endswith('.cmd'):
-            f = FlashFileCmd(section, ip, variant)
-        else:
-            print "Warning, don't know how to generate", filename
-            print "Please fix flashfiles.ini for this target"
-            continue
+            if filename.endswith('.json'):
+                f = FlashFileJson(section, ip, variant)
+            elif filename.endswith('.cmd'):
+                f = FlashFileCmd(section, ip, variant)
+            else:
+                print "Warning, don't know how to generate", filename
+                print "Please fix flashfiles.ini for this target"
+                continue
 
-        f.parse()
-        results.append((filename, f.finish()))
-        files.extend(f.files())
+            f.parse()
+            if filename in results:
+                if filename.endswith('.json'):
+                    results[filename] = f.merge(results[filename])
+                else:
+                    raise NotImplementedError("Don't know how to merge %s"%filename)
+            else:
+                results[filename] = f.finish()
+            files.extend(f.files())
 
+    results_list = []
+    for k,v in results.iteritems():
+        results_list.append((k,v))
     flist = [f.rsplit(':', 1) for f in set(files)]
-    return results, flist
+    return results_list, flist
 
 
 def main():

@@ -69,11 +69,11 @@ flashfile_content = []
 variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img", "cse_spi.bin", "firmware-info.txt"]
 
 class VariantIpGenerator:
-    def __init__(self, ip, configs, variants, variant_files):
+    def __init__(self, ip, configs, variants, variant_files, flashfile):
         # Original iniparser object
         self.ip = ip
-        # Variant version of iniparser object
-        self.variant_ip = ip
+        # List of variant IPs
+        self.variant_ips = []
         # List of variants
         self.variants = variants
         # List of variant-specific files
@@ -82,29 +82,48 @@ class VariantIpGenerator:
         self.output_sections = []
         for c in configs:
             self.output_sections.append('output.' + c[0])
+        # Prefix path for variants flashfiles
+        self.flashfile = flashfile
+        # Only one configuration can be the default one,
+        # save it when parsing variants configurations
+        self.default_config = None
 
         # Remove variant 'additional-files' from list to avoid Phone Flash Tool issues
         if ip.has_option('global', 'additional-files'):
             exclude_files = set(ip.get('global', 'additional-files').split())
             self.variant_files = sorted(set(self.variant_files) - exclude_files)
 
+    def __add_variant_flashfile(self, ip, variant):
+        variant_flashfile = self.flashfile + "_" + variant + ".ini"
+        print "Variant flashfile = %s"%variant_flashfile
+        if os.path.isfile(variant_flashfile):
+            print "Reading INI configuration for %s ..."%variant
+            with open(variant_flashfile, "r") as f:
+                ip.parse(f)
+
     def generate_variant_ip(self):
         # Add variant files to ip
         self.__add_variant_files()
-        # Cycle through output "sections"
-        for section in self.output_sections:
-            config_list = []
-            if not self.ip.has_option(section, 'configurations'):
-                # For outputs without "configurations" like
-                # installer.cmd, we will have to generate one output
-                # file per variant.
-                self.__add_variant_output(section)
-                continue
-            # Add variant configs for each configuration "section"
-            for config in self.ip.get(section, 'configurations').split():
-                config_list.extend(self.__add_variant_configs(config))
-            # Modify output "section" to use new variant configs instead of original "generics"
-            self.variant_ip.sec[section]['configurations'] = ' '.join(config_list)
+
+        for variant in self.variants:
+            new_ip = self.ip.copy()
+            self.variant_ips.append(new_ip)
+            self.__add_variant_flashfile(new_ip, variant)
+
+            # Cycle through output "sections"
+            for section,_ in new_ip.sectionsfilter("output."):
+                config_list = []
+                if not new_ip.has_option(section, 'configurations'):
+                    # For outputs without "configurations" like
+                    # installer.cmd, we will have to generate one output
+                    # file per variant.
+                    self.variantize_output(variant, new_ip, section)
+                    continue
+                # Add variant configs for each configuration "section"
+                for config in new_ip.get(section, 'configurations').split():
+                    config_list.append(self.variantize_config(variant, new_ip, config))
+                # Modify output "section" to use new variant configs instead of original "generics"
+                new_ip.sec[section]['configurations'] = ' '.join(config_list)
 
     def __add_variant_files(self):
         # add all files from provdata into the variant files as well
@@ -125,40 +144,30 @@ class VariantIpGenerator:
         self.variant_files = sorted((provdata_files | set(self.variant_files)) & all_filenames)
 
         for item in self.variant_files:
-            self.variant_ip.new_section('[file.{}]'.format(item))
+            self.ip.new_section('[file.{}]'.format(item))
             for variant in self.variants:
-                self.variant_ip.append_option(variant, variantFilename(item, variant))
+                self.ip.append_option(variant, variantFilename(item, variant))
 
-    def __add_variant_output(self, output):
-        copy = self.variant_ip.copy_option(output);
-        for v in self.variants:
-            l = output.split(".")
-            l[len(l) - 2] += "_" + v
-            new_section = "[" + '.'.join(l) + "]"
-            self.variant_ip.new_section(new_section)
-            for k in copy.keys():
-                self.variant_ip.append_option(k, copy[k])
-            self.variant_ip.append_option("suffix", v)
-        self.variant_ip.delete_section(output)
+    def variantize_output(self, variant, ip, output):
+        l = output.split(".")
+        l[len(l) - 2] += "_" + variant
+        new_output = '.'.join(l)
+        ip.rename_section(output, new_output)
+        ip.append_option("suffix", variant)
 
-    def __add_variant_configs(self, config):
-        variant_configs = []
+    def variantize_config(self, variant, ip, config):
         section = 'configuration.' + config
-        to_copy = ['startState', 'sets', 'brief', 'description']
-        for variant in self.variants:
-            variant_configs.append('{}_{}'.format(config, variant))
-            new_section = 'configuration.{}'.format(variant_configs[-1])
-            if new_section in self.variant_ip.sections():
-                continue
-            self.variant_ip.new_section("["+new_section+"]")
-            config_dict = self.ip.copy_option(section, to_copy)
-            config_dict['name'] = 'configuration.{}'.format(variant_configs[-1])
-            for key in config_dict.keys():
-                self.variant_ip.append_option(key, config_dict[key])
-            for item in self.variant_files:
-                self.variant_ip.append_option('parameters',
-                                              '{}:{}'.format(os.path.splitext(item)[0], variant))
-        return variant_configs
+        if ip.has_option(section, "default") and ip.get(section, "default") == True:
+            if self.default_config == None:
+                self.default_config = config
+            else:
+                ip.sec[section]["default"] = False
+        new_config = config + "_" + variant
+        new_section = 'configuration.' + new_config
+        ip.rename_section(section, new_section)
+        for item in self.variant_files:
+            ip.append_option('parameters', '{}:{}'.format(os.path.splitext(item)[0], variant))
+        return new_config
 
 def variantFilename(filename, variant):
     base, suffix = os.path.splitext(filename)
@@ -314,7 +323,7 @@ def main(argv):
         with open(flashfile + ".ini", "r") as f:
             ip = iniparser.IniParser()
             ip.parse(f)
-        configs, files = flash_cmd_generator.parse_config(ip, build_type, platform)
+        configs, files = flash_cmd_generator.parse_config([ip], build_type, platform)
     elif os.path.isfile(flashfile + ".json") and not OPTIONS.unified_variants:
         print "Reading JSON configuration..."
         with open(flashfile + ".json", "r") as f:
@@ -345,13 +354,13 @@ def main(argv):
     else:
         with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
             # If mega flashfile is enabled, create multi-variant version of PFT instructions
-            cmd_files = []
             if OPTIONS.unified_variants or OPTIONS.variants :
                 print "Adding variant specific configurations to ip..."
-                vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files)
+                vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files, flashfile)
                 vip.generate_variant_ip()
-                configs, cmd_files = flash_cmd_generator.parse_config(vip.variant_ip, build_type, platform)
+                configs, cmd_files = flash_cmd_generator.parse_config(vip.variant_ips, build_type, platform)
                 cmd_files = set([i for _,i in cmd_files])
+
             # Using "generic" instructions as reference, grab required files & insert into flashfile zip
             print "Adding required binaries..."
             for src, target in files:
