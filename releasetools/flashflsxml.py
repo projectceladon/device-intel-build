@@ -94,6 +94,12 @@ class FlashFileJson:
                     self.add_command('flsTool', ' -x ${' + shortname + '} --replace -o ${' + shortname_temp + '}', 'Extract image parts from ' + fname, 'fastboot_config', params)
                     self.add_command('fastboot', ' flash ' +  cmd['partition'] + ' ${' + shortname_temp + '}/'  + fname_temp, 'Flashing ' +  cmd['partition'] + ' with fastboot', 'fastboot_config', params)
 
+            if cmd['type'] == 'info':
+                fname = os.path.basename(cmd['target'])
+                shortname = fname.split('.')[0].lower()
+                self.add_file(shortname, cmd['target'], cmd['source'], 'file')
+                continue
+
         tools = 'flsDownloader'
         for config_name in self.flash['configurations']:
             c = self.flash['configurations'][config_name]
