@@ -68,6 +68,7 @@ $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDO
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
 
+ifneq ($(FAST_FLASHFILES),false)
 ifeq ($(FLASHFILE_VARIANTS),)
 # Fast flashfiles is for engineering purpose only
 # Should not be used on end-user product
@@ -95,6 +96,7 @@ droid: fast_flashfiles
 flashfiles: fast_flashfiles
 
 endif
+endif #FAST_FLASHFILES
 
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
 
