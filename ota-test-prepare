@@ -20,13 +20,14 @@ trap 'bail ${LINENO}' ERR
 export TESTKEYS=device/intel/build/testkeys
 export PRODKEYS=device/intel/build/testkeys/production-test
 export ANDROID_PW_FILE=$PRODKEYS/pwfile
-export IRDA_VARIANT=
+export BOARD_VARIANT=
 export PARALLEL=
 export NO_LOGS=
 export NO_BUILD_OTATOOLS=
 export TFP=
 export QUICK=
 export FORCE_BUILD_TFPS=
+export HAS_VARIANTS=
 
 while getopts "qst:V:jlof" opt; do
     case $opt in
@@ -40,7 +41,7 @@ while getopts "qst:V:jlof" opt; do
             export TFP=$OPTARG
             ;;
         V)
-            export IRDA_VARIANT=$OPTARG
+            export BOARD_VARIANT=$OPTARG
             ;;
         j)
             export PARALLEL=YES
@@ -71,7 +72,7 @@ while getopts "qst:V:jlof" opt; do
             echo "-q: Just build testkey signed images for the 'quick' test cases"
             echo "-s: Show commands being run"
             echo "-t <tfp>: Don't do own build; use supplied target-files to create a re-signed release"
-            echo "-V <variant>: Device variant for IRDA builds"
+            echo "-V <variant>: Device variant"
             echo "-j: Build output images in parallel (SSD recommended)"
             echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
             echo "-o: skip building otatools, assume they are there"
@@ -91,6 +92,16 @@ fi
 export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
 export OTA_TMP_DIR=ota/tmp/
 export MKTEMP="mktemp --tmpdir=ota/tmp/"
+
+variants_enable_string="# Source: device/intel/mixins/groups/variants/true/AndroidBoard.mk"
+function has_variants {
+    if [ -z "$TFP" ]; then
+        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+        HAS_VARIANTS=$(grep "$variants_enable_string" $product_dir/AndroidBoard.mk | wc -l)
+    else
+        HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l)
+    fi
+}
 
 # Args: <input TFP> <output TFP>
 function sign_tfp {
@@ -117,12 +128,12 @@ function sign_tfp {
 
 # Args: <input target files package> <output flashfiles>
 function build_provimg {
-    if [ -z "$IRDA_VARIANT" ]; then
+    if [ -z "$BOARD_VARIANT" ]; then
         ./device/intel/build/releasetools/flashfiles_from_target_files \
                 --verbose $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose --variant $IRDA_VARIANT $1 $2
+                --verbose --variant $BOARD_VARIANT $1 $2
     fi
 }
 
@@ -134,11 +145,11 @@ function build_ota {
         EXTRA_ARGS=
     fi
 
-    if [ -n "$IRDA_VARIANT" ]; then
+    if [ -n "$BOARD_VARIANT" ]; then
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS $1 $2.unfixed
         ./device/intel/build/releasetools/ota_deployment_fixup \
-            --variant $IRDA_VARIANT --target_files $1 $EXTRA_ARGS $2.unfixed $2
+            --variant $BOARD_VARIANT --target_files $1 $EXTRA_ARGS $2.unfixed $2
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS $1 $2
@@ -153,11 +164,11 @@ function build_inc_ota {
         EXTRA_ARGS=
     fi
 
-    if [ -n "$IRDA_VARIANT" ]; then
+    if [ -n "$BOARD_VARIANT" ]; then
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
             $EXTRA_ARGS --incremental_from $1 $2 $3.unfixed
         ./device/intel/build/releasetools/ota_deployment_fixup \
-            --variant $IRDA_VARIANT --source_target_files $1 --target_files $2 \
+            --variant $BOARD_VARIANT --source_target_files $1 --target_files $2 \
             $EXTRA_ARGS $3.unfixed $3
     else
         ./build/tools/releasetools/ota_from_target_files --verbose --block \
@@ -205,10 +216,10 @@ function build_release {
                     device/intel/common/recovery/$BBIN \
                     bootloader.zip $BLOBS1 B.bin
 
-    if [ -n "$IRDA_VARIANT" ]; then
+    if [ -n "$BOARD_VARIANT" ]; then
         season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
                     device/intel/common/recovery/$BBIN \
-                    provdata_${IRDA_VARIANT}.zip \
+                    provdata_${BOARD_VARIANT}.zip \
                     $BLOBS2 BOOTLOADER/E.bin
     fi
 }
@@ -296,15 +307,16 @@ if [[ -n "$TFP" ]]; then
     fi
 fi
 
-if [ -z "$IRDA_VARIANT" ]; then
-    if [ $TARGET_PRODUCT == "coho" -o $TARGET_PRODUCT == "cohol" ]; then
-        echo "IRDA builds require use of -V parameter"
+if [ -z "$BOARD_VARIANT" ]; then
+    has_variants
+    if [ $HAS_VARIANTS -ge 1 ]; then
+        echo "${BOARD_VARIANT} builds require use of -V parameter"
         exit 1
     fi
 
     BASEDIR=ota/$TARGET_PRODUCT/
 else
-    BASEDIR=ota/$TARGET_PRODUCT-$IRDA_VARIANT/
+    BASEDIR=ota/$TARGET_PRODUCT-$BOARD_VARIANT/
 fi
 
 pushd $ANDROID_BUILD_TOP &> /dev/null
