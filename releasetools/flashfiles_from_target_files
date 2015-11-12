@@ -346,7 +346,7 @@ def main(argv):
         with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
             # If mega flashfile is enabled, create multi-variant version of PFT instructions
             cmd_files = []
-            if OPTIONS.unified_variants:
+            if OPTIONS.unified_variants or OPTIONS.variants :
                 print "Adding variant specific configurations to ip..."
                 vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files)
                 vip.generate_variant_ip()
