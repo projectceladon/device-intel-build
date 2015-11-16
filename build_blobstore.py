@@ -131,7 +131,8 @@ def main(argv):
             # Assumes version 1
             brand, product, device, lunch, fish, basev = dmap[k]
             # Nip off trailing _coho since that is not in DMI
-            device = device[:-(len(fish) + 1)]
+            if fish in device:
+                device = device[:-(len(fish) + 1)]
 
             device_id = "%s/%s/%s" % (brand, product, device)
             for t, fn in metadata["types"].iteritems():
