@@ -77,7 +77,7 @@ class VariantIpGenerator:
         # List of variants
         self.variants = variants
         # List of variant-specific files
-        self.variant_files = variant_files
+        self.variant_files_common = variant_files
         # List of output "sections" to cycle through
         self.output_sections = []
         for c in configs:
@@ -88,10 +88,7 @@ class VariantIpGenerator:
         # save it when parsing variants configurations
         self.default_config = None
 
-        # Remove variant 'additional-files' from list to avoid Phone Flash Tool issues
-        if ip.has_option('global', 'additional-files'):
-            exclude_files = set(ip.get('global', 'additional-files').split())
-            self.variant_files = sorted(set(self.variant_files) - exclude_files)
+        self.variant_exclude_files = []
 
     def __add_variant_flashfile(self, ip, variant):
         variant_flashfile = self.flashfile + "_" + variant + ".ini"
@@ -100,15 +97,32 @@ class VariantIpGenerator:
             print "Reading INI configuration for %s ..."%variant
             with open(variant_flashfile, "r") as f:
                 ip.parse(f)
+        self.variant_files = self.variant_files_common
+        # Remove variant 'additional-files' from list to avoid Phone Flash Tool issues
+        if ip.has_option('global', 'additional-files'):
+            exclude_files = set(ip.get('global', 'additional-files').split())
+            exclude_files_global = set(self.ip.get('global', 'additional-files').split())
+            self.variant_files = sorted(set(self.variant_files) - exclude_files)
+            filenames = []
+            filenames_global = []
+            for file in exclude_files:
+                _,f = file.split(":")
+                filenames.append(f)
+            for file in exclude_files_global:
+                _,f = file.split(":")
+                filenames_global.append(f)
+            exclude = set(filenames_global) - set(filenames)
+            for f in exclude:
+                self.variant_exclude_files.append(variantFilename(f, variant))
 
     def generate_variant_ip(self):
         # Add variant files to ip
-        self.__add_variant_files()
 
         for variant in self.variants:
             new_ip = self.ip.copy()
             self.variant_ips.append(new_ip)
             self.__add_variant_flashfile(new_ip, variant)
+            self.__add_variant_files(new_ip, variant)
 
             # Cycle through output "sections"
             for section,_ in new_ip.sectionsfilter("output."):
@@ -125,28 +139,27 @@ class VariantIpGenerator:
                 # Modify output "section" to use new variant configs instead of original "generics"
                 new_ip.sec[section]['configurations'] = ' '.join(config_list)
 
-    def __add_variant_files(self):
+    def __add_variant_files(self, ip, variant):
         # add all files from provdata into the variant files as well
-        commands = [c for c,_ in self.ip.sectionsfilter('command.')]
+        commands = [c for c,_ in ip.sectionsfilter('command.')]
         all_files = set([])
         for command in commands:
-            for option in self.ip.options(command):
-                opt_arg = self.ip.get(command, option)
+            for option in ip.options(command):
+                opt_arg = ip.get(command, option)
                 if type(opt_arg) != str:
                     continue
-                all_files |= set([self.ip.get(command, a[1:]) for a in opt_arg.split() if a.startswith('$')])
+                all_files |= set([ip.get(command, a[1:]) for a in opt_arg.split() if a.startswith('$')])
 
         all_filenames = set(a.split(':')[-1] for a in all_files)
         provdata_files = set(f[len('provdatazip:'):] for f in all_files
                              if f.startswith('provdatazip:'))
-        if self.ip.has_option('global', 'additional-files'):
-            provdata_files -= set(self.ip.get('global', 'additional-files').split())
+        if ip.has_option('global', 'additional-files'):
+            provdata_files -= set(ip.get('global', 'additional-files').split())
         self.variant_files = sorted((provdata_files | set(self.variant_files)) & all_filenames)
 
         for item in self.variant_files:
-            self.ip.new_section('[file.{}]'.format(item))
-            for variant in self.variants:
-                self.ip.append_option(variant, variantFilename(item, variant))
+            ip.new_section('[file.{}]'.format(item))
+            ip.append_option(variant, variantFilename(item, variant))
 
     def variantize_output(self, variant, ip, output):
         l = output.split(".")
@@ -369,6 +382,9 @@ def main(argv):
                         target_out = None
                         if variantFilename(target, variant) in cmd_files or target in variant_files:
                             target_out = variantFilename(target, variant)
+                        if variantFilename(target, variant) in vip.variant_exclude_files \
+                           or (target_out == None and target not in cmd_files):
+                            continue
                         process_image(unpack_dir, dest_zip, src, target, variant, target_out)
                 else:
                     process_image(unpack_dir, dest_zip, src, target)
