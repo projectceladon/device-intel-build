@@ -37,10 +37,20 @@ class IniParser:
         else:
             self.cursec[option] = data
 
+    def remove_option(self, option, data):
+        option = option.strip()
+        if type(data) == str:
+            data = data.strip()
+        if option in self.cursec:
+            self.cursec[option] = self.cursec[option].replace(data, "").strip()
+
     def new_option(self, line):
         option, data = line.split('=', 1)
         if option[-1] == '+':
             self.append_option(option[:-1], data)
+            return
+        if option[-1] == '-':
+            self.remove_option(option[:-1], data)
             return
 
         option = option.strip()
