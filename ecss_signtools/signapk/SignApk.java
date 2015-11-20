@@ -210,8 +210,13 @@ class SignApk {
             // Probably not an encrypted key.
             return null;
         }
+        String strPassword=readPassword(keyFile);
+        if(strPassword == null) {
+            System.err.println("No passord in keyFile.");
+            return null;
+        }
 
-        char[] password = readPassword(keyFile).toCharArray();
+        char[] password = strPassword.toCharArray();
 
         SecretKeyFactory skFactory = SecretKeyFactory.getInstance(epkInfo.getAlgName());
         Key key = skFactory.generateSecret(new PBEKeySpec(password));
@@ -340,14 +345,19 @@ class SignApk {
         JarEntry je = new JarEntry(OTACERT_NAME);
         je.setTime(timestamp);
         outputJar.putNextEntry(je);
-        FileInputStream input = new FileInputStream(publicKeyFile);
-        byte[] b = new byte[4096];
-        int read;
-        while ((read = input.read(b)) != -1) {
-            outputJar.write(b, 0, read);
-            md.update(b, 0, read);
+        FileInputStream input =null;
+        try{
+            input = new FileInputStream(publicKeyFile);
+            byte[] b = new byte[4096];
+            int read;
+            while ((read = input.read(b)) != -1) {
+                outputJar.write(b, 0, read);
+                md.update(b, 0, read);
+            }
+        }finally{
+            if(input !=null)
+                input.close();
         }
-        input.close();
 
         Attributes attr = new Attributes();
         attr.putValue(hash == USE_SHA1 ? "SHA1-Digest" : "SHA-256-Digest",
@@ -699,6 +709,8 @@ class SignApk {
         temp.write(0);
 
         cmsOut.writeSignatureBlock(temp);
+        if(cmsOut.getSigner()==null)
+            throw new IllegalArgumentException("CMSSigner gets null signer!");
 
         byte[] zipData = cmsOut.getSigner().getTail();
 

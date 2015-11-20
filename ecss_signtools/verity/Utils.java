@@ -279,21 +279,32 @@ public class Utils {
     }
 
     static byte[] read(String fname) throws Exception {
-        long offset = 0;
-        File f = new File(fname);
-        long length = f.length();
-        byte[] image = new byte[(int)length];
-        FileInputStream fis = new FileInputStream(f);
-        while (offset < length) {
-            offset += fis.read(image, (int)offset, (int)(length - offset));
+        FileInputStream fis=null;
+        byte[] image = null;
+        try{
+           long offset = 0;
+           File f = new File(fname);
+           long length = f.length();
+           image = new byte[(int)length];
+           fis = new FileInputStream(f);
+           while (offset < length) {
+               offset += fis.read(image, (int)offset, (int)(length - offset));
+           }
+        }finally{
+            if(fis != null)
+                fis.close();
         }
-        fis.close();
         return image;
     }
 
     static void write(byte[] data, String fname) throws Exception{
-        FileOutputStream out = new FileOutputStream(fname);
-        out.write(data);
-        out.close();
+        FileOutputStream out =null;
+        try{
+            out = new FileOutputStream(fname);
+            out.write(data);
+        }finally{
+            if(out != null)
+               out.close();
+        }
     }
 }
