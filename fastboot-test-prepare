@@ -16,6 +16,7 @@ function usage {
     echo
     echo "Valid options:"
     echo "-V <variant>: Device variant for IRDA builds"
+    echo "-M <mv_config_type>: MV configuration type for Sofia builds"
 }
 
 if [[ -z "$1" ]]; then
@@ -27,10 +28,14 @@ export tfp=$1
 shift $((OPTIND))
 
 export IRDA_VARIANT=
-while getopts "V:" opt; do
+export MV_CONFIG_TYPE=
+while getopts "V:M:" opt; do
     case $opt in
         V)
             export IRDA_VARIANT="--variant $OPTARG"
+            ;;
+        M)
+            export MV_CONFIG_TYPE="-M $OPTARG"
             ;;
         \?)
             usage
@@ -50,7 +55,7 @@ make clean
 make -j16 fastboot otatools keystore_signer
 
 ./build/tools/releasetools/img_from_target_files --verbose fastboot/tfp.zip fastboot/update.zip
-./device/intel/build/releasetools/flashfiles_from_target_files --verbose $IRDA_VARIANT fastboot/tfp.zip fastboot/flashfiles.zip
+./device/intel/build/releasetools/flashfiles_from_target_files --verbose $IRDA_VARIANT $MV_CONFIG_TYPE fastboot/tfp.zip fastboot/flashfiles.zip
 unzip fastboot/flashfiles.zip -d fastboot/
 
 # if .fls files are found extract fastboot images out of them
