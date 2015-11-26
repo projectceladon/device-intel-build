@@ -58,6 +58,14 @@ publish_kernel_debug:
 	@echo "Publish kernel debug: skipped"
 endif
 
+# Publish Firmware symbols
+.PHONY: publish_firmware_symbols
+ifneq ($(FIRMWARE_SYMBOLS_PATH),)
+publish_firmware_symbols: publish_mkdir_dest
+	@echo "Publish firmware symbols"
+	$(hide)(zip -qry $(publish_dest)/$(FIRMWARE_SYMBOLS_FILE) $(FIRMWARE_SYMBOLS_PATH))
+endif
+
 # Are we doing an 'sdk' type lunch target
 PUBLISH_SDK := $(strip $(filter sdk sdk_x86,$(TARGET_PRODUCT)))
 
@@ -122,7 +130,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi
+publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
