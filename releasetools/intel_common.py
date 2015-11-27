@@ -766,7 +766,7 @@ def get_bootloader_list(unpack_dir):
     for cmd in data['commands']:
         if (cmd['type'] == "fls" and cmd['source'] == "provdatazip"):
             if (cmd['partition'] != 'oem' and cmd['partition'] != 'modem'
-                                          and (cmd['partition'] not in bootloader_list)):
+                and cmd['partition'] != 'vrl' and (cmd['partition'] not in bootloader_list)):
                 bootloader_list.append(cmd['partition'])
 
     return sorted(bootloader_list)
