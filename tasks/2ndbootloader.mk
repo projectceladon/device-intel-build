@@ -7,11 +7,18 @@ blobstore_deps += $(BOARD_DEVICE_MAPPING)
 blobstore_extra_args := --device-map $(BOARD_DEVICE_MAPPING)
 endif
 
+# use the dtb file(s) under LOCAL_KERNEL_PATH
+# if dtb file is built from kernel source
+ifeq ($(BUILD_DTBS), true)
+blobstore_extra_args += --dtb-path $(LOCAL_KERNEL_PATH)
+blobstore_deps += $(BOARD_DTB)
+else
 # build_blobstore without an output parameter lists all the necessary
 # source blob files we need
 blobstore_deps += $(shell $(build_blobstore) \
 			--config $(BOARD_BLOBSTORE_CONFIG) \
 			$(blobstore_extra_args))
+endif
 
 $(INSTALLED_2NDBOOTLOADER_TARGET): $(blobstore_deps)
 	$(build_blobstore) --config $(BOARD_BLOBSTORE_CONFIG) \

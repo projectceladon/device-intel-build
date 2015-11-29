@@ -63,6 +63,25 @@ The set of keys used can be specified in a few different ways:
 If for any reason a file can't be found, a warning message is printed but
 the blobstore is still assembled. This is to support scenarios where not all
 boards require blob data of a specific type.
+
+Since the kernel is built from source for most boards, the following changes
+have been made in order to pick up dtb files from LOCAL_KERNEL_PATH:
+    * Copy all dtb files lively built from kernel source into LOCAL_KERNEL_PATH
+
+    * Add option --dtb-path to pass LOCAL_KERNEL_PATH during build time. It
+      overwrites "base_dir" that set in "meta" block.
+
+    * Set device specific dtb file name in the JSON configuration file, example:
+
+      "meta": {
+       ...
+       },
+      "OARS7": {"dtb": "SF_3GR-s303.dtb"},
+      "OARS7_EVT": {"dtb": "SF_3GR-s303-evt.dtb"},
+      "S3GR10M6S": {"dtb": "SF_3GR-mrd6-p2.dtb"},
+      "TH8": {"dtb": "SF_3GR-ecs-th8.dtb"},
+
+The changes also applied to other blob types(i.e. oemvars and bootvars).
 """
 
 import blobstore
@@ -93,9 +112,19 @@ def main(argv):
                         help="blobstore output file path. If omitted, just list dependencies")
         parser.add_argument("--device-map",required=False,
                         help="device mapping database")
+        parser.add_argument("--oemvars-path",required=False,
+                        help="path where oemvars file locates")
+        parser.add_argument("--dtb-path",required=False,
+                        help="path where dtb file locates")
+        parser.add_argument("--bootvars-path",required=False,
+                        help="path where bootvars file locates")
         args = parser.parse_args()
     except argparse.ArgumentError:
         sys.exit(1)
+
+    args_dict = vars(args)
+    # put all --<blobstore type>-path args in a dict: { <blob type>: <path> }
+    bs_basedirs = dict((x, args_dict[y]) for x,y in ((t, t + "_path") for t in btypes.keys()) if (y in args_dict and args_dict[y]))
 
     in_file = open(args.config, 'r')
     configData = json.load(in_file)
@@ -135,16 +164,46 @@ def main(argv):
                 device = device[:-(len(fish) + 1)]
 
             device_id = "%s/%s/%s" % (brand, product, device)
-            for t, fn in metadata["types"].iteritems():
-                path = os.path.join(metadata["base_dir"], k, fn)
+            for t, def_fn in metadata["types"].iteritems():
+                # Use the path specified via cmd-line, otherwise
+                # use the one set in the configuration file
+                if t in bs_basedirs:
+                    basedir = bs_basedirs[t]
+                else:
+                    basedir = os.path.join(metadata["base_dir"], k)
+
+                # Use device specific name of the blobstore file 
+                # set in the configuration file, otherwise use the
+                # default one in "meta" block 
+                if (k in configData) and (t in configData[k]):
+                    fn = configData[k][t]
+                else:
+                    fn = def_fn
+
+                path = os.path.join(basedir, fn)
                 blobs[(device_id, btypes[t])] = path
     elif "devices" in configData:
         # Non-EFI, just have a list of device ids as reported by
         # respective loaders. We assume here that these ids can
         # be used in a UNIX path
         for device_id in configData["devices"]:
-            for t, fn in metadata["types"].iteritems():
-                path = os.path.join(metadata["base_dir"], device_id, fn)
+            for t, def_fn in metadata["types"].iteritems():
+                # Use the path specified via cmd-line, otherwise
+                # use the one set in the configuration file
+                if t in bs_basedirs:
+                    basedir = bs_basedirs[t]
+                else:
+                    basedir = os.path.join(metadata["base_dir"], device_id)
+
+                # Use device specific name of the blobstore file 
+                # set in the configuration file, otherwise use the
+                # default one in "meta" block 
+                if (device_id in configData) and (t in configData[device_id]):
+                    fn = configData[device_id][t]
+                else:
+                    fn = def_fn
+
+                path = os.path.join(basedir, fn)
                 blobs[(device_id, btypes[t])] = path
     else:
         sys.stderr.write("No device mapping or 'devices' in JSON configuration")
