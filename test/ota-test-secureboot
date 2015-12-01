@@ -178,7 +178,7 @@ if [ "$OTA_TESTS" -eq 1 ] || [ "$OTA_TESTS" -eq 7 ]; then
 
     rm -rf ota_q
     echo $(date) 'Test_Q: Create quick test packages : ota-test-prepare -q'
-    ./device/intel/build/ota-test-prepare -q
+    ./device/intel/build/test/ota-test-prepare -q
     echo $(date) 'Test_Q: Backup quick test packages to another folder to save from overwriting'
     cp -rfv ota ota_q
 
@@ -186,13 +186,13 @@ if [ "$OTA_TESTS" -eq 1 ] || [ "$OTA_TESTS" -eq 7 ]; then
     provisionDevice ota/flashfiles-A-testkey.zip
     adb -s $ANDROID_DEVICEID shell getprop > ota_q/getprop_A.log
     verify_SW ota/tfp-A-testkey.zip
-    ./device/intel/build/flash-update ota/ota-A-B-testkey.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-A-B-testkey.zip $ANDROID_DEVICEID
     interrupt_OTA_update
     adb -s $ANDROID_DEVICEID shell getprop > ota_q/getprop_B.log
     verify_SW ota/tfp-B-testkey.zip
 
     echo $(date) 'Test_Q: Test update from B->A'
-    ./device/intel/build/flash-update ota/ota-B-A-testkey.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-B-A-testkey.zip $ANDROID_DEVICEID
     interrupt_OTA_update
     adb -s $ANDROID_DEVICEID shell getprop > ota_q/getprop_A1.log
     verify_SW ota/tfp-A-testkey.zip
@@ -210,7 +210,7 @@ if [ "$OTA_TESTS" -eq 2 ] || [ "$OTA_TESTS" -eq 7 ]; then
     adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A.log
 
     echo $(date) 'Test_S: Create standard test packages : ota-test-prepare -s'
-    ./device/intel/build/ota-test-prepare -s
+    ./device/intel/build/test/ota-test-prepare -s
     echo $(date) 'Test_S: Backup test packages to another folder to save from overwriting'
     cp -rfv ota ota_s
 
@@ -246,21 +246,21 @@ COMMENT_FAILURE_TESTCASE_VERIFY_INTERRUPT
 
     echo $(date) 'Test_S: Full image update from A->B'
     echo $(date) 'Test_S: Negative test case, send same SW which is provisioned.'
-    # ISSUE: ./device/intel/build/flash-update fails if multiple devices are connected with Host. And there is no provision for providing DUT DeviceID.
-    ./device/intel/build/flash-update ota/ota-A.zip $ANDROID_DEVICEID
+    # ISSUE: ./device/intel/build/test/flash-update fails if multiple devices are connected with Host. And there is no provision for providing DUT DeviceID.
+    ./device/intel/build/test/flash-update ota/ota-A.zip $ANDROID_DEVICEID
     interrupt_OTA_update
     # ISSUE: It tries to update the provisioned SW.
     adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A0.1.log
     verify_SW ota/tfp-A.zip
     echo $(date) 'Test_S: Provide correct inputs for full image update.'
-    ./device/intel/build/flash-update ota/ota-B.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-B.zip $ANDROID_DEVICEID
     interrupt_OTA_update
     adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_B1.log
     verify_SW ota/tfp-B.zip
     # ISSUE: Cannot update back to Software A. Remove comments and below provisioning line after this issue is resolved.
 : <<'COMMENT_FAILURE_TESTCASE_FULL_OTA_ANTIROLLBACK'
     echo $(date) 'Test_S: Full image update from B->A'
-    ./device/intel/build/flash-update ota/ota-A.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-A.zip $ANDROID_DEVICEID
     interrupt_OTA_update
 COMMENT_FAILURE_TESTCASE_FULL_OTA_ANTIROLLBACK
     provisionDevice ota/flashfiles-A.zip
@@ -272,21 +272,21 @@ COMMENT_FAILURE_TESTCASE_FULL_OTA_ANTIROLLBACK
     do
         echo $(date) 'Test_R: OTA Update Count # ' $((LoopCounter++))
         echo $(date) 'Test_R: Update from A->B'
-        ./device/intel/build/flash-update ota/ota-A-B.zip $ANDROID_DEVICEID
+        ./device/intel/build/test/flash-update ota/ota-A-B.zip $ANDROID_DEVICEID
         interrupt_OTA_update
         adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_B$LoopCounter.log
         verify_SW ota/tfp-B.zip
 
         echo $(date) 'Test_R: Update from B->A'
         echo $(date) 'Test_R: Send wrong update package, it should fail. Negative testcase'
-        ./device/intel/build/flash-update ota/ota-A-B.zip $ANDROID_DEVICEID
+        ./device/intel/build/test/flash-update ota/ota-A-B.zip $ANDROID_DEVICEID
         echo $(date) 'Test_R: Wait for device to fail update and reboot into normal mode'
         sleep 15
         adb -s $ANDROID_DEVICEID wait-for-device
         adb -s $ANDROID_DEVICEID logcat -v time | grep -e 'Boot has been completed' --max-count=1
         verify_SW ota/tfp-B.zip
         echo $(date) 'Test_R: Send correct update package'
-        ./device/intel/build/flash-update ota/ota-B-A.zip $ANDROID_DEVICEID
+        ./device/intel/build/test/flash-update ota/ota-B-A.zip $ANDROID_DEVICEID
         interrupt_OTA_update
         adb -s $ANDROID_DEVICEID shell getprop > ota_s/getprop_A$LoopCounter.log
         verify_SW ota/tfp-A.zip
@@ -307,9 +307,9 @@ if [ "$OTA_TESTS" -eq 4 ] || [ "$OTA_TESTS" -eq 7 ]; then
     rm -rf ota_o
     echo $(date) 'Test_O: Create test packages from Official Release'
     echo $(date) 'Test_O: Create TFP source package'
-    ./device/intel/build/ota-test-prepare -s -t downloadRelease/$PRODUCT_NAME-target_files-GMINLMASTER$OFFICIAL_REL_SRC_A.zip A
+    ./device/intel/build/test/ota-test-prepare -s -t downloadRelease/$PRODUCT_NAME-target_files-GMINLMASTER$OFFICIAL_REL_SRC_A.zip A
     echo $(date) 'Test_O: Create TFP destination package'
-    ./device/intel/build/ota-test-prepare -s -t downloadRelease/$PRODUCT_NAME-target_files-GMINLMASTER$OFFICIAL_REL_DST_B.zip B
+    ./device/intel/build/test/ota-test-prepare -s -t downloadRelease/$PRODUCT_NAME-target_files-GMINLMASTER$OFFICIAL_REL_DST_B.zip B
     echo $(date) 'Test_O: Create ota package from A->B'
     ./build/tools/releasetools/ota_from_target_files --verbose -i ota/tfp-A.zip ota/tfp-B.zip ota/ota-A-B.zip
     echo $(date) 'Test_O: Create ota package from B->A'
@@ -321,7 +321,7 @@ if [ "$OTA_TESTS" -eq 4 ] || [ "$OTA_TESTS" -eq 7 ]; then
     echo $(date) 'Test_O: Full image update from A->B'
     provisionDevice ota/flashfiles-A.zip
     adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A.log
-    ./device/intel/build/flash-update ota/ota-B.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-B.zip $ANDROID_DEVICEID
     # ISSUE: Enters into recovery screen with options enabled. Signature verification failed.
     # ISSUE: Enters into recovery screen with options enabled. While OTA update in recovery mode, UI was blank.
     # ISSUE: If VOL-UP is not pressed immediately before DUT goes to sleep, OTA process doesn't start on Power-On again.
@@ -332,7 +332,7 @@ if [ "$OTA_TESTS" -eq 4 ] || [ "$OTA_TESTS" -eq 7 ]; then
     #verify_SW ota/ota-B.zip
     adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_B.log
     echo $(date) 'Test_O: Full image update from B->A'
-    ./device/intel/build/flash-update ota/ota-A.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-A.zip $ANDROID_DEVICEID
     # ISSUE: Cannot update back to Software A.
     #interrupt_OTA_update
     confirmStateSleepNReboot recovery 0 noReboot
@@ -345,14 +345,14 @@ if [ "$OTA_TESTS" -eq 4 ] || [ "$OTA_TESTS" -eq 7 ]; then
     # TODO: Remove below lines as SW A already rolled-back so no need to reprovision.
     provisionDevice ota/flashfiles-A.zip
     adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A2.log
-    ./device/intel/build/flash-update ota/ota-A-B.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-A-B.zip $ANDROID_DEVICEID
     # Issue: Interrupting OTA is not working.
     #interrupt_OTA_update
     adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_B1.log
     verify_SW ota/tfp-B.zip
 
     echo $(date) 'Test_O: Update from B->A'
-    ./device/intel/build/flash-update ota/ota-B-A.zip $ANDROID_DEVICEID
+    ./device/intel/build/test/flash-update ota/ota-B-A.zip $ANDROID_DEVICEID
     #interrupt_OTA_update
     adb -s $ANDROID_DEVICEID shell getprop > ota_o/getprop_A2.log
     verify_SW ota/tfp-A.zip
