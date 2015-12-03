@@ -6,6 +6,9 @@ ifdef BOARD_DEVICE_MAPPING
 blobstore_deps += $(BOARD_DEVICE_MAPPING)
 blobstore_extra_args := --device-map $(BOARD_DEVICE_MAPPING)
 endif
+ifdef TARGET_PRODUCT_FISHNAME
+blobstore_extra_args += --fishname $(TARGET_PRODUCT_FISHNAME)
+endif
 
 # use the dtb file(s) under LOCAL_KERNEL_PATH
 # if dtb file is built from kernel source

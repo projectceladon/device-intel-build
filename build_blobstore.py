@@ -108,6 +108,8 @@ def main(argv):
                 formatter_class=argparse.RawDescriptionHelpFormatter)
         parser.add_argument('--config',required=True,
                         help="blob configuration file")
+        parser.add_argument('--fishname',required=False,
+                        help="fishname contained in device name")
         parser.add_argument('--output',required=False,
                         help="blobstore output file path. If omitted, just list dependencies")
         parser.add_argument("--device-map",required=False,
@@ -159,9 +161,11 @@ def main(argv):
 
             # Assumes version 1
             brand, product, device, lunch, fish, basev = dmap[k]
-            # Nip off trailing _coho since that is not in DMI
-            if fish in device:
-                device = device[:-(len(fish) + 1)]
+            # Nip off trailing fishname since that is not in DMI.
+            # Note that trailing fishname is not the one from dmap
+            # which is in fact the PRODUCT_DEVICE
+            if args.fishname and args.fishname in device:
+                device = device[:-(len(args.fishname) + 1)]
 
             device_id = "%s/%s/%s" % (brand, product, device)
             for t, def_fn in metadata["types"].iteritems():
