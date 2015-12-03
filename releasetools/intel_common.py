@@ -262,19 +262,25 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
             tdos_file = tdos.WriteToTemp()
             extra_files.append((tdos_file.name,"tdos.img"))
 
-        if not autosize:
-            size = int(open(os.path.join(unpack_dir, "RADIO", "bootloader-size.txt")).read().strip())
-        else:
-            size = 0
+        info_file = os.path.join(unpack_dir, "RADIO", "bootloader_image_info.txt")
+        info = GetBootloaderInfo(info_file, autosize)
 
         MakeVFATFilesystem(os.path.join(unpack_dir, "RADIO", "bootloader.zip"),
-                filename, size=size, extra_files=extra_files)
+                           filename, size=int(info["size"]),
+                           block_size=int(info["block_size"]),
+                           extra_files=extra_files)
 
     bootloader = open(filename)
     data = bootloader.read()
     bootloader.close()
     os.unlink(filename)
     return data
+
+def GetBootloaderInfo(info_file, autosize):
+    info = common.LoadDictionaryFromLines(open(info_file).readlines())
+    if autosize:
+        info["size"] = 0
+    return info
 
 def GetBootloaderImageFromOut(product_out, intermediate_dir, filename, autosize=False, extra_files=None):
     if extra_files == None:
@@ -290,15 +296,14 @@ def GetBootloaderImageFromOut(product_out, intermediate_dir, filename, autosize=
         print "add tdos.img to bootloader"
         extra_files.append((tdos, "tdos.img"))
 
-    if not autosize:
-        bl_size = os.path.join(intermediate_dir, "../", "bootloader-size.txt")
-        size = int(open(bl_size).read().strip())
-    else:
-        size = 0
+    info_file = os.path.join(intermediate_dir, "../", "bootloader_image_info.txt")
+    info = GetBootloaderInfo(info_file, autosize)
 
-    MakeVFATFilesystem(intermediate_dir, filename, size=size, extra_files=extra_files, zipped=False)
+    MakeVFATFilesystem(intermediate_dir, filename, size=int(info["size"]),
+                       block_size=int(info["block_size"]),
+                       extra_files=extra_files, zipped=False)
 
-def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size=0,
+def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, block_size=None, extra_size=0,
         extra_files=[], zipped=True):
     """Create a VFAT filesystem image with all the files in the provided
     root zipfile. The size of the filesystem, if not provided by the
@@ -339,7 +344,10 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, extra_size
         os.unlink(filename)
 
     add_dir_to_path("/sbin")
-    cmd = ["mkdosfs", "-n", title, "-C", filename, str(size / 1024)]
+    cmd = ["mkdosfs"]
+    if block_size:
+        cmd.extend(["-S", str(block_size)])
+    cmd.extend(["-n", title, "-C", filename, str(size / 1024)])
     try:
         p = common.Run(cmd)
     except Exception as exc:
