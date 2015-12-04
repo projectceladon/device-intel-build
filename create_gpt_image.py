@@ -863,13 +863,15 @@ class GPTImage(object):
                 continue
 
             # checks if partition size is greather or equal to the binary file
-            bin_size = stat(bin_path).st_size / self.block_size
+            bin_size_in_bytes = stat(bin_path).st_size
+            part_size_in_bytes = tlb_part.size * self.block_size
+            bin_size = bin_size_in_bytes / self.block_size
             if tlb_part.size < bin_size:
                 error('Size of binary file {0} ({1} Bytes) is greather than '
                       '{2} partition size ({3} Bytes)'.format(bin_path,
-                                                              bin_size,
+                                                              bin_size_in_bytes,
                                                               tlb_part.label,
-                                                              tlb_part.size))
+                                                              part_size_in_bytes))
                 exit(-1)
 
             # opens and reads the binary file to write the partition
