@@ -11,7 +11,8 @@ endif
 # if dtb file is built from kernel source
 ifeq ($(BUILD_DTBS), true)
 blobstore_extra_args += --dtb-path $(LOCAL_KERNEL_PATH)
-blobstore_deps += $(BOARD_DTB)
+$(foreach v,$(BOARD_DTB_VARIANTS), \
+    $(eval $(if $$(BOARD_DTB.$(v)), blobstore_deps += $$(BOARD_DTB.$(v)))))
 else
 # build_blobstore without an output parameter lists all the necessary
 # source blob files we need
