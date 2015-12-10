@@ -95,7 +95,7 @@ OPTIONS.all_keys = set()
 OPTIONS.keystore_certs = []
 OPTIONS.oem_key = None
 OPTIONS.target_product = None
-
+GiB = (1 << 30)
 
 def is_32bit_efi(data):
     tf = tempfile.NamedTemporaryFile()
@@ -379,7 +379,10 @@ def main(argv):
         elif zi.filename == "RADIO/tdos.img":
             common.ZipWriteStr(output_zip, zi, tdos.data)
         else:
-            common.ZipWriteStr(output_zip, zi, input_zip.read(zi))
+            if (zi.file_size >= 2 * GiB):
+                common.ZipWrite(output_zip, os.path.join(unpack_dir, zi.filename), zi.filename)
+            else:
+                common.ZipWriteStr(output_zip, zi, input_zip.read(zi))
 
     common.ZipClose(output_zip)
     print "All done."
