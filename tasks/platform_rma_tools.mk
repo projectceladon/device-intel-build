@@ -6,6 +6,25 @@ ifeq ($(HOST_OS),windows)
     EXECUTABLE_SUFFIX = ".exe"
 endif
 
+ifeq ($(SOC_FIRMWARE_TYPE),slb)
+
+ifeq ($(HOST_OS),windows)
+RMA_TO_COPY := key_maker/bin/win32/key_maker.exe signing_module/bin/win32/sec_signing.exe signing_module/bin/win32/signing_module.dll
+else
+RMA_TO_COPY := key_maker/bin/linux/key_maker32 signing_module/bin/linux/m32/sec_signing signing_module/bin/linux/m32/libsigningmodule.so
+endif
+RMA_TO_COPY := $(addprefix hardware/intel/mrd-3gr-sofia/secure_vm/tools/,$(RMA_TO_COPY))
+
+RMA_TO_COPY += device/intel/$(TARGET_PROJECT)/security/oem_oak_flag.bin $(HOST_OUT)/bin/action-authorization$(EXECUTABLE_SUFFIX) $(HOST_OUT)/bin/openssl$(EXECUTABLE_SUFFIX) external/openssl/apps/openssl.cnf
+
+$(PLATFORM_RMA_TOOLS_ZIP): action-authorization openssl $(RMA_TO_COPY)
+	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_DIR) $(PLATFORM_RMA_TOOLS_ZIP)
+	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_DIR)
+	$(hide) $(ACP) -fp $(RMA_TO_COPY) $(PLATFORM_RMA_TOOLS_DIR)
+	$(hide) cd $(HOST_OUT) && zip -r $(PLATFORM_RMA_TOOLS).zip $(PLATFORM_RMA_TOOLS)
+
+else
+
 $(PLATFORM_RMA_TOOLS_ZIP): action-authorization sign-efi-sig-list openssl
 	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_DIR)
 	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_DIR)
@@ -16,5 +35,7 @@ $(PLATFORM_RMA_TOOLS_ZIP): action-authorization sign-efi-sig-list openssl
 	$(hide) $(ACP) -fp external/openssl/apps/openssl.cnf $(PLATFORM_RMA_TOOLS_DIR)/
 	$(hide) tar czf $(PLATFORM_RMA_TOOLS_DIR)/efitools.tar.gz external/efitools
 	$(hide) cd $(HOST_OUT) && zip -r $(PLATFORM_RMA_TOOLS).zip $(PLATFORM_RMA_TOOLS)
+
+endif
 
 platform_rma_tools: $(PLATFORM_RMA_TOOLS_ZIP)
