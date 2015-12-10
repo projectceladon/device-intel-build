@@ -262,12 +262,12 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
             tdos_file = tdos.WriteToTemp()
             extra_files.append((tdos_file.name,"tdos.img"))
 
-        info_file = os.path.join(unpack_dir, "RADIO", "bootloader_image_info.txt")
-        info = GetBootloaderInfo(info_file, autosize)
+        info_dir = os.path.join(unpack_dir, "RADIO")
+        info = GetBootloaderInfo(info_dir, autosize)
 
         MakeVFATFilesystem(os.path.join(unpack_dir, "RADIO", "bootloader.zip"),
                            filename, size=int(info["size"]),
-                           block_size=int(info["block_size"]),
+                           block_size=info["block_size"],
                            extra_files=extra_files)
 
     bootloader = open(filename)
@@ -276,10 +276,20 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
     os.unlink(filename)
     return data
 
-def GetBootloaderInfo(info_file, autosize):
-    info = common.LoadDictionaryFromLines(open(info_file).readlines())
+def GetBootloaderInfo(info_dir, autosize):
+    info_file = os.path.join(info_dir, "bootloader_image_info.txt")
+    if os.path.isfile(info_file):
+        info = common.LoadDictionaryFromLines(open(info_file).readlines())
+    else:
+        # Preserve legacy way to get size to keep OTA generation scripts working
+        info = {}
+        info_file = os.path.join(info_dir, "bootloader-size.txt")
+        info["size"] = int(open(info_file).read().strip())
+        info["block_size"] = None
+
     if autosize:
         info["size"] = 0
+
     return info
 
 def GetBootloaderImageFromOut(product_out, intermediate_dir, filename, autosize=False, extra_files=None):
@@ -296,11 +306,11 @@ def GetBootloaderImageFromOut(product_out, intermediate_dir, filename, autosize=
         print "add tdos.img to bootloader"
         extra_files.append((tdos, "tdos.img"))
 
-    info_file = os.path.join(intermediate_dir, "../", "bootloader_image_info.txt")
-    info = GetBootloaderInfo(info_file, autosize)
+    info_dir = os.path.join(intermediate_dir, "../")
+    info = GetBootloaderInfo(info_dir, autosize)
 
     MakeVFATFilesystem(intermediate_dir, filename, size=int(info["size"]),
-                       block_size=int(info["block_size"]),
+                       block_size=info["block_size"],
                        extra_files=extra_files, zipped=False)
 
 def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, block_size=None, extra_size=0,
