@@ -58,6 +58,13 @@ publish_kernel_debug:
 	@echo "Publish kernel debug: skipped"
 endif
 
+# Publish OS agnostic tag
+ifneq ($(OS_AGNOSTIC_INFO),)
+PUB_OSAGNOSTIC_TAG := $(publish_dest)/$(notdir $(OS_AGNOSTIC_INFO))
+$(PUB_OSAGNOSTIC_TAG): publish_mkdir_dest $(OS_AGNOSTIC_INFO)
+	$(hide)($(ACP) $(OS_AGNOSTIC_INFO) $@)
+endif
+
 # Publish Firmware symbols
 .PHONY: publish_firmware_symbols
 ifneq ($(FIRMWARE_SYMBOLS_PATH),)
@@ -130,7 +137,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols
+publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -163,5 +170,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG)
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
