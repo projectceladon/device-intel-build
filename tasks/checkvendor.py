@@ -45,6 +45,8 @@ Exemples of module: \n\
  \n\
 https://wiki.ith.intel.com/display/ANDROIDSI/Vendor \n"
 
+informative_message_light = "https://wiki.ith.intel.com/display/ANDROIDSI/Vendor \n"
+
 warning_message1 = "WARNING: Prefer usage of LOCAL_PROPRIETARY_MODULE"
 warning_message2 = "WARNING: Module will not be in vendor !"
 separative_line = "================================================================================"
@@ -101,7 +103,7 @@ def search_string(light, tup, f, nb_err, out):
                                 for l in s:
                                     print l
                 else:
-                    if re.search(r"TARGET_OUT(?!_VENDOR).*", ''.join(s)) is not None:
+                    if re.search(r"LOCAL_MODULE_PATH.*TARGET_OUT(?!_VENDOR).*", ''.join(s)) is not None:
                         nb_err = nb_err+1
                         if light:
                             light_message(f, s)
@@ -170,12 +172,13 @@ def main():
             nb_err_tmp = nb_err
 
     if not options.light:
-        print separative_line
-        print_vendor(informative_message)
-        print separative_line
+        if nb_err is not 0:
+            print separative_line
+            print_vendor(informative_message)
+            print separative_line
     else:
         print "\n"
-        print_vendor("https://wiki.ith.intel.com/display/ANDROIDSI/Vendor \n")
+        print informative_message_light
 
     return 0
 
