@@ -135,13 +135,11 @@ def get_auth_data(timestamp, sign_pair, password, guid_str, name, payload):
     payload_fname = tempfilename("payload-" + name + "-", payload)
     pemkey_fname = pk8_to_pem(sign_pair + private_key_suffix, password)
     auth_fname = tempfilename("auth_file-" + name + "-", None)
-    # Windows does not support the %c format very well.  We enforce a
-    # more generic format which works on both Linux and Windows.
     timestampfmt = "%m/%d/%Y %I:%M:%S"
 
     ret = run(["sign-efi-sig-list", "-t",
                time.strftime(timestampfmt, time.strptime(time.ctime(timestamp))),
-               "-T", timestampfmt, "-c", sign_pair + certificate_suffix,
+               "-c", sign_pair + certificate_suffix,
                "-g", guid_str, "-k", pemkey_fname,
                name, payload_fname, auth_fname], None)
     assert ret == 0, "sign-efi-sig-list failed"
