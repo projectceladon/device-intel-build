@@ -737,8 +737,11 @@ def get_auth_data(timestamp, sign_pair, password, pem_cert, guid_str, name, payl
     pem_key = pk8_to_pem(sign_pair + common.OPTIONS.private_key_suffix, password)
 
     tf = tempfile.NamedTemporaryFile(prefix="auth_file-"+name+"-")
-    cmd = ["sign-efi-sig-list", "-t", time.ctime(timestamp), "-c",
-           sign_pair + common.OPTIONS.public_key_suffix,
+    timestampfmt = "%m/%d/%Y %I:%M:%S"
+
+    cmd = ["sign-efi-sig-list", "-t",
+           time.strftime(timestampfmt, time.strptime(time.ctime(timestamp))),
+           "-c", sign_pair + common.OPTIONS.public_key_suffix,
            "-g", guid_str, "-k", pem_key.name, name, esl.name, tf.name]
     p = common.Run(cmd)
     p.communicate()
