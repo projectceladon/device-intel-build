@@ -89,6 +89,7 @@ class VariantIpGenerator:
         self.default_config = None
 
         self.variant_exclude_files = []
+        self.variant_include_files = []
 
     def __add_variant_flashfile(self, ip, variant):
         variant_flashfile = self.flashfile + "_" + variant + ".ini"
@@ -100,20 +101,17 @@ class VariantIpGenerator:
         self.variant_files = self.variant_files_common
         # Remove variant 'additional-files' from list to avoid Phone Flash Tool issues
         if ip.has_option('global', 'additional-files'):
-            exclude_files = set(ip.get('global', 'additional-files').split())
-            exclude_files_global = set(self.ip.get('global', 'additional-files').split())
-            self.variant_files = sorted(set(self.variant_files) - exclude_files)
-            filenames = []
-            filenames_global = []
-            for file in exclude_files:
-                _,f = file.split(":")
-                filenames.append(f)
-            for file in exclude_files_global:
-                _,f = file.split(":")
-                filenames_global.append(f)
-            exclude = set(filenames_global) - set(filenames)
+            exclude_files_variant = set(ip.get('global', 'additional-files').split())
+            exclude_files_generic = set(self.ip.get('global', 'additional-files').split())
+            self.variant_files = sorted(set(self.variant_files) - exclude_files_variant)
+
+            exclude = set(exclude_files_generic) - set(exclude_files_variant)
+            include = set(exclude_files_variant) - set(exclude_files_generic)
             for f in exclude:
-                self.variant_exclude_files.append(variantFilename(f, variant))
+                _,name = f.split(":")
+                self.variant_exclude_files.append(variantFilename(name, variant))
+            for f in include:
+                self.variant_include_files.append((variant, f))
 
     def generate_variant_ip(self):
         # Add variant files to ip
@@ -388,6 +386,11 @@ def main(argv):
                         process_image(unpack_dir, dest_zip, src, target, variant, target_out)
                 else:
                     process_image(unpack_dir, dest_zip, src, target)
+            if OPTIONS.variants:
+                for variant, file in vip.variant_include_files:
+                    src,target = file.split(":")
+                    process_image(unpack_dir, dest_zip, src, target, variant, variantFilename(target, variant))
+
             # Write flash_cmd_generator parsed PFT flashing instructions to file & insert into flashfile zip
             print "Generating JSON flash configuration files..."
             for fn, data in configs:
