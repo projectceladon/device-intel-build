@@ -74,10 +74,19 @@ endif
 
 # Publish Firmware symbols
 .PHONY: publish_firmware_symbols
+FIRMWARE_SYMBOLS_FILE := $(TARGET_DEVICE)-symbols_firmware.zip
+FIRMWARE_SYMBOLS_PATH := $(wildcard hardware/intel/$(TARGET_BOARD_PLATFORM)-fls/$(PRODUCT_MODEL)/symbols/*.elf)
+
+publish_firmware_symbols: publish_mkdir_dest publish_flashfiles
+ifneq ($(BUILD_OSAS),1) # prebuilt
+	@echo "------------Publish prebuilt firmware symbols from $(FIRMWARE_SYMBOLS_PATH) -----------"
 ifneq ($(FIRMWARE_SYMBOLS_PATH),)
-publish_firmware_symbols: publish_mkdir_dest
-	@echo "Publish firmware symbols"
-	$(hide)(zip -qry $(publish_dest)/$(FIRMWARE_SYMBOLS_FILE) $(FIRMWARE_SYMBOLS_PATH))
+	$(hide)-(zip -jry $(publish_dest)/$(FIRMWARE_SYMBOLS_FILE) $(FIRMWARE_SYMBOLS_PATH))
+endif
+else # built from source
+	@echo "------------Publish compiled firmware symbols-----------"
+	$(info $(BOOTLOADER_BIN_PATH) $(VMM_BUILD_OUT) $(SECVM_BUILD_DIR))
+	$(hide)-(zip -jry $(publish_dest)/$(FIRMWARE_SYMBOLS_FILE) $(BOOTLOADER_BIN_PATH)/*/*.elf $(VMM_BUILD_OUT)/*/*.elf $(SECVM_BUILD_DIR)/*.elf $(THREADX_BUILD_DIR)/*.elf)
 endif
 
 # Are we doing an 'sdk' type lunch target
@@ -144,7 +153,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb $(PLATFORM_RMA_TOOLS_ZIP)
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
