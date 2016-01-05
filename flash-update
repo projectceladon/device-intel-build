@@ -26,11 +26,9 @@ function usage {
 }
 
 function wait_for_adb {
-    while [ -z "$dutID" ]; do
-        adb wait-for-device
-        dutID=$(adb devices | grep -v 'List' | awk '{print ($1)}')
+    while [ -z "$(adb devices | grep $dutID | awk '{print($1)}')" ]; do
+        sleep 1
     done
-    adb -s $dutID wait-for-device
 }
 
 function adb_root {
