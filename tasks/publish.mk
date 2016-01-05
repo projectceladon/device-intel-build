@@ -135,7 +135,7 @@ publish_ota_flashfile:
 	@echo "Do not publish ota_flashfile"
 endif # PUBLISH_CONF
 
-PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
+PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb $(PLATFORM_RMA_TOOLS_ZIP)
 .PHONY: publish_ci
 publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG)
 	$(if $(wildcard $(publish_dest)), \
