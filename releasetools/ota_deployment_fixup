@@ -243,11 +243,11 @@ def main(argv):
     output_zip = zipfile.ZipFile(temp_zip, "w")
 
     print "Decompressing target-files-packages..."
-    tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp)
+    tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp, "RADIO/*")
     OPTIONS.info_dict = common.LoadInfoDict(tfp_zip)
 
     if OPTIONS.incremental:
-        source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp)
+        source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp, "RADIO/*")
         OPTIONS.source_info_dict = common.LoadInfoDict(source_tfp_zip)
 
     dmap = intel_common.load_device_mapping_from_tfp(tfp_dir)
