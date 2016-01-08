@@ -127,14 +127,14 @@ def WriteFileToDest(img, dest):
     fid.close()
 
 
-def patch_or_verbatim_exists(path, ota_dir):
-    filepath = os.path.join(ota_dir, "bootloader", path)
-    patchpath = os.path.join(ota_dir, "patch", "bootloader", path + ".p")
-    return os.path.exists(filepath) or os.path.exists(patchpath)
+def patch_or_verbatim_exists(path, ota_zip):
+    filepath = os.path.join("bootloader", path)
+    patchpath = os.path.join("patch", "bootloader", path + ".p")
+    return filepath in ota_zip.namelist() or patchpath in ota_zip.namelist()
 
 
 def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
-                           base_variant=None, existing_ota_dir=None):
+                           base_variant=None, existing_ota_zip=None):
     target_data = LoadBootloaderFiles(target_tfp_dir, variant=variant, base_variant=base_variant)
     source_data = LoadBootloaderFiles(source_tfp_dir, variant=variant, base_variant=base_variant)
 
@@ -156,7 +156,7 @@ def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
     patch_list = []
 
     for fn in sorted(target_data.keys()):
-        if existing_ota_dir and patch_or_verbatim_exists(fn, existing_ota_dir):
+        if existing_ota_zip and patch_or_verbatim_exists(fn, existing_ota_zip):
             continue
 
         tf = target_data[fn]
