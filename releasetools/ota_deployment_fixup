@@ -127,7 +127,7 @@ def process_updater_script(data, unpack_dir):
     return '\n'.join(linesout)
 
 
-def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
+def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_zip,
         output_zip, script_data):
     print "Computing new bootloader patches..."
     output_files, delete_files, patch_list, verbatim_targets = \
@@ -135,7 +135,7 @@ def compute_new_bootloader_patches(source_tfp_dir, target_tfp_dir, ota_dir,
                                                 target_tfp_dir,
                                                 variant=OPTIONS.variant,
                                                 base_variant=OPTIONS.base_variant,
-                                                existing_ota_dir=ota_dir)
+                                                existing_ota_zip=ota_zip)
     for f in output_files:
         print "Adding",f.name
         f.AddToZip(output_zip)
@@ -237,8 +237,7 @@ def main(argv):
         common.Usage(__doc__)
         sys.exit(1)
 
-    print "Decompressing OTA update", args[0]
-    input_dir, input_zip = common.UnzipTemp(args[0])
+    input_zip = zipfile.ZipFile(args[0])
     temp_zip = tempfile.NamedTemporaryFile()
     output_zip = zipfile.ZipFile(temp_zip, "w")
 
@@ -282,7 +281,7 @@ def main(argv):
             sdata = process_updater_script(sdata, tfp_dir)
             if OPTIONS.incremental:
                 sdata = compute_new_bootloader_patches(source_tfp_dir,
-                        tfp_dir, input_dir, output_zip, sdata)
+                        tfp_dir, input_zip, output_zip, sdata)
             output_zip.writestr(zi, sdata)
         elif zi.filename == "bootloader.img":
             new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
