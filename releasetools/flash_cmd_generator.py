@@ -341,7 +341,7 @@ def main():
         ip = iniparser.IniParser()
         ip.parse(f)
 
-    results, files = parse_config(ip, variant, target)
+    results, files = parse_config([ip], variant, target)
     for fname, content in results:
         print fname
         print content
