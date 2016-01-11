@@ -37,6 +37,7 @@ import zipfile
 import tempfile
 import imp
 import re
+import shutil
 
 if None == os.environ.get('ANDROID_BUILD_TOP'):
     print "I'm hungry. Feed me lunch."
@@ -190,6 +191,12 @@ def check_arg(arg, errortext):
         common.Usage(__doc__)
         sys.exit(1)
 
+def replace_in_zip(zip_filename, data, item):
+    os.system("zip -d %s %s"%(zip_filename, item))
+    zip = zipfile.ZipFile(zip_filename, "a")
+    zip.writestr(item, data, compress_type=zipfile.ZIP_DEFLATED)
+    zip.close()
+
 def main(argv):
     def option_handler(o, a):
         if o in ("-B", "--brand"):
@@ -238,8 +245,6 @@ def main(argv):
         sys.exit(1)
 
     input_zip = zipfile.ZipFile(args[0])
-    temp_zip = tempfile.NamedTemporaryFile()
-    output_zip = zipfile.ZipFile(temp_zip, "w")
 
     print "Decompressing target-files-packages..."
     tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp, "RADIO/*")
@@ -273,27 +278,30 @@ def main(argv):
               "Missing one of -B, -P, -D, -f and cannot get this info from target-files")
 
     print "Processing OTA update contents.."
+    _, temp_zip = tempfile.mkstemp(suffix=".zip")
+    shutil.copyfile(input_zip.filename, temp_zip)
     for zi in input_zip.infolist():
         if zi.filename == "META-INF/com/android/metadata":
-            output_zip.writestr(zi, process_metadata(input_zip.read(zi)))
+            data = process_metadata(input_zip.read(zi))
+            replace_in_zip(temp_zip, data, zi.filename)
         elif zi.filename == "META-INF/com/google/android/updater-script":
             sdata = input_zip.read(zi)
             sdata = process_updater_script(sdata, tfp_dir)
             if OPTIONS.incremental:
+                output_zip = zipfile.ZipFile(temp_zip, "a")
                 sdata = compute_new_bootloader_patches(source_tfp_dir,
                         tfp_dir, input_zip, output_zip, sdata)
-            output_zip.writestr(zi, sdata)
+                output_zip.close()
+            replace_in_zip(temp_zip, sdata, zi.filename)
         elif zi.filename == "bootloader.img":
             new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
                     variant=OPTIONS.variant)
-            output_zip.writestr(zi, new_bi)
-        else:
-            output_zip.writestr(zi, input_zip.read(zi))
-    output_zip.close()
+            replace_in_zip(temp_zip, new_bi, zi.filename)
 
     print "Signing fixed-up package", args[1]
     passwords = common.GetKeyPasswords([OPTIONS.package_key])
-    common.SignFile(temp_zip.name, args[1], OPTIONS.package_key, passwords[OPTIONS.package_key], whole_file=True)
+    common.SignFile(temp_zip, args[1], OPTIONS.package_key, passwords[OPTIONS.package_key], whole_file=True)
+    os.unlink(temp_zip)
 
     print "All done."
 
