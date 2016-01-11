@@ -13,7 +13,7 @@ RMA_TO_COPY := key_maker/bin/win32/key_maker.exe signing_module/bin/win32/sec_si
 else
 RMA_TO_COPY := key_maker/bin/linux/key_maker32 signing_module/bin/linux/m32/sec_signing signing_module/bin/linux/m32/libsigningmodule.so
 endif
-RMA_TO_COPY := $(addprefix hardware/intel/mrd-3gr-sofia/secure_vm/tools/,$(RMA_TO_COPY))
+RMA_TO_COPY := $(addprefix hardware/intel/mrd-3gr-sofia/secure_vm/src/security_framework/tools/,$(RMA_TO_COPY))
 
 RMA_TO_COPY += device/intel/$(TARGET_PROJECT)/security/oem_oak_flag.bin $(HOST_OUT)/bin/action-authorization$(EXECUTABLE_SUFFIX) $(HOST_OUT)/bin/openssl$(EXECUTABLE_SUFFIX) external/openssl/apps/openssl.cnf
 
