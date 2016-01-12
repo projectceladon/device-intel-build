@@ -145,15 +145,10 @@ function build_ota {
         EXTRA_ARGS=
     fi
 
-    if [ -n "$BOARD_VARIANT" ]; then
-        ./build/tools/releasetools/ota_from_target_files --verbose --block \
-            $EXTRA_ARGS $1 $2.unfixed
-        ./device/intel/build/releasetools/ota_deployment_fixup \
-            --variant $BOARD_VARIANT --target_files $1 $EXTRA_ARGS $2.unfixed $2
-    else
-        ./build/tools/releasetools/ota_from_target_files --verbose --block \
-            $EXTRA_ARGS $1 $2
-    fi
+    [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
+
+    ./device/intel/build/releasetools/generate_otas --verbose --block \
+            $EXTRA_ARGS $1 -f $2
 }
 
 # Args: <source tfp> <target tfp> <output zip> <optional package key>
@@ -164,16 +159,10 @@ function build_inc_ota {
         EXTRA_ARGS=
     fi
 
-    if [ -n "$BOARD_VARIANT" ]; then
-        ./build/tools/releasetools/ota_from_target_files --verbose --block \
-            $EXTRA_ARGS --incremental_from $1 $2 $3.unfixed
-        ./device/intel/build/releasetools/ota_deployment_fixup \
-            --variant $BOARD_VARIANT --source_target_files $1 --target_files $2 \
-            $EXTRA_ARGS $3.unfixed $3
-    else
-        ./build/tools/releasetools/ota_from_target_files --verbose --block \
-            $EXTRA_ARGS --incremental_from $1 $2 $3
-    fi
+    [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
+
+    ./device/intel/build/releasetools/generate_otas --verbose --block \
+            $EXTRA_ARGS -s $1 $2 -f $3
 }
 
 function rename_in_zip {
@@ -310,7 +299,7 @@ fi
 if [ -z "$BOARD_VARIANT" ]; then
     has_variants
     if [ $HAS_VARIANTS -ge 1 ]; then
-        echo "${BOARD_VARIANT} builds require use of -V parameter"
+        echo "${TARGET_PRODUCT} builds require use of -V parameter"
         exit 1
     fi
 
