@@ -58,6 +58,13 @@ publish_kernel_debug:
 	@echo "Publish kernel debug: skipped"
 endif
 
+# Publish Sofia LTE CMCC images
+ifeq ($(PUBLISH_CMCC_IMG),true)
+PUB_CMCC_ZIP := $(publish_dest)/$(notdir $(CMCC_TARGET))
+$(PUB_CMCC_ZIP): publish_mkdir_dest $(CMCC_TARGET)
+	$(hide) $(ACP) $(CMCC_TARGET) $@
+endif
+
 # Publish OS agnostic tag
 ifneq ($(OS_AGNOSTIC_INFO),)
 PUB_OSAGNOSTIC_TAG := $(publish_dest)/$(notdir $(OS_AGNOSTIC_INFO))
@@ -137,7 +144,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb $(PLATFORM_RMA_TOOLS_ZIP)
 .PHONY: publish_ci
-publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG)
+publish_ci: publish_flashfiles publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -170,5 +177,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG)
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
