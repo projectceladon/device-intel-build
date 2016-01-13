@@ -68,6 +68,15 @@ $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDO
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
 
+ifeq ($(PUBLISH_CMCC_IMG),true)
+CMCC_TARGET := $(PRODUCT_OUT)/$(subst -flashfiles-,-cmcc-,$(name)).zip
+CMCC_IMG_PATH := $(PRODUCT_OUT)/fls/fls/CMCC
+
+$(CMCC_TARGET): droidcore
+	$(hide) mkdir -p $(dir $@)
+	$(hide) zip -j $@ $(CMCC_IMG_PATH)/*
+endif
+
 ifneq ($(FAST_FLASHFILES),false)
 ifeq ($(FLASHFILE_VARIANTS),)
 # Fast flashfiles is for engineering purpose only
