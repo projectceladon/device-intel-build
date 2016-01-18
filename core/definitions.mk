@@ -99,3 +99,6 @@ endef
 
 # Hook up the prebuilts generation mechanism
 include device/intel/common/external/external.mk
+
+# Hook to check all modules
+BUILD_NOTICE_FILE := device/intel/common/notice_files.mk
