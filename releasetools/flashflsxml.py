@@ -20,7 +20,8 @@ class FlashFileJson:
         self.mv_config_default = mv_config_default
         self.extracts = {'psi': '.fls_ID0_PSI_LoadMap0.bin',
                          'slb': '.fls_ID0_SLB_LoadMap0.bin',
-                         'hypervisor': '.fls_ID0_CODE_LoadMap0.bin'}
+                         'hypervisor': '.fls_ID0_CODE_LoadMap0.bin',
+                         'vrl': '.fls_ID0_PSI_LoadMap0.bin'}
         self.default_params = {"timeout":60000, "retry":2, "mandatory":True}
 
     def add_file(self, shortname, target, source, file_type):
