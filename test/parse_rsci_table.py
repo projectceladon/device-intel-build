@@ -18,9 +18,8 @@ translate_dict = {'wake_source': ["WAKE_NOT_APPLICABLE",
                                   "WAKE_ACDC_CHARGER_INSERTED",
                                   "WAKE_POWER_BUTTON_PRESSED",
                                   "WAKE_RTC_TIMER",
-                                  "WAKE_BATTERY_REACHED_IA_THRESHOLD",
-                                  "WAKE_ERROR"],
-                  'reset_source': ["RESET_NOT_APPLICABLE",
+                                  "WAKE_BATTERY_REACHED_IA_THRESHOLD"],
+                  'reset_source_v1': ["RESET_NOT_APPLICABLE",
                                    "RESET_OS_INITIATED",
                                    "RESET_FORCED",
                                    "RESET_FW_UPDATE",
@@ -29,8 +28,20 @@ translate_dict = {'wake_source': ["WAKE_NOT_APPLICABLE",
                                    "RESET_SECURITY_INITIATED",
                                    "RESET_PMC_WATCHDOG",
                                    "RESET_EC_WATCHDOG",
-                                   "RESET_PLATFORM_WATCHDOG",
-                                   "RESET_ERROR"],
+                                   "RESET_PLATFORM_WATCHDOG"],
+                  'reset_source_v2': ["RESET_NOT_APPLICABLE",
+                                   "RESET_OS_INITIATED",
+                                   "RESET_FORCED",
+                                   "RESET_FW_UPDATE",
+                                   "RESET_KERNEL_WATCHDOG",
+                                   "RESERVED_5",
+                                   "RESERVED_6",
+                                   "RESERVED_7",
+                                   "RESET_EC_WATCHDOG",
+                                   "RESET_PMIC_WATCHDOG",
+                                   "RESERVED_10",
+                                   "RESET_SHORT_POWER_LOSS",
+                                   "RESET_PLATFORM_SPECIFIC"],
                   'shutdown_source': ["SHTDWN_NOT_APPLICABLE",
                                       "SHTDWN_POWER_BUTTON_OVERRIDE",
                                       "SHTDWN_BATTERY_REMOVAL",
@@ -39,19 +50,20 @@ translate_dict = {'wake_source': ["WAKE_NOT_APPLICABLE",
                                       "SHTDWN_PMICTEMP",
                                       "SHTDWN_SYSTEMP",
                                       "SHTDWN_BATTEMP",
-                                      "SHTDWN_BATTEMP",
+                                      "SHTDWN_SYSUVP",
                                       "SHTDWN_SYSOVP",
                                       "SHTDWN_SECURITY_WATCHDOG",
                                       "SHTDWN_SECURITY_INITIATED",
                                       "SHTDWN_PMC_WATCHDOG",
-                                      "SHTDWN_EC_WATCHDOG"],
+                                      "SHTDWN_EC_WATCHDOG",
+                                      "SHTDWN_PLATFORM_WATCHDOG"],
                   'reset_type': ["NOT_APPLICABLE",
                                  "WARM_RESET",
                                  "COLD_RESET",
-                                 "COLD_BOOT",
-                                 "COLD_OFF",
-                                 "PLATFORM_RESET",
-                                 "PMIC_ASSISTED_RESET",
+                                 "RESERVED_3",
+                                 "RESERVED_4",
+                                 "RESERVED_5",
+                                 "RESERVED_6",
                                  "GLOBAL_RESET"]
 }
 
@@ -62,7 +74,7 @@ def translate(field, value):
         if (value < len(translate_dict[field])):
             ret = translate_dict[field][value]
         else:
-            ret = "UNKNOWW_VALUE"
+            ret = "UNKNOWN_VALUE"
     return ret
 
 
@@ -92,7 +104,10 @@ def print_header(header):
 def print_fields(fields, revision):
     print "RSCI FIELDS"
     print "\twake_source      : {0} ({1})".format(fields[0], translate('wake_source', fields[0]))
-    print "\treset_source     : {0} ({1})".format(fields[1], translate('reset_source', fields[1]))
+    if (revision == 2):
+        print "\treset_source     : {0} ({1})".format(fields[1], translate('reset_source_v2', fields[1]))
+    else:
+        print "\treset_source     : {0} ({1})".format(fields[1], translate('reset_source_v1', fields[1]))
     print "\treset_type       : {0} ({1})".format(fields[2], translate('reset_type', fields[2]))
     print "\tshutdown_source  : {0} ({1})".format(fields[3], translate('shutdown_source', fields[3]))
     print "\tindicator        : {0}".format(fields[4])
