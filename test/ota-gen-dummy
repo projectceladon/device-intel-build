@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# Generation of dummy OTA package files
+#
+# The generated files are around 500ko so they are
+# fast for generating and testing. They don't update
+# the board (no payload), but are convenient for testing
+# all the OTA process :
+# - basic OTA flow (reboot in ROS, apply update, reboot in MOS)
+# - signing keys check
+# - updater-script sanity checks like board or date
+
+function warning_msg {
+   echo ""
+   echo ""
+   echo "WARNING : $1"
+   echo "WARNING : We don't garantee this script to work as expected."
+   echo ""
+   echo ""
+}
+
+while getopts "sdp:" opt; do
+    case $opt in
+        s)
+            set -x
+            ;;
+        p)
+            export PRODUCT_NAME=$OPTARG
+            ;;
+        d)
+            export CHECK_DATE=true
+            ;;
+        \?)
+            echo "Usage:"
+            echo "  ota-gen-dummy [-s] [-d] [-p <product-name>]"
+            echo
+            echo "Generates a dummy OTA file for test prupose"
+            echo "  -s : set -x for debug purpose"
+            echo "  -d : will add a check on date (Jan 01 1970). OTA failure is expected."
+            echo "  -p <product-name> : will add a check on product name. OTA failure is expected."
+            exit 1
+            ;;
+    esac
+done
+
+# Sanity
+if [ -z "$ANDROID_BUILD_TOP" -o -z "$ANDROID_PRODUCT_OUT" ]
+then
+    echo "Run lunch first!"
+    exit 1
+fi
+
+if [ ! -f $ANDROID_PRODUCT_OUT/system/bin/updater ]
+then
+    echo "Run 'make updater' first!"
+    exit 1
+fi
+
+VERSION_FILE=$ANDROID_BUILD_TOP/build/core/version_defaults.mk
+if [ ! -f $VERSION_FILE ]
+then
+   warning_msg "Can't find Android version."
+else
+   ANDROID_VERSION=`grep 'PLATFORM_VERSION :=' $VERSION_FILE | grep -Eo '[0-9]+' | head -n 1`
+   if [ $ANDROID_VERSION -gt 6 ]
+   then
+      warning_msg "Incorrect Android version."
+   fi
+fi
+
+# Create and populate temp directory with an OTA package
+TMP_OTA_DIR=`mktemp -d`
+pushd $TMP_OTA_DIR &> /dev/null
+mkdir -p META-INF/com/google/android
+
+UPDATER_SCRIPT="META-INF/com/google/android/updater-script"
+# Check product name if provided by option
+if [ ! -z "$PRODUCT_NAME" ]
+then
+    echo "getprop(\"ro.product.device\") == \"$PRODUCT_NAME\" || abort(\"This package is for \\\"$PRODUCT_NAME\\\" devices; this is a \\\"\" + getprop(\"ro.product.device\") + \"\\\".\");" >> $UPDATER_SCRIPT
+fi
+
+# Check date if enabled by option
+if [ ! -z "$CHECK_DATE" ]
+then
+    echo "(!less_than_int(0, getprop(\"ro.build.date.utc\"))) || abort(\"Can't install this package (Thu Jan 1 00:00:00 UTC 1970) over newer build (\" + getprop(\"ro.build.date\") + \").\");" >> $UPDATER_SCRIPT
+fi
+
+echo "show_progress(0.500000, 0);" >> $UPDATER_SCRIPT
+
+cat $UPDATER_SCRIPT
+
+cp $ANDROID_PRODUCT_OUT/system/bin/updater META-INF/com/google/android/update-binary
+zip -r dummy_ota_unsigned.zip META-INF/
+popd
+
+# Create alternate key/certificates
+TMP_KEY_DIR=`mktemp -d`
+USERKEY=dummykey
+pushd $TMP_KEY_DIR &> /dev/null
+export OPENSSL_CONF=${OPENSSL_CONF:-/etc/ssl/openssl.cnf}
+
+openssl genpkey -out $USERKEY -algorithm rsa -pkeyopt rsa_keygen_bits:2048
+openssl rsa -in $USERKEY -pubout -outform DER -out $USERKEY.pub
+openssl pkcs8 -in $USERKEY -topk8 -outform DER -out $USERKEY.pk8 -nocrypt
+openssl req -new -x509 -sha256 -key $USERKEY -out $USERKEY.x509.pem -days 10000 -batch
+popd
+
+pushd $ANDROID_BUILD_TOP
+mv $TMP_OTA_DIR/dummy_ota_unsigned.zip .
+
+java -Xmx3072m -jar out/host/linux-x86/framework/signapk.jar -w ./bootable/recovery/testdata/testkey.x509.pem ./bootable/recovery/testdata/testkey.pk8 dummy_ota_unsigned.zip dummy_ota.zip
+java -Xmx3072m -jar out/host/linux-x86/framework/signapk.jar -w $TMP_KEY_DIR/$USERKEY.x509.pem $TMP_KEY_DIR/$USERKEY.pk8 dummy_ota_unsigned.zip dummy_ota_alternate_signed.zip
+
+rm -rf $TMP_OTA_DIR
+rm -rf $TMP_KEY_DIR
+
+popd
+echo "OTA dummy generation complete!"
