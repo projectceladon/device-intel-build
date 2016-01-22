@@ -30,7 +30,7 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(blobstore_deps)
 else ifdef BOARD_DTB_FILE
 # Non-scalable SoFIA targets
 
-ifneq ($(TARGET_DEVICE),Sf3gr_sr_garnet)
+ifeq ($(filter Sf3gr_sr_garnet Sf3gr_xw_garnet, $(TARGET_DEVICE)),)
 LOCAL_DTB_PATH := $(LOCAL_KERNEL_PATH)/$(BOARD_DTB_FILE)
 else
 LOCAL_DTB_PATH := $(BOARD_DTB)
