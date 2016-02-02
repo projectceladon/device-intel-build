@@ -105,7 +105,7 @@ class FlashFileJson:
         for config_name in self.flash['configurations']:
             c = self.flash['configurations'][config_name]
             if config_name == "fastboot_config":
-                self.add_command('fastboot', ' oem lock', 'lock the device', config_name, (self.default_params['timeout'], self.default_params['retry'], self.default_params['mandatory']))
+                self.add_command('fastboot', ' flashing lock', 'lock the device', config_name, (self.default_params['timeout'], self.default_params['retry'], self.default_params['mandatory']))
                 self.add_command('fastboot', ' continue ', 'fastboot continue', config_name, (self.default_params['timeout'], self.default_params['retry'], self.default_params['mandatory']))
                 continue
             mv_desc = "Flashing " + c['name'] + " image"
@@ -120,7 +120,7 @@ class FlashFileJson:
         for config in configurations:
             default = False
             if config['config_name'] == "fastboot_config":
-                self.add_command('fastboot', ' oem unlock', 'unlock the device', config['config_name'], (self.default_params['timeout'], self.default_params['retry'], self.default_params['mandatory']))
+                self.add_command('fastboot', ' flashing unlock', 'unlock the device', config['config_name'], (self.default_params['timeout'], self.default_params['retry'], self.default_params['mandatory']))
             else:
                 self.mv_args[config['config_name']] = ""
                 if config['config_name'].split("_fls_config")[0] == self.mv_config_default:
