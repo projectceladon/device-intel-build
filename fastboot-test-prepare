@@ -64,7 +64,7 @@ do
     dirname=${file%.fls}
     filename_signed=${dirname##*/}
     filename=${filename_signed%_signed}
-    ./device/intel/common/tools/FlsTool -o ${dirname} -x $file
+    ./device/intel-imc/common/tools/FlsTool -o ${dirname} -x $file
     cp ${dirname}/${filename}.*_LoadMap0.bin fastboot/${filename}.img
     rm -rf ${dirname} $file
 done
