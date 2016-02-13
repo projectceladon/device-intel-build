@@ -133,23 +133,15 @@ def patch_or_verbatim_exists(filepath, ota_zip):
     return filepath in ota_zip.namelist() or patchpath in ota_zip.namelist()
 
 
-def AddFWImageFile(input_zip, output_zip, variant=None):
-    # AddFWImageFile is called to read the fwu_image from provdata
-    # This function is invoked by base target as well as specific variants
+def AddFWImageFile(input_dir, output_zip, variant=None):
+    # AddFWImageFile reads the fwu_image file from provdata in input_dir
+    # and writes it into the output_zip.
     # When called by ota_from_target_files for specifc variants an empty
     # fwu_image is written into output_zip.
-    fwu_image = ""
-    if variant:
-        provdata_name = os.path.join("RADIO", "provdata_" + variant + ".zip")
-    else:
-        provdata_name = os.path.join("RADIO", "provdata.zip")
+    fwu_image = readfile_from_provdata(input_dir, "fwu_image.bin", variant)
 
-    if not zipfile.is_zipfile(str(input_zip)) and variant is not None:
-        fwu_image = readfile_from_provdata(input_zip, "fwu_image.bin", variant)
-    else:
-        if provdata_name in input_zip.namelist():
-            with zipfile.ZipFile(StringIO(input_zip.read(provdata_name))) as provdata_zip:
-                fwu_image = provdata_zip.read("fwu_image.bin")
+    if fwu_image is None:
+        fwu_image = ""
     common.ZipWriteStr(output_zip, "fwu_image.bin", fwu_image)
 
 def readfile_from_provdata(tmpdir, path, variant=None):
