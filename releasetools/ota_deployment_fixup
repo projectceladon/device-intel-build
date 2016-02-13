@@ -359,8 +359,9 @@ def main(argv):
                     variant=OPTIONS.variant)
             replace_in_zip(temp_zip, new_bi, zi.filename)
         elif zi.filename == "fwu_image.bin" and not platform_efi:
+            os.system("zip -d %s %s"%(temp_zip, zi.filename))
             output_zip = zipfile.ZipFile(temp_zip, "a")
-            intel_common.AddFWImageFile(tfp_zip, output_zip, variant=OPTIONS.variant)
+            intel_common.AddFWImageFile(tfp_dir, output_zip, variant=OPTIONS.variant)
             output_zip.close()
 
     print "Signing fixed-up package", args[1]
