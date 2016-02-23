@@ -15,6 +15,8 @@
 # 	   e.g. 'make publish_ci'
 
 publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/
+publish_tool_dest :=  $(TOP)/pub/tool/
+publish_tool_destw := $(publish_tool_dest)/windows-x86/bin/
 publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 
 .PHONY: publish_mkdir_dest
@@ -158,6 +160,12 @@ publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifw
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
 
+PUBLISH_WINDOWS_FILES := $(PLATFORM_RMA_TOOLS_ZIP)
+.PHONY: publish_windows_tools
+publish_windows_tools:
+	@$(hide) mkdir -p $(publish_tool_destw)
+	@$(foreach f,$(PUBLISH_WINDOWS_FILES), \
+		$(if $(wildcard $(f)), $(ACP) $(f) $(publish_tool_destw);,))
 
 else # !PUBLISH_SDK
 # Unfortunately INTERNAL_SDK_TARGET is always defined, so its existence does
