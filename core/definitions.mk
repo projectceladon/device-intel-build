@@ -38,7 +38,7 @@ TARGET_EFI_GLOBAL_CFLAGS := -ggdb -O3 -fno-stack-protector \
 	-mno-mmx -fno-builtin -fno-tree-loop-distribute-patterns \
 	-ffreestanding -fno-stack-check
 
-TARGET_EFI_GLOBAL_LDFLAGS := -nostdlib --warn-common --no-undefined \
+TARGET_EFI_GLOBAL_LDFLAGS := -nostdlib --no-undefined \
 	--fatal-warnings -shared -Bsymbolic -znocombreloc
 
 GNU_EFI_CRT0 := $(call intermediates-dir-for,STATIC_LIBRARIES,crt0-efi)/crt0-efi.o
