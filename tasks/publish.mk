@@ -15,7 +15,7 @@
 # 	   e.g. 'make publish_ci'
 
 publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/
-publish_tool_dest :=  $(TOP)/pub/tool/
+publish_tool_dest :=  $(publish_dest)/../tools/
 publish_tool_destw := $(publish_tool_dest)/windows-x86/bin/
 publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 
@@ -162,7 +162,7 @@ publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifw
 
 PUBLISH_WINDOWS_FILES := $(PLATFORM_RMA_TOOLS_ZIP)
 .PHONY: publish_windows_tools
-publish_windows_tools:
+publish_windows_tools: platform_rma_tools
 	@$(hide) mkdir -p $(publish_tool_destw)
 	@$(foreach f,$(PUBLISH_WINDOWS_FILES), \
 		$(if $(wildcard $(f)), $(ACP) $(f) $(publish_tool_destw);,))
