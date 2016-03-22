@@ -210,7 +210,7 @@ def main(argv):
                 path = os.path.join(basedir, fn)
                 blobs[(device_id, btypes[t])] = path
     else:
-        sys.stderr.write("No device mapping or 'devices' in JSON configuration")
+        sys.stderr.write("No device mapping or 'devices' in JSON configuration\n")
         sys.exit(2)
 
     if not args.output:
