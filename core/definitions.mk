@@ -41,9 +41,6 @@ TARGET_EFI_GLOBAL_CFLAGS := -ggdb -O3 -fno-stack-protector \
 TARGET_EFI_GLOBAL_LDFLAGS := -nostdlib --no-undefined \
 	--fatal-warnings -shared -Bsymbolic -znocombreloc
 
-GNU_EFI_CRT0 := $(call intermediates-dir-for,STATIC_LIBRARIES,crt0-efi)/crt0-efi.o
-GNU_EFI_BASE := external/gnu-efi/gnu-efi-3.0/gnuefi
-
 ifeq ($(TARGET_UEFI_ARCH),x86_64)
     TARGET_EFI_GLOBAL_CFLAGS += -DEFI_FUNCTION_WRAPPER -DGNU_EFI_USE_MS_ABI
     TARGET_EFI_ARCH_NAME := x86_64
@@ -52,6 +49,8 @@ else
     TARGET_EFI_ARCH_NAME := ia32
     TARGET_EFI_ASFLAGS := -m32
 endif
+
+GNU_EFI_CRT0 := crt0-efi-$(TARGET_EFI_ARCH_NAME)
 
 TARGET_EFI_GLOBAL_LDFLAGS += -T $(EFI_BUILD_SYSTEM)/elf_$(TARGET_EFI_ARCH_NAME)_efi.lds
 TARGET_EFI_GLOBAL_OBJCOPY_FLAGS := \
@@ -90,7 +89,8 @@ define transform-o-to-efi-executable
 @echo "target EFI Executable: $(PRIVATE_MODULE) ($@)"
 $(hide) mkdir -p $(dir $@)
 $(hide) $(EFI_LD) $(PRIVATE_LDFLAGS) \
-    $(GNU_EFI_CRT0) $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(EFI_LIBGCC) \
+    --whole-archive $(call module-built-files,$(GNU_EFI_CRT0)) --no-whole-archive \
+    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(EFI_LIBGCC) \
     -o $(@:.efi=.so)
 $(hide) $(EFI_OBJCOPY) $(PRIVATE_OBJCOPY_FLAGS) \
     --target=efi-app-$(TARGET_EFI_ARCH_NAME) $(@:.efi=.so) $(@:.efi=.efiunsigned)
