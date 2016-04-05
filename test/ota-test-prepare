@@ -147,7 +147,7 @@ function build_ota {
 
     [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
 
-    ./device/intel/build/releasetools/generate_otas --verbose --block \
+    ./device/intel/build/releasetools/generate_otas --verbose \
             $EXTRA_ARGS $1 -f $2
 }
 
@@ -161,7 +161,7 @@ function build_inc_ota {
 
     [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
 
-    ./device/intel/build/releasetools/generate_otas --verbose --block \
+    ./device/intel/build/releasetools/generate_otas --verbose \
             $EXTRA_ARGS -s $1 $2 -f $3
 }
 
