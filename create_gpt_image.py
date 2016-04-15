@@ -618,7 +618,7 @@ class TLBInfos(list):
                 size = readlen
 
             ptype = cfg.get(partname, 'type')
-            uuid = cfg.get(partname, 'guid')
+            uuid = str(uuid4())
             label = cfg.get(partname, 'label')
             self.append(TLB_INFO(begin, size, ptype, uuid, label))
 
