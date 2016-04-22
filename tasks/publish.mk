@@ -14,9 +14,9 @@
 # 	on the one file we need.
 # 	   e.g. 'make publish_ci'
 
-publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/
-publish_tool_dest :=  $(publish_dest)/../tools/
-publish_tool_destw := $(publish_tool_dest)/windows-x86/bin/
+publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+publish_tool_dest :=  $(publish_dest)/../tools
+publish_tool_destw := $(publish_tool_dest)/windows-x86/bin
 publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 
 .PHONY: publish_mkdir_dest
