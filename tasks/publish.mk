@@ -21,7 +21,7 @@ publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 
 .PHONY: publish_mkdir_dest
 publish_mkdir_dest:
-	$(call publish_make_dir, $(dir $(publish_dest)))
+	$(call publish_make_dir, $(publish_dest))
 
 # Publish System symbols
 PUB_SYSTEM_SYMBOLS := $(publish_dest)/symbols.tar.gz
