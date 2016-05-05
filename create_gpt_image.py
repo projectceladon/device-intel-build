@@ -703,6 +703,7 @@ class GPTImage(object):
         'persistent',
         'factory',
         'config',
+        'tos',
         ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
