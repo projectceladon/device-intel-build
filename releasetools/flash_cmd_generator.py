@@ -272,6 +272,8 @@ class FlashFileCmd:
                 self.flist.append(filename)
                 filename = filename.split(':')[-1]
                 args[index] = filename
+        if self.ip.has_option(section, 'mandatory') and not self.ip.get(section, 'mandatory'):
+            self.cmd += '[o] '
         self.cmd += ' '.join(args) + '\n'
 
     def parse(self):
