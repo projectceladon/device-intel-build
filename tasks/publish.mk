@@ -41,14 +41,14 @@ PUB_KERNEL_DBG := vmlinux.bz2 System.map.bz2
 PUB_KERNEL_DBG_PATH := $(publish_dest)/kernel
 PUB_KERNEL_DBG := $(addprefix $(PUB_KERNEL_DBG_PATH)/,$(PUB_KERNEL_DBG))
 
-$(PUB_KERNEL_DBG_PATH)/%: $(LOCAL_KERNEL)| $(ACP)
+$(PUB_KERNEL_DBG): $(LOCAL_KERNEL)
 	@echo "Publish $(basename $(@F))"
 	$(hide) mkdir -p $(@D)
 	$(hide) bzip2 -c $(LOCAL_KERNEL_PATH)/$(basename $(@F)) > $@
 
 PUB_KERNEL_MODULES = $(PUB_KERNEL_DBG_PATH)/kernel_modules-$(TARGET_BUILD_VARIANT).tar.bz2
 
-$(PUB_KERNEL_MODULES): copy_modules
+$(PUB_KERNEL_MODULES): $(LOCAL_KERNEL_PATH)/copy_modules
 	@echo "Publish Kernel Modules"
 	$(hide) mkdir -p $(@D)
 	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
