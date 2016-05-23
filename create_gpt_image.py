@@ -450,6 +450,9 @@ class TableEntryInfos(object):
             'misc': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'metadata': '5808C8AA-7E8F-42E0-85D2-E1E90434CFB3',
             'linux': {'android_system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'android_bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'android_bootloader2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'android_vendor': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_cache': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_persistent': ('ebc597d0-2053-4b15-8b64-'
@@ -698,6 +701,7 @@ class GPTImage(object):
         'misc',
         'metadata',
         'system',
+        'vendor',
         'cache',
         'data',
         'persistent',
