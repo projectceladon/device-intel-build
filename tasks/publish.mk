@@ -35,7 +35,10 @@ $(PUB_SYSTEM_SYMBOLS): systemtarball
 publish_system_symbols: $(PUB_SYSTEM_SYMBOLS)
 
 .PHONY: publish_kernel_debug
+# if kernel is not a prebuilt one
+# and kernel is built locally
 ifeq ($(TARGET_PREBUILT_KERNEL),)
+ifneq ($(LOCAL_KERNEL_PATH),)
 # Publish Kernel debug
 PUB_KERNEL_DBG := vmlinux.bz2 System.map.bz2
 PUB_KERNEL_DBG_PATH := $(publish_dest)/kernel
@@ -55,6 +58,7 @@ $(PUB_KERNEL_MODULES): $(LOCAL_KERNEL_PATH)/copy_modules
 
 publish_kernel_debug: $(PUB_KERNEL_DBG) $(PUB_KERNEL_MODULES)
 	@echo "Publish kernel debug: $(notdir $^)"
+endif # $(LOCAL_KERNEL_PATH)
 else
 publish_kernel_debug:
 	@echo "Publish kernel debug: skipped"
