@@ -4,6 +4,8 @@ set -e
 
 PACKAGE="$OUT/ota-dev.zip"
 dutID=$(adb devices | grep -v 'List' | awk '{print ($1)}')
+AndroidVer=$(adb shell getprop ro.build.version.release | awk '{print ($1)}')
+HasFotaAPP=-1
 UPDATE_CMD=update_from_mos
 OFF=""
 
@@ -40,6 +42,21 @@ function adb_root {
     wait_for_adb
 }
 
+function check_has_fota {
+    FotainSys=$(adb -s $dutID shell ls -l /system/vendor/app/AFotaApp | grep 'Fota' | awk  '{print($8)}')
+    FotainData=$(adb -s $dutID shell ls -l /data/app | grep 'fota' | awk  '{print($8)}')
+
+    if [ ! -z "$FotainSys" ]; then
+        echo "There is $FotainSys in system"
+        HasFotaAPP=1
+    fi
+
+    if [ ! -z "$FotainData" ]; then
+        echo "There is $FotainData in data"
+        HasFotaAPP=2
+    fi
+}
+
 function wait_for_uncrypt {
     GET_PROGRESS="adb -s $dutID shell tail /cache/recovery/uncrypt_status"
 
@@ -56,16 +73,19 @@ function wait_for_uncrypt {
 }
 
 function update_from_mos {
+    echo "Device is runnig Android: $AndroidVer"
     adb_root
     echo "Copying OTA image $(basename $PACKAGE) to device..."
     adb -s $dutID push $PACKAGE /data/local/tmp/update.zip
-    adb -s $dutID shell "mkdir -p /cache/recovery"
-    adb -s $dutID shell "echo \"/data/local/tmp/update.zip\" > /cache/recovery/uncrypt_file"
-    adb -s $dutID shell start uncrypt
-    wait_for_uncrypt
-    echo "Setting parameters and rebooting into recovery console..."
-    adb -s $dutID shell "echo \"${OFF}--update_package=@/cache/recovery/block.map\" > /cache/recovery/command"
-    adb -s $dutID shell start pre-recovery
+    check_has_fota
+    if [ $HasFotaAPP -gt 0 ]; then
+        echo "Doing uncrypt and rebooting into recovery console with Fota app..."
+        adb -s $dutID shell "am broadcast -a com.intel.afotaapp.INSTALL_LOCAL_OTA -e com.intel.afotaapp.extra.LOCAL_OTA_PATH /data/local/tmp/update.zip"
+    else
+        echo ""
+        echo "Run failed, No fota app in your device!"
+        echo "Please install it first! AFotaApp.apk can be found in system/vendor/app/AFotaApp."
+    fi
 }
 
 function update_from_ros {
