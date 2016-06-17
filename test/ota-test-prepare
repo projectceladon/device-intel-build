@@ -99,7 +99,7 @@ function has_variants {
         product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
     else
-        HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l)
+        HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l || true)
     fi
 }
 
@@ -245,15 +245,6 @@ function season_tfp {
     rm -rf $local_archive
 }
 
-# Args: <private signing key> <signing cert> <keystore filename> <key1> <key2>
-function build_keystore {
-    t1=`$MKTEMP tmp.derkey.XXXXXXXXX`
-    t2=`$MKTEMP tmp.derkey.XXXXXXXXX`
-    openssl x509 -in $4 -pubkey -noout | openssl enc -base64 -d > $t1
-    openssl x509 -in $5 -pubkey -noout | openssl enc -base64 -d > $t2
-    keystore_signer $1 $2 $3 $t1 $t2
-    rm -f $t1 $t2
-}
 
 # Args: <logfile> <command> <args...>
 function background {
@@ -338,14 +329,8 @@ background oemvars-testkeys.log device/intel/build/generate_bios_oemvars \
         -T $TS \
         --unlock ota/unlock-testkeys.txt ota/oemvars-testkeys.txt
 
-# Builds a keystore signed with production-test OEM key that has both
-# testing and production-test verity keys in it
-background build-keystore.log build_keystore \
-        $PRODKEYS/oem.pk8 $PRODKEYS/oem.x509.pem ota/keystore.bin \
-        build/target/product/security/verity.x509.pem \
-        $PRODKEYS/verity.x509.pem
 
-wait_complete 3
+wait_complete 2
 
 if [[ -n "$TFP" ]]; then
     log_to sign_tfp-${1}.log sign_tfp $TFP $BASEDIR/tfp-${1}.zip
