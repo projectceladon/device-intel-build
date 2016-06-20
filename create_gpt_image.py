@@ -452,6 +452,7 @@ class TableEntryInfos(object):
             'linux': {'android_system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_bootloader2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'android_bldr_utils': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_vendor': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_cache': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
@@ -696,6 +697,7 @@ class GPTImage(object):
     ANDROID_PARTITIONS = [
         'bootloader',
         'bootloader2',
+        'bldr_utils',
         'boot',
         'recovery',
         'misc',
