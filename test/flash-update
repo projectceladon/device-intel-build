@@ -94,6 +94,8 @@ function update_from_ros {
     adb -s $dutID reboot sideload-auto-reboot
     sleep 1
     wait_for_adb
+    echo "Enter into sideload status ok,will do updating"
+    sleep 3
     adb -s $dutID sideload $PACKAGE
 }
 
