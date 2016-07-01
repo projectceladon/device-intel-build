@@ -1,10 +1,12 @@
 PLATFORM_RMA_TOOLS := platform-rma-tools-$(HOST_OS)
+PLATFORM_RMA_TOOLS_CROSS := platform-rma-tools-$(HOST_CROSS_OS)
 PLATFORM_RMA_TOOLS_ZIP := $(HOST_OUT)/$(PLATFORM_RMA_TOOLS).zip
+PLATFORM_RMA_TOOLS_CROSS_ZIP := $(HOST_CROSS_OUT)/$(PLATFORM_RMA_TOOLS_CROSS).zip
 PLATFORM_RMA_TOOLS_DIR := $(HOST_OUT)/$(PLATFORM_RMA_TOOLS)
+PLATFORM_RMA_TOOLS_CROSS_DIR := $(HOST_CROSS_OUT)/$(PLATFORM_RMA_TOOLS_CROSS)
 
-ifeq ($(HOST_OS),windows)
-    EXECUTABLE_SUFFIX = ".exe"
-endif
+EXECUTABLE_CROSS_SUFFIX = ".exe"
+
 
 ifeq ($(SOC_FIRMWARE_TYPE),slb)
 
@@ -38,4 +40,18 @@ $(PLATFORM_RMA_TOOLS_ZIP): action-authorization sign-efi-sig-list openssl
 
 endif
 
+$(PLATFORM_RMA_TOOLS_CROSS_ZIP): host_cross_action-authorization host_cross_sign-efi-sig-list host_cross_openssl
+	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_CROSS_DIR)
+	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_CROSS_DIR)
+	$(hide) $(ACP) -fp device/intel/build/generate_blpolicy_oemvars $(PLATFORM_RMA_TOOLS_CROSS_DIR)/generate_blpolicy_oemvars.py
+	$(hide) $(ACP) -fp $(HOST_CROSS_OUT)/bin/action-authorization$(EXECUTABLE_CROSS_SUFFIX) $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
+	$(hide) $(ACP) -fp $(HOST_CROSS_OUT)/bin/sign-efi-sig-list$(EXECUTABLE_CROSS_SUFFIX) $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
+	$(hide) $(ACP) -fp $(HOST_CROSS_OUT)/bin/openssl$(EXECUTABLE_CROSS_SUFFIX) $(PLATFORM_RMA_TOOLS_CROSS_DIR)/openssl$(EXECUTABLE_CROSS_SUFFIX)
+	$(hide) $(ACP) -fp vendor/intel/external/openssl/apps/openssl.cnf $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
+	$(hide) tar czf $(PLATFORM_RMA_TOOLS_CROSS_DIR)/efitools.tar.gz external/efitools
+	$(hide) cd $(HOST_CROSS_OUT) && zip -r $(PLATFORM_RMA_TOOLS_CROSS).zip $(PLATFORM_RMA_TOOLS_CROSS)
+
+
 platform_rma_tools: $(PLATFORM_RMA_TOOLS_ZIP)
+
+host_cross_platform_rma_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)

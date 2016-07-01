@@ -16,7 +16,7 @@
 
 publish_dest := $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 publish_tool_dest :=  $(publish_dest)/../tools
-publish_tool_destw := $(publish_tool_dest)/windows-x86/bin
+publish_tool_destw := $(publish_tool_dest)/windows-x86/
 publish_make_dir = $(if $(wildcard $1),,mkdir -p $1)
 
 .PHONY: publish_mkdir_dest
@@ -159,17 +159,15 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb $(PLATFORM_RMA_TOOLS_ZIP)
 .PHONY: publish_ci
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
 
-PUBLISH_WINDOWS_FILES := $(PLATFORM_RMA_TOOLS_ZIP)
 .PHONY: publish_windows_tools
-publish_windows_tools: platform_rma_tools
+publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 	@$(hide) mkdir -p $(publish_tool_destw)
-	@$(foreach f,$(PUBLISH_WINDOWS_FILES), \
-		$(if $(wildcard $(f)), $(ACP) $(f) $(publish_tool_destw);,))
+	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_CROSS_ZIP) $(publish_tool_destw)
 
 else # !PUBLISH_SDK
 # Unfortunately INTERNAL_SDK_TARGET is always defined, so its existence does
