@@ -171,6 +171,7 @@ def main(argv):
     password = None
     timestamp = 0
 
+    os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.realpath(sys.argv[0]))
     try:
         opts, args = getopt.getopt(argv, "hK:O:B:D:T:P:v",
                                    ["odm-pair=", "oak-cert=",
