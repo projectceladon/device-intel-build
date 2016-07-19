@@ -6,6 +6,7 @@ export OPENSSL_CONF=${OPENSSL_CONF:-/etc/ssl/openssl.cnf}
 ANDROID_BUILD_TOP=`readlink -f ${ANDROID_BUILD_TOP:-""}`
 BOOT_SIGNER="boot_signer"
 SIMG_DUMP="$ANDROID_BUILD_TOP/system/core/libsparse/simg_dump.py"
+FEC_PARSE="$ANDROID_BUILD_TOP/device/intel/build/test/parse_fec_verity.py"
 SCRIPT_ABS_NAME=`readlink -f $0`
 UNSIGN_BOOT_TOOL=`dirname $SCRIPT_ABS_NAME`"/unsign_boot_img.py"
 
@@ -62,14 +63,29 @@ function generate_corrupted_system_images {
     LIST_VERITY_IMGS=("verity_metadata.img" "verity.img")
     START_OFFSET=()
     TMP_VERITY_IMG="$TMP_DIR/tmp.img"
-    i=0
-    while read start length; do
+    # get the offset and length of last chunk of system.img
+    read last_block_start last_block_length <<< "$($SIMG_DUMP -v $TMP_DIR/$IMG.img | tail -2  | head -1 | awk '{print $2" "$3}')"
+    read fec_supported verity_metadata_offset verity_metadata_len verity_hash_offset verity_hash_len \
+        <<< $($FEC_PARSE  $TMP_DIR/$IMG.img $last_block_start $last_block_length)
+    if [ $fec_supported -eq 1 ]
+    then
         # use of tmp file but save us some unreliable arithmetic
-        dd if=$TMP_DIR/$IMG.img of=$TMP_VERITY_IMG bs=$start skip=1 2>/dev/null
-        dd if=$TMP_VERITY_IMG of=$TMP_DIR/${LIST_VERITY_IMGS[$i]} bs=$length count=1 2>/dev/null
-        START_OFFSET[$i]=$start
-        ((i++))
-    done <<< "$($SIMG_DUMP -v $TMP_DIR/$IMG.img | tail -3  | head -2 | awk '{print $2" "$3}')"
+        dd if=$TMP_DIR/$IMG.img of=$TMP_VERITY_IMG bs=$verity_metadata_offset skip=1 2>/dev/null
+        dd if=$TMP_VERITY_IMG of=$TMP_DIR/${LIST_VERITY_IMGS[0]} bs=$verity_metadata_len count=1 2>/dev/null
+        START_OFFSET[0]=$verity_metadata_offset
+        dd if=$TMP_DIR/$IMG.img of=$TMP_VERITY_IMG bs=$verity_hash_offset skip=1 2>/dev/null
+        dd if=$TMP_VERITY_IMG of=$TMP_DIR/${LIST_VERITY_IMGS[1]} bs=$verity_hash_len count=1 2>/dev/null
+        START_OFFSET[1]=$verity_hash_offset
+    else
+        i=0
+        while read start length; do
+            # use of tmp file but save us some unreliable arithmetic
+            dd if=$TMP_DIR/$IMG.img of=$TMP_VERITY_IMG bs=$start skip=1 2>/dev/null
+            dd if=$TMP_VERITY_IMG of=$TMP_DIR/${LIST_VERITY_IMGS[$i]} bs=$length count=1 2>/dev/null
+            START_OFFSET[$i]=$start
+            ((i++))
+        done <<< "$($SIMG_DUMP -v $TMP_DIR/$IMG.img | tail -3  | head -2 | awk '{print $2" "$3}')"
+    fi
 
     for i in "${!LIST_VERITY_IMGS[@]}"
     do
