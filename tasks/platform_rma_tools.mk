@@ -40,6 +40,8 @@ $(PLATFORM_RMA_TOOLS_ZIP): action-authorization sign-efi-sig-list openssl
 
 endif
 
+
+ifneq (,$(findstring cht,$(TARGET_PRODUCT)))
 $(PLATFORM_RMA_TOOLS_CROSS_ZIP): host_cross_action-authorization host_cross_sign-efi-sig-list host_cross_openssl
 	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_CROSS_DIR)
 	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_CROSS_DIR)
@@ -51,7 +53,11 @@ $(PLATFORM_RMA_TOOLS_CROSS_ZIP): host_cross_action-authorization host_cross_sign
 	$(hide) tar czf $(PLATFORM_RMA_TOOLS_CROSS_DIR)/efitools.tar.gz external/efitools
 	$(hide) cd $(HOST_CROSS_OUT) && zip -r $(PLATFORM_RMA_TOOLS_CROSS).zip $(PLATFORM_RMA_TOOLS_CROSS)
 
-
+else
+$(PLATFORM_RMA_TOOLS_CROSS_ZIP):
+	$(info "cross compilation is not available on this target")
+	touch $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
+endif
 platform_rma_tools: $(PLATFORM_RMA_TOOLS_ZIP)
 
 host_cross_platform_rma_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
