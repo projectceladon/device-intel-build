@@ -94,7 +94,7 @@ def pem_cert_to_der_cert(pem_cert_path):
     ret = run(["openssl", "x509", "-inform", "PEM", "-outform", "DER",
                "-in", pem_cert_path, "-out", fname], None)
     assert ret == 0, "openssl cert conversion failed"
-    with file(fname) as f:
+    with file(fname, "rb") as f:
         der = f.read()
     os.remove(fname)
     return der
