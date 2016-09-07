@@ -1,25 +1,24 @@
 ifeq ($(strip $(LOCAL_MODULE_CLASS)),)
-LOCAL_MODULE_CLASS := EFI
+LOCAL_MODULE_CLASS := ABL
 endif
 
 ifeq ($(strip $(LOCAL_MODULE_SUFFIX)),)
-LOCAL_MODULE_SUFFIX := .efi
+LOCAL_MODULE_SUFFIX := .abl
 endif
 
 ifeq ($(strip $(LOCAL_MODULE_PATH)),)
-LOCAL_MODULE_PATH := $(PRODUCT_OUT)/efi
-endif
-
-ifeq ($(strip $(LOCAL_EFI_KEY_PAIR)),)
-LOCAL_EFI_KEY_PAIR := device/intel/build/testkeys/DB
+LOCAL_MODULE_PATH := $(PRODUCT_OUT)/abl
 endif
 
 LOCAL_CC := $(IAFW_CC)
 LOCAL_NO_DEFAULT_COMPILER_FLAGS := true
 LOCAL_CFLAGS += $(TARGET_IAFW_GLOBAL_CFLAGS)
 LOCAL_ASFLAGS += $(TARGET_IAFW_ASFLAGS)
-LOCAL_LDFLAGS := $(TARGET_IAFW_GLOBAL_LDFLAGS) -shared \
-	-T $(TARGET_EFI_LDS) $(LOCAL_LDFLAGS)
+LOCAL_LDFLAGS := $(TARGET_IAFW_GLOBAL_LDFLAGS) -static \
+	-T $(TARGET_ABL_LDS) $(LOCAL_LDFLAGS)
+# If kernel enforce superpages the .text section gets aligned at
+# offset 0x200000 which break multiboot compliance.
+LOCAL_LDFLAGS += -z max-page-size=0x1000
 LOCAL_OBJCOPY_FLAGS := $(TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS) $(LOCAL_OBJCOPY_FLAGS)
 LOCAL_CLANG := false
 
@@ -41,17 +40,12 @@ WITHOUT_LIBCOMPILER_RT := true
 include $(BUILD_SYSTEM)/binary.mk
 WITHOUT_LIBCOMPILER_RT :=
 
-all_objects += $(intermediates)/db.key $(GNU_EFI_CRT0)
-
-$(intermediates)/db.key: $(LOCAL_EFI_KEY_PAIR).pk8 $(OPENSSL)
-	$(transform-der-key-to-pem-key)
+all_objects += $(LIBPAYLOAD_CRT0)
 
 $(LOCAL_BUILT_MODULE): PRIVATE_OBJCOPY_FLAGS := $(LOCAL_OBJCOPY_FLAGS)
-$(LOCAL_BUILT_MODULE): PRIVATE_EFI_KEY_PAIR := $(LOCAL_EFI_KEY_PAIR)
-$(LOCAL_BUILT_MODULE): PRIVATE_GENERATED_DB := $(intermediates)/db.key
 
-$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(LOCAL_EFI_KEY_PAIR).x509.pem $(SBSIGN)
-	$(call transform-o-to-efi-executable,$(PRIVATE_GENERATED_DB),$(PRIVATE_EFI_KEY_PAIR).x509.pem)
+$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(ABLSIGN)
+	$(call transform-o-to-abl-executable)
 
 endif # skip_build_from_source
 
