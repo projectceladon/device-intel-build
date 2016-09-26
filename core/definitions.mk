@@ -15,7 +15,8 @@ KEYSTORE_SIGNER := $(HOST_OUT_EXECUTABLES)/keystore_signer
 GENERATE_VERITY_KEY := $(HOST_OUT_EXECUTABLES)/generate_verity_key$(HOST_EXECUTABLE_SUFFIX)
 OPENSSL := $(HOST_OUT_EXECUTABLES)/openssl$(HOST_EXECUTABLE_SUFFIX)
 SBSIGN := $(HOST_OUT_EXECUTABLES)/sbsign$(HOST_EXECUTABLE_SUFFIX)
-ABLSIGN := $(HOST_OUT_EXECUTABLES)/ias_image_app$(HOST_EXECUTABLE_SUFFIX)
+ABLIMAGE := $(HOST_OUT_EXECUTABLES)/ias_image_app$(HOST_EXECUTABLE_SUFFIX)
+ABLSIGN := $(HOST_OUT_EXECUTABLES)/ias_image_signer$(HOST_EXECUTABLE_SUFFIX)
 MKDOSFS := $(HOST_OUT_EXECUTABLES)/mkdosfs$(HOST_EXECUTABLE_SUFFIX)
 MCOPY := $(HOST_OUT_EXECUTABLES)/mcopy$(HOST_EXECUTABLE_SUFFIX)
 SESL :=  $(HOST_OUT_EXECUTABLES)/sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
@@ -25,6 +26,7 @@ CTESL :=  $(HOST_OUT_EXECUTABLES)/cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
     $(SBSIGN) \
+    $(ABLIMAGE) \
     $(ABLSIGN) \
     $(MKDOSFS) \
     $(MCOPY) \
@@ -122,7 +124,13 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
     -o $(@:.abl=.elf)
 $(hide) if `test $(TARGET_BUILD_VARIANT) == user`; then $(IAFW_STRIP) -s $(@:.abl=.elf) ; fi
-$(hide) $(ABLSIGN) -o $@ -i 0x40000 $(@:.abl=.elf)
+$(hide) $(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40000 $(@:.abl=.elf)
+$(hide) if `test $(TARGET_BUILD_VARIANT) == eng`; then \
+	cp $(@:.abl=.ablunsigned) $@ ; else \
+	$(ABLSIGN) $(@:.abl=.ablunsigned) \
+	$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 \
+	$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem \
+	$@ ; fi
 endef
 
 # Hook up the prebuilts generation mechanism
