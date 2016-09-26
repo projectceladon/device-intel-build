@@ -72,6 +72,7 @@ TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS := \
 
 IAFW_TOOLCHAIN_ROOT := prebuilts/gcc/$(HOST_PREBUILT_TAG)/x86/x86_64-linux-android-$(TARGET_GCC_VERSION)
 IAFW_TOOLS_PREFIX := $(IAFW_TOOLCHAIN_ROOT)/bin/x86_64-linux-android-
+IAFW_STRIP := $(IAFW_TOOLS_PREFIX)strip$(HOST_EXECUTABLE_SUFFIX)
 IAFW_LD := $(IAFW_TOOLS_PREFIX)ld.bfd$(HOST_EXECUTABLE_SUFFIX)
 IAFW_CC := $(IAFW_TOOLS_PREFIX)gcc$(HOST_EXECUTABLE_SUFFIX)
 IAFW_OBJCOPY := $(IAFW_TOOLS_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
@@ -120,6 +121,7 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
     -o $(@:.abl=.elf)
+$(hide) if `test $(TARGET_BUILD_VARIANT) == user`; then $(IAFW_STRIP) -s $(@:.abl=.elf) ; fi
 $(hide) $(ABLSIGN) -o $@ -i 0x40000 $(@:.abl=.elf)
 endef
 
