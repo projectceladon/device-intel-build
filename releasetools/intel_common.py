@@ -900,6 +900,9 @@ def CheckIfSocEFI(unpack_dir, variant):
                return False, True
            else:
                return False, False
+        elif (t2f["SOC_FIRMWARE_TYPE"] == "abl"):
+           return False, False
+
     provdata.close()
     return True, False
 
