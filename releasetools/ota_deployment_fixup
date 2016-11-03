@@ -38,6 +38,7 @@ import tempfile
 import imp
 import re
 import shutil
+import hashlib
 
 if None == os.environ.get('ANDROID_BUILD_TOP'):
     print "I'm hungry. Feed me lunch."
@@ -75,6 +76,9 @@ verify_end_str = "---- start making changes here ----"
 
 OPTIONS.worker_threads = multiprocessing.cpu_count()
 
+_TARGET_LINE_PREFIX = "(bootloader) target: "
+_HASH_LINE_PREFIX = "(bootloader) hash: "
+
 def process_metadata(data):
     lines = data.split("\n")
     linesout = []
@@ -93,6 +97,31 @@ def process_metadata(data):
                 linesout.append('='.join([k,OPTIONS.device]))
         else:
             linesout.append(line)
+    return '\n'.join(linesout)
+
+def process_hashfile(data, bootloader):
+    linesout = []
+    line_bootloader = ""
+    lines = data.split("\n")
+    index = 0
+    for i in range(len(lines)):
+        line = lines[i]
+        if not line.startswith(_TARGET_LINE_PREFIX):
+            continue
+
+        target = line[len(_TARGET_LINE_PREFIX):]
+        i = i + 1
+        linesout.append(line)
+        line = lines[i]
+        if not line.startswith(_HASH_LINE_PREFIX):
+            raise Exception("unexpected Fastboot output")
+        if target == '/bootloader':
+            line_bootloader = _HASH_LINE_PREFIX + str(hashlib.sha1(bootloader).hexdigest())
+            print "dbg: ", line_bootloader
+            linesout.append(line_bootloader)
+        else:
+            linesout.append(line)
+
     return '\n'.join(linesout)
 
 def process_updater_script(data, unpack_dir):
@@ -358,6 +387,11 @@ def main(argv):
             new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
                     variant=OPTIONS.variant)
             replace_in_zip(temp_zip, new_bi, zi.filename)
+        elif zi.filename == "verify/hashesfromtgt.txt":
+            new_bi = intel_common.GetBootloaderImageFromTFP(tfp_dir,
+                    variant=OPTIONS.variant)
+            data = process_hashfile(input_zip.read(zi),new_bi)
+            replace_in_zip(temp_zip, data, zi.filename)
         elif zi.filename == "fwu_image.bin" and not platform_efi:
             os.system("zip -d %s %s"%(temp_zip, zi.filename))
             output_zip = zipfile.ZipFile(temp_zip, "a")
