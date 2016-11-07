@@ -1,0 +1,275 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2016 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+Re-sign ABL related binaries found in RADIO/provdata.zip with production
+keys.
+Usage: sign_target_files_abl <options> <input_target_files_zip> <output_file>
+  -K  (--oem-key) <path to new keypair>
+      Replace the OEM key inside kernelflinger with the replacement copy.
+      The OEM keystore must be signed with this key.
+      Expects a key pair assuming private key ends in .pk8 and public key
+      with .x509.pem
+
+  -I  (--ifwi-directory) <path>
+      Path to the resigned IFWI, which is a directory contain all the resigned IFWI binaries.
+
+  -V  (--variant) variant
+  variant can be gr_mrb(A0) or gr_mrb_b1(B1)
+"""
+
+import sys
+import shutil
+import zipfile
+import os
+import os.path
+import shlex
+import tempfile
+import subprocess
+import struct
+from pyasn1.error import PyAsn1Error
+from pyasn1.codec.ber import decoder as ber_decoder
+from pyasn1_modules import rfc5208 as pkcs8
+
+import json
+
+if sys.hexversion < 0x02040000:
+    print >> sys.stderr, "Python 2.4 or newer is required."
+    sys.exit(1)
+
+# Android Release Tools
+sys.path.append("build/tools/releasetools")
+import common
+
+sys.path.append("device/intel/build/releasetools")
+import intel_common
+
+OPTIONS = common.OPTIONS
+OPTIONS.ifwi_directory = ""
+OPTIONS.variant = ""
+OPTIONS.all_keys = set()
+OPTIONS.oem_key = None
+OPTIONS.target_product = None
+GiB = (1 << 30)
+crc_len = 4
+#bootloader.img block size
+bootloader_bs = 1024
+#bootloader.img filesystem size
+bootloader_fs_sz = 30*1024*1024
+
+def get_named_temp(prefix=None):
+    f = tempfile.NamedTemporaryFile(prefix=prefix, delete=False)
+    OPTIONS.tempfiles.append(f.name)
+    f.close()
+    return f.name
+
+
+def extract_to_temp(input_zip, path, prefix=None):
+    f = tempfile.NamedTemporaryFile(prefix=prefix, delete=False)
+    OPTIONS.tempfiles.append(f.name)
+    f.write(input_zip.read(path))
+    f.close()
+    return f.name
+
+
+def zero_pad(data, size):
+    if len(data) > size:
+        raise common.ExternalError("Binary is already larger than pad size")
+
+    return data + (b'\x00' * (size - len(data)))
+
+
+def process_provzip(input_provzip, output_provzip, passwords):
+    for zi in input_provzip.infolist():
+        path = zi.filename
+        data = input_provzip.read(zi)
+
+        if OPTIONS.verbose:
+            print "Processing",path
+
+        # Replace the ifwi binaries with the new generated content
+        if path == "ifwi.bin" or path == "ifwi_dnx.bin":
+            fn = os.path.join(OPTIONS.ifwi_directory, path)
+            with open(fn) as f:
+                data=f.read()
+
+        if path == "bootloader":
+            out_file = tempfile.NamedTemporaryFile(prefix="bootloader")
+            dn = tempfile.mkdtemp()
+            in_fname = input_provzip.extract(path, dn)
+            process_bootloader(in_fname,out_file.name)
+            output_provzip.write(out_file.name, path)
+            shutil.rmtree(dn)
+            continue
+
+        output_provzip.writestr(zi, data)
+
+
+def process_bootloader(in_f, out_f):
+    d1 = tempfile.mkdtemp()
+    cmd = ["dumpext2img"]
+    cmd.append(in_f)
+    cmd.append("fastboot.bin")
+    cmd.append(os.path.join(d1,"fastboot.bin"))
+    p = common.Run(cmd)
+    p.wait()
+    #assert p.returncode == 0, "dumpext2img failed: %d" % p.returncode
+    process_iasimage(os.path.join(d1, "fastboot.bin"), os.path.join(d1, "fastboot_resigned.bin"))
+
+    #make a new directory to prepare for new bootloader file directory
+    #which will be used to generate the new ext2fs
+    d2 = tempfile.mkdtemp()
+    #copy the resigned ifwi_update.bin
+    ifwi_fn = os.path.join(OPTIONS.ifwi_directory, "ifwi_update.bin")
+    ifwi_fn2 = os.path.join(d2, "ifwi_update.bin")
+    shutil.copy2(ifwi_fn, ifwi_fn2)
+
+    #copy the resigned fastboot.bin
+    fastboot_fn = os.path.join(d1, "fastboot_resigned.bin")
+    fastboot_fn2 = os.path.join(d2, "fastboot.bin")
+    shutil.copy2(fastboot_fn, fastboot_fn2)
+
+    #make the new ext2 fs image
+    cmd = ["mkext2img"]
+    cmd.append(out_f)
+    cmd.extend([str(bootloader_bs), str(bootloader_fs_sz), d2])
+    p = common.Run(cmd)
+    p.wait()
+    assert p.returncode == 0, "mkext2img failed: %d" % p.returncode
+
+    #cleanup the temporary directories
+    shutil.rmtree(d1)
+    shutil.rmtree(d2)
+
+
+def process_iasimage(in_f, out_f):
+    """
+      resign the iasimage with new verity key
+    """
+    #get the unsigned iasimage binary
+    #the method is to get the payload offset plus
+    #palyload length plus the crc checksum
+    s = struct.Struct('I I I I I I I')
+    with open(in_f, 'rb') as fh:
+        u = s.unpack(fh.read(struct.calcsize(s.format)))
+        data_len = u[3]
+        data_off = u[4]
+        unsigned_len = data_off + data_len + crc_len
+        fh.seek(0,0)
+        data = fh.read(unsigned_len)
+
+    tf = tempfile.NamedTemporaryFile()
+    tf.write(data)
+    tf.flush()
+
+    #resign the fastboot with new verity key
+    cmd = ["ias_image_signer"]
+    cmd.append(tf.name)
+    cmd.extend([OPTIONS.oem_key+".pk8", OPTIONS.oem_key+".x509.pem"])
+    cmd.append(out_f)
+    p = common.Run(cmd)
+    p.wait()
+    tf.close()
+
+
+def get_output_provzip():
+    of_file = get_named_temp("output_provzip")
+    output_provzip = zipfile.ZipFile(of_file, "w")
+    return output_provzip, of_file
+
+
+def main(argv):
+    def option_handler(o, a):
+        if o in ("-I", "--ifwi-directory"):
+            OPTIONS.ifwi_directory = a
+        elif o in ("-K", "--oem-key"):
+            OPTIONS.oem_key = a
+            OPTIONS.all_keys.add(a)
+        elif o in ("-V", "--variant"):
+            OPTIONS.variant = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__,
+            extra_opts = "I:K:V:",
+            extra_long_opts = ["ifwi-directory=", "oem-key=", "variant="],
+            extra_option_handler = option_handler)
+
+    if len(args) != 2:
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    output_zip = zipfile.ZipFile(args[1], "w")
+
+    print "Extracting the provdata.zip"
+    prov_file = "provdata_"+OPTIONS.variant+".zip"
+    unpack_dir, input_zip = common.UnzipTemp(args[0])
+    input_provzip = zipfile.ZipFile(os.path.join(unpack_dir,
+                "RADIO", prov_file), "r")
+
+    print "Parsing build.prop for target_product"
+    d = {}
+    try:
+        with open(os.path.join(unpack_dir, "SYSTEM", "build.prop")) as f:
+            d = common.LoadDictionaryFromLines(f.read().split("\n"))
+    except IOError, e:
+       if e.errno == errno.ENOENT:
+          raise KeyError(f)
+    OPTIONS.target_product = d["ro.product.name"]
+
+    print "Processing private keys"
+    OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+    passwords = common.GetKeyPasswords(OPTIONS.all_keys)
+
+    output_provzip, output_pz_file = get_output_provzip()
+
+    #process the provdata.zip to generate resigned one
+    process_provzip(input_provzip, output_provzip, passwords)
+    output_provzip.close()
+
+    #Get the multiboot.img name
+    multiboot_fn = "RADIO/multiboot.img"
+
+    print "Building destination target-files-package"
+    prov_f = "RADIO/provdata_" + OPTIONS.variant + ".zip"
+    for zi in input_zip.infolist():
+        if zi.filename == prov_f:
+            common.ZipWrite(output_zip, output_pz_file, zi.filename)
+        elif zi.filename == multiboot_fn:
+            input_multiboot_file = os.path.join(unpack_dir, multiboot_fn)
+            output_multiboot_file = get_named_temp("output_multiboot")
+            process_iasimage(input_multiboot_file, output_multiboot_file)
+            common.ZipWrite(output_zip, output_multiboot_file, zi.filename)
+        else:
+            if (zi.file_size >= 2 * GiB):
+                common.ZipWrite(output_zip, os.path.join(unpack_dir, zi.filename), zi.filename)
+            else:
+                common.ZipWriteStr(output_zip, zi, input_zip.read(zi))
+
+    common.ZipClose(input_zip)
+    common.ZipClose(output_zip)
+    print "All done."
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except common.ExternalError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
+    finally:
+        common.Cleanup()
