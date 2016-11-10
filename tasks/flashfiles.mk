@@ -15,7 +15,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
     INTEL_FACTORY_FLASHFILES_TARGET :=
       $(foreach var,$(FLASHFILE_VARIANTS), \
 	    $(info Adding $(var)) \
-	    $(eval fn_prefix := $(OUT)/$(TARGET_PRODUCT)) \
+	    $(eval fn_prefix := $(PRODUCT_OUT)/$(TARGET_PRODUCT)) \
 	    $(eval fn_suffix := $(var)-$(FILE_NAME_TAG)) \
 	    $(eval ff_zip := $(fn_prefix)-flashfiles-$(fn_suffix).zip) \
 	    $(eval INTEL_FACTORY_FLASHFILES_TARGET += $(ff_zip)) \
@@ -34,7 +34,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
   INTEL_OTA_PACKAGES :=
   $(foreach var,$(OTA_VARIANTS), \
 	$(info Adding $(var)) \
-	$(eval fn_prefix := $(OUT)/$(TARGET_PRODUCT)) \
+	$(eval fn_prefix := $(PRODUCT_OUT)/$(TARGET_PRODUCT)) \
 	$(eval fn_suffix := $(var)-$(FILE_NAME_TAG)) \
 	$(eval ota_zip := $(fn_prefix)-ota-$(fn_suffix).zip) \
 	$(eval INTEL_OTA_PACKAGES += $(ota_zip)) \
@@ -44,7 +44,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	$(hide) mkdir -p $(dir $@)
 	$(eval y = $(subst -, ,$(basename $(@F))))
 	$(eval DEV = $(word 3, $(y)))
-	$(hide) $(odf) --verbose --variant=$(DEV) \
+	$(hide) export ANDROID_BUILD_TOP=$(PWD); $(odf) --verbose --variant=$(DEV) \
 		--target_files $(BUILT_TARGET_FILES_PACKAGE) \
 		$(INTERNAL_OTA_PACKAGE_TARGET) $@
 
