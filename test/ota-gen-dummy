@@ -44,13 +44,13 @@ while getopts "sdp:" opt; do
 done
 
 # Sanity
-if [ -z "$ANDROID_BUILD_TOP" -o -z "$ANDROID_PRODUCT_OUT" ]
+if [ -z "$ANDROID_BUILD_TOP" -o -z "$PRODUCT_OUT" ]
 then
     echo "Run lunch first!"
     exit 1
 fi
 
-if [ ! -f $ANDROID_PRODUCT_OUT/system/bin/updater ]
+if [ ! -f $PRODUCT_OUT/system/bin/updater ]
 then
     echo "Run 'make updater' first!"
     exit 1
@@ -90,7 +90,7 @@ echo "show_progress(0.500000, 0);" >> $UPDATER_SCRIPT
 
 cat $UPDATER_SCRIPT
 
-cp $ANDROID_PRODUCT_OUT/system/bin/updater META-INF/com/google/android/update-binary
+cp $PRODUCT_OUT/system/bin/updater META-INF/com/google/android/update-binary
 zip -r dummy_ota_unsigned.zip META-INF/
 popd
 
