@@ -35,6 +35,7 @@ from cStringIO import StringIO
 sys.path.append("build/tools/releasetools")
 import common
 
+_FASTBOOT = "out/host/linux-x86/bin/fastboot"
 
 def load_device_mapping(path):
     try:
@@ -248,6 +249,20 @@ def ComputeBootloaderPatch(source_tfp_dir, target_tfp_dir, variant=None,
 
     return (output_files, delete_files, patch_list, verbatim_targets)
 
+def fastboot_get_hw_revision():
+    fastboot_data = subprocess.check_output([_FASTBOOT, "getvar", "hw-revision"], stderr=subprocess.STDOUT)
+    board_type = fastboot_data.split(':',1)[1]
+    space=re.compile('^ ');
+    board_type=space.sub('',board_type)
+    board_type = board_type.split('\n',1)[0]
+    variant=None
+
+    if cmp(board_type, '50') == 0:
+        variant='gr_mrb'
+    else:
+        if cmp(board_type, '51') == 0:
+            variant='gr_mrb_b1'
+    return variant
 
 def LoadBootloaderFiles(tfpdir, extra_files=None, variant=None, base_variant=None):
     out = {}
@@ -304,6 +319,8 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
                     extra_files.append((fullpath, relpath))
 
     if not platform_efi:
+        if variant is None:
+            variant=fastboot_get_hw_revision()
         if variant:
             provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
         else:
@@ -824,6 +841,8 @@ def get_bootloader_list(unpack_dir):
     bootloader_list = []
     flashfls_path = os.path.join(unpack_dir, "RADIO", "flashfiles_fls.json")
 
+    if not os.path.exists(flashfls_path):
+        return
     with open(flashfls_path, 'r') as flashfls_json:
         data = json.loads(flashfls_json.read())
     for cmd in data['commands']:
@@ -842,6 +861,8 @@ def get_partition_target_hash(unpack_dir):
     partition_target = {}
     flashfls_path = os.path.join(unpack_dir, "RADIO", "flashfiles_fls.json")
 
+    if not os.path.exists(flashfls_path):
+        return
     with open(flashfls_path, 'r') as flashfls_json:
         data = json.loads(flashfls_json.read())
     for cmd in data['commands']:
@@ -942,6 +963,8 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     Extract and return the *LoadMap.bin files from the *.fls files. """
 
     bootloader_list = get_bootloader_list(unpack_dir)
+    if variant is None:
+        variant=fastboot_get_hw_revision()
     if variant:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
     else:
@@ -951,6 +974,9 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     partition_to_target = get_partition_target_hash(unpack_dir)
 
     platform_efi, platform_sflte = CheckIfSocEFI(unpack_dir, variant)
+
+    if not bootloader_list:
+        return None
 
     for loader_partition in bootloader_list:
         curr_loader = partition_to_target[loader_partition]
