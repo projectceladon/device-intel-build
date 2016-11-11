@@ -188,12 +188,13 @@ def main(argv):
         subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
     else:
         subprocess.check_output(["cp", image.name, bootloader_img + "/bootloader" ]);
-        for imgname, imgdata in additional_data.iteritems():
-            img = common.File(imgname,imgdata).WriteToTemp()
-            subprocess.check_output(["cp", img.name, bootloader_img + "/" + imgname]);
-            if imgname != 'fw_update' and imgname != 'bootloader' and imgname != 'vrl':
-                bootloader_sizes += ":" + str(len(imgdata))
-            img.close()
+        if additional_data is not None:
+            for imgname, imgdata in additional_data.iteritems():
+                img = common.File(imgname,imgdata).WriteToTemp()
+                subprocess.check_output(["cp", img.name, bootloader_img + "/" + imgname]);
+                if imgname != 'fw_update' and imgname != 'bootloader' and imgname != 'vrl':
+                    bootloader_sizes += ":" + str(len(imgdata))
+                img.close()
     image.close();
 
     for app in [_SIMG2IMG, _FASTBOOT]:
@@ -219,6 +220,19 @@ def main(argv):
     else :
         bootloader_root = bootloader_img
         devpath_prefix = "/"
+
+    bootloaderimg_path = os.path.join(unpack_dir, "RADIO", "bootloader.img")
+    print "bootloaderimg_path=", bootloaderimg_path
+
+    bootloader_hash, bootloader_size = get_hash_and_size_from_file(bootloaderimg_path)
+    print "bootloader_hash=",bootloader_hash
+    print "   =",hashdict["/bootloader"]
+    if hashdict["/bootloader"] != bootloader_hash:
+        print "FAILED: hash mismatch for /bootloader"
+        success = False
+    else:
+        print "/bootloader hash match!"
+
     for dpath, dname, fnames in os.walk(bootloader_root):
         for fname in fnames:
             # Capsule update file -- gets consumed and deleted by the firmware
