@@ -126,7 +126,7 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
     -o $(@:.abl=.elf)
 $(hide) if `test $(TARGET_BUILD_VARIANT) == user`; then $(IAFW_STRIP) -s $(@:.abl=.elf) ; fi
-$(hide) $(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40000 $(@:.abl=.elf)
+$(hide) $(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(@:.abl=.elf)
 $(hide) if `test $(TARGET_BUILD_VARIANT) == eng`; then \
 	cp $(@:.abl=.ablunsigned) $@ ; else \
 	$(ABLSIGN) $(@:.abl=.ablunsigned) \
