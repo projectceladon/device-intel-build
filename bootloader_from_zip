@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2008 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Generates a VFAT EFI System partition image from a provided
+zip file containing its contents relative to the root directory
+
+-i, --size       Size of partition in bytes (required)
+-s, --block-size Block size in bytes
+-z, --zipfile    Source zipfile containing root contents (required)
+-b, --fastboot   Path to Fastboot boot image
+-B, --bootimage  Path to additonal boot images, can call multiple times
+-u, --bootable   Flag indicating this is bootable USB image,
+                 creates sentinel file for loader
+"""
+
+import sys
+import tempfile
+import zipfile
+import os
+import shutil
+
+if sys.hexversion < 0x02040000:
+    print >> sys.stderr, "Python 2.4 or newer is required."
+    sys.exit(1)
+
+# Android Release Tools
+sys.path.append("build/tools/releasetools")
+import common
+
+sys.path.append("hardware/intel/kernelflinger/build/releasetools")
+import intel_common
+
+OPTIONS = common.OPTIONS
+OPTIONS.bootable = False
+OPTIONS.zipfile = None
+OPTIONS.bootimage = []
+OPTIONS.size = 0;
+OPTIONS.block_size = None;
+OPTIONS.extra_size = 0;
+
+def main(argv):
+
+    def option_handler(o, a):
+        if o in ("-i", "--size"):
+            OPTIONS.size = int(a)
+        elif o in ("-s", "--block-size"):
+            OPTIONS.block_size = int(a)
+        elif o in ("-z", "--zipfile"):
+            OPTIONS.zipfile = a
+        elif o in ("-b", "--fastboot"):
+            OPTIONS.bootimage.append((a, "fastboot.img"))
+        elif o in ("-B", "--bootimage"):
+            OPTIONS.bootimage.append((a, os.path.basename(a)))
+        elif o in ("-u", "--bootable"):
+            OPTIONS.bootable = True
+        elif o in ("-e", "--extra-size"):
+            OPTIONS.extra_size = int(a)
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__,
+                            extra_opts="i:s:z:b:B:ue:",
+                            extra_long_opts=["size=", "block-size=", "zipfile=", "bootimage=", "fastboot=",
+                                             "bootable", "extra-size="],
+                            extra_option_handler=option_handler)
+    if len(args) != 1:
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    if not OPTIONS.zipfile:
+        print "--zipfile is required"
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    tf = tempfile.NamedTemporaryFile()
+    tf.write("foo")
+    tf.flush()
+
+    extra_files = OPTIONS.bootimage
+    if OPTIONS.bootable:
+        extra_files.append((tf.name, "force_fastboot"))
+
+    intel_common.MakeVFATFilesystem(OPTIONS.zipfile, args[0], size=OPTIONS.size,
+                                    block_size=OPTIONS.block_size,
+                                    extra_files=extra_files,
+                                    extra_size=OPTIONS.extra_size)
+    tf.close()
+    common.Cleanup()
+
+if __name__ == '__main__':
+    try:
+        common.CloseInheritedPipes()
+        main(sys.argv[1:])
+    except common.ExternalError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
+
