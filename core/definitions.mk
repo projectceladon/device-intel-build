@@ -1,5 +1,5 @@
 # Base directory for our Makefiles.
-IAFW_BUILD_SYSTEM := hardware/intel/kernelflinger/build/core
+IAFW_BUILD_SYSTEM := device/intel/build/core
 
 # Used in Android.mk to produce a binary
 BUILD_EFI_STATIC_LIBRARY := $(IAFW_BUILD_SYSTEM)/iafw_static_library.mk
