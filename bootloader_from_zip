@@ -41,7 +41,7 @@ if sys.hexversion < 0x02040000:
 sys.path.append("build/tools/releasetools")
 import common
 
-sys.path.append("hardware/intel/kernelflinger/build/releasetools")
+sys.path.append("device/intel/build/releasetools")
 import intel_common
 
 OPTIONS = common.OPTIONS
