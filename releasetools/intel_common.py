@@ -158,6 +158,48 @@ def readfile_from_provdata(tmpdir, path, variant=None):
             data = provdata_zip.read(path)
         return data
 
+def ComputeBinOrImgPatches(source_tfp_dir, target_tfp_dir, filename=None, variant=None,
+                             existing_ota_zip=None):
+    patch_list = []
+    verbatim = None
+    output_files = None
+
+    if filename is None:
+        print "Error input, no filename "
+        return [None, None, None]
+
+    source_loader_filepath = os.path.join(source_tfp_dir, "RADIO", filename)
+    if not os.path.exists(source_loader_filepath):
+        print "Source:Can't find ", source_loader_filepath
+        return [None, None, None]
+    source_loader_file = open(source_loader_filepath)
+    source_loader_data = source_loader_file.read()
+    source_loader_file.close()
+
+    target_loader_filepath = os.path.join(target_tfp_dir, "RADIO", filename)
+    if not os.path.exists(target_loader_filepath):
+        print "Target Can't find ", target_loader_filepath
+        return [None, None, None]
+    target_loader_file = open(target_loader_filepath)
+    target_loader_data = target_loader_file.read()
+    target_loader_file.close()
+
+    src_bin = common.File(filename, source_loader_data)
+    tgt_bin = common.File(filename, target_loader_data)
+
+    diffs = [common.Difference(tgt_bin, src_bin)]
+    common.ComputeDifferences(diffs)
+    tf, sf, d = diffs[0].GetPatch()
+    verbatim = False
+    # If the patch size is almost as big as the actual file
+    # the image will be included in the OTA verbatim.
+    if d is None or len(d) > tf.size * 0.95:
+        print filename, "update will be included verbatim"
+        verbatim = True
+    else:
+        patch_list = (tf,sf)
+        output_files = d
+    return verbatim, patch_list, output_files
 
 def ComputeFWUpdatePatches(source_tfp_dir, target_tfp_dir, variant=None,
                              existing_ota_zip=None):
