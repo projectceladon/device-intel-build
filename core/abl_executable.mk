@@ -20,7 +20,6 @@ LOCAL_LDFLAGS := $(TARGET_IAFW_GLOBAL_LDFLAGS) -static \
 # offset 0x200000 which break multiboot compliance.
 LOCAL_LDFLAGS += -z max-page-size=0x1000
 LOCAL_OBJCOPY_FLAGS := $(TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS) $(LOCAL_OBJCOPY_FLAGS)
-LOCAL_CLANG := false
 
 skip_build_from_source :=
 ifdef LOCAL_PREBUILT_MODULE_FILE
