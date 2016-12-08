@@ -52,4 +52,9 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_OEM_VARS)
 	$(hide) echo "#OEMVARS" > $@
 	$(hide) cat $(BOARD_OEM_VARS) >> $@
 
+else ifdef BOARD_ABL_VARS
+
+$(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_ABL_VARS)
+	$(hide) cat $(BOARD_ABL_VARS) >> $@
+
 endif
