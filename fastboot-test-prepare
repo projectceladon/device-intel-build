@@ -52,7 +52,7 @@ mkdir fastboot
 cp $tfp fastboot/tfp.zip
 
 make clean
-make -j16 fastboot otatools keystore_signer
+make -j16 fastboot otatools
 
 ./build/tools/releasetools/img_from_target_files --verbose fastboot/tfp.zip fastboot/update.zip
 ./device/intel/build/releasetools/flashfiles_from_target_files --verbose $IRDA_VARIANT $MV_CONFIG_TYPE fastboot/tfp.zip fastboot/flashfiles.zip
@@ -79,6 +79,5 @@ fi
 cp device/intel/build/testkeys/oem.pk8 fastboot/oem.pk8
 cp device/intel/build/testkeys/oem.x509.pem fastboot/oem.x509.pem
 openssl rsa -pubout -inform DER -outform DER -in device/intel/build/testkeys/production-test/verity.pk8 -out fastboot/verity.pub
-keystore_signer fastboot/oem.pk8 fastboot/oem.x509.pem fastboot/keystore fastboot/verity.pub
 
 popd
