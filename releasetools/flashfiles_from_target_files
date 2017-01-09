@@ -222,6 +222,17 @@ def getProvdataVariants(unpack_dir):
             variants.append(m.group('variant'))
     return variants
 
+def getProvdataVariants_fast(product_out):
+    variants = []
+    working_path = os.path.join(product_out, "obj", "PACKAGING", "flashfiles_intermediates")
+    # Use regex analysis of provdata files to determine current variants
+    regex = re.compile('provdata_(?P<variant>\w+).zip')
+    for f in os.listdir(working_path):
+        m = regex.match(os.path.basename(f))
+        if m and m.group('variant'):
+            variants.append(m.group('variant'))
+    return variants
+
 def getIntermediates(product_out, component, subdir):
     return os.path.join(product_out, "obj", "PACKAGING",
                         component + "_intermediates", subdir)
@@ -270,12 +281,15 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
         ifile.AddToZip(dest_zip)
     flashfile_content.append(target_out)
 
-def process_image_fast(product_out, flashfiles_out, source, target):
-    if target in flashfile_content:
+def process_image_fast(product_out, flashfiles_out, source, target, variant=None, target_out=None):
+    if target_out is None:
+        target_out = target
+
+    if target_out in flashfile_content:
         return
 
-    print "-- Adding", target, source
-    outfile = os.path.join(flashfiles_out, target)
+    print "-- Adding", target_out
+    outfile = os.path.join(flashfiles_out, target_out)
     if not os.path.exists(os.path.dirname(outfile)):
         os.mkdir(os.path.dirname(outfile))
 
@@ -285,9 +299,10 @@ def process_image_fast(product_out, flashfiles_out, source, target):
     elif source == "images" or source == "radio" or source.startswith("boot:") or source == "fastboot":
         os.link(os.path.join(product_out, target), outfile)
     elif source == "provdatazip":
-        infile = os.path.join(getIntermediates(product_out, "flashfiles", "root"), os.path.basename(target))
+        suffix = "_" + variant if variant else ""
+        infile = os.path.join(getIntermediates(product_out, "flashfiles", "root%s" % suffix), os.path.basename(target))
         if not os.path.isfile(infile):
-            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata"), os.path.basename(target))
+            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata%s" % suffix), os.path.basename(target))
         os.link(infile, outfile)
     elif source == "bootloaderzip":
         infile = os.path.join(getIntermediates(product_out, "bootloader_zip", "root"), target)
@@ -299,7 +314,7 @@ def process_image_fast(product_out, flashfiles_out, source, target):
     else:
         raise Exception("unknown source image type " + source)
 
-    flashfile_content.append(target)
+    flashfile_content.append(target_out)
 
 def main(argv):
     def option_handler(o, a):
@@ -325,6 +340,9 @@ def main(argv):
 
     if OPTIONS.fast:
         product_out = args[0]
+        if OPTIONS.unified_variants:
+            OPTIONS.variants = getProvdataVariants_fast(product_out)
+
         system = os.path.join(product_out, "system")
         build_type = getBuildProp(system, "ro.build.type")
         platform = getBuildProp(system, "ro.product.name")
@@ -369,9 +387,31 @@ def main(argv):
 
     if OPTIONS.fast:
         fastff_dir = args[1]
+        # If mega flashfile is enabled, create multi-variant version of PFT instructions
+        if OPTIONS.unified_variants or OPTIONS.variants :
+            print "Adding variant specific configurations to ip..."
+            vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files, flashfile)
+            vip.generate_variant_ip()
+            configs, cmd_files = flash_cmd_generator.parse_config(vip.variant_ips, build_type, platform)
+            cmd_files = set([i for _,i in cmd_files])
+
         print "Adding required binaries..."
         for src, target in files:
-            process_image_fast(product_out, fastff_dir, src, target)
+            if OPTIONS.variants:
+                for variant in OPTIONS.variants:
+                    target_out = None
+                    if variantFilename(target, variant) in cmd_files or target in variant_files:
+                        target_out = variantFilename(target, variant)
+                    if variantFilename(target, variant) in vip.variant_exclude_files \
+                       or (target_out == None and target not in cmd_files):
+                        continue
+                    process_image_fast(product_out, fastff_dir, src, target, variant, target_out)
+            else:
+                process_image_fast(product_out, fastff_dir, src, target)
+        if OPTIONS.variants:
+            for variant, file in vip.variant_include_files:
+                src,target = file.split(":")
+                process_image_fast(product_out, fastff_dir, src, target, variant, variantFilename(target, variant))
 
         print "Generating JSON flash configuration files..."
         for fn, data in configs:

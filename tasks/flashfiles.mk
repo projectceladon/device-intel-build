@@ -78,7 +78,6 @@ $(CMCC_TARGET): droidcore
 endif
 
 ifneq ($(FAST_FLASHFILES),false)
-ifeq ($(FLASHFILE_VARIANTS),)
 # Fast flashfiles is for engineering purpose only
 # Should not be used on end-user product
 .PHONY: fast_flashfiles
@@ -98,13 +97,12 @@ FAST_FLASHFILES_DEPS := \
 fast_flashfiles: $(fftf) $(MKDOSFS) $(MCOPY) $(FAST_FLASHFILES_DEPS) | $(ACP)
 	$(hide) rm -rf $(FAST_FLASHFILES_DIR)
 	$(hide) mkdir -p $(FAST_FLASHFILES_DIR)
-	$(fftf) --mv_config_default=$(notdir $(mvcfg_default_arg)) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
+	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
 
 # add dependencies
 droid: fast_flashfiles
 flashfiles: fast_flashfiles
 
-endif
 endif #FAST_FLASHFILES
 
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
