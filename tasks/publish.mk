@@ -138,6 +138,16 @@ publish_gptimage:
 	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
 endif
 
+
+.PHONY: publish_androidia_image
+ifdef ANDROID_IA_IMAGE
+publish_androidia_image: publish_mkdir_dest $(ANDROID_IA_IMAGE)
+	@$(ACP) $(ANDROID_IA_IMAGE) $(publish_dest)
+else
+publish_androidia_image:
+	@echo "Warning: Unable to fulfill publish_androidia_image makefile request"
+endif
+
 .PHONY: publish_otapackage
 publish_otapackage: publish_mkdir_dest $(INTERNAL_OTA_PACKAGE_TARGET)
 	@$(ACP) $(INTERNAL_OTA_PACKAGE_TARGET) $(publish_dest)
@@ -204,5 +214,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) publish_androidia_image
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
