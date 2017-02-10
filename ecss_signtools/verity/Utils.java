@@ -150,7 +150,7 @@ public class Utils {
             return null;
         }
 
-        char[] password = System.console().readPassword("Password for the private key file: ");
+        char[] password = console.readPassword("Password for the private key file: ");
 
         SecretKeyFactory skFactory = SecretKeyFactory.getInstance(epkInfo.getAlgName());
         Key key = skFactory.generateSecret(new PBEKeySpec(password));
