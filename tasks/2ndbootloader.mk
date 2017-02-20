@@ -53,8 +53,24 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_OEM_VARS)
 	$(hide) cat $(BOARD_OEM_VARS) >> $@
 
 else ifdef BOARD_ABL_VARS
+BOARD_ABL_ACPI_DIR := $(TARGET_DEVICE_DIR)/ablvars/acpi_table
+BOARD_ABL_ACPI_SRCS := $(filter-out acpi.tables,\
+							$(shell ls $(BOARD_ABL_ACPI_DIR)))
+BOARD_ABL_ACPI_FILE_PATHS := $(addprefix $(BOARD_ABL_ACPI_DIR)/,\
+									$(BOARD_ABL_ACPI_SRCS))
 
 $(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_ABL_VARS)
-	$(hide) cat $(BOARD_ABL_VARS) >> $@
+	$(hide) if [ -e $(BOARD_ABL_VARS) ]; then\
+				cat $(BOARD_ABL_VARS) >> $@; \
+				rm -f $(BOARD_ABL_VARS); \
+			fi
+
+.PHONY: $(BOARD_ABL_VARS)
+$(BOARD_ABL_VARS):
+	$(hide) if [ -n "$(BOARD_ABL_ACPI_SRCS)" ];then \
+				cat $(BOARD_ABL_ACPI_FILE_PATHS) > $(BOARD_ABL_ACPI_DIR)/acpi.tables; \
+				vendor/intel/abl/abl_build_tools/ias_image_app -o $@ -i 0x30000 -v $(BOARD_ABL_ACPI_DIR)/acpi.tables; \
+				rm -f $(BOARD_ABL_ACPI_DIR)/acpi.tables;\
+			fi
 
 endif
