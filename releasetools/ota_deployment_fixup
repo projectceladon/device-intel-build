@@ -78,6 +78,7 @@ OPTIONS.worker_threads = multiprocessing.cpu_count()
 
 _TARGET_LINE_PREFIX = "(bootloader) target: "
 _HASH_LINE_PREFIX = "(bootloader) hash: "
+_IFWI_PREFIX = "(bootloader) version: "
 
 def process_metadata(data):
     lines = data.split("\n")
@@ -113,14 +114,18 @@ def process_hashfile(data, bootloader):
         i = i + 1
         linesout.append(line)
         line = lines[i]
-        if not line.startswith(_HASH_LINE_PREFIX):
-            raise Exception("unexpected Fastboot output")
-        if target == '/bootloader':
-            line_bootloader = _HASH_LINE_PREFIX + str(hashlib.sha1(bootloader).hexdigest())
-            print "dbg: ", line_bootloader
-            linesout.append(line_bootloader)
-        else:
+
+        if line.startswith(_IFWI_PREFIX):
             linesout.append(line)
+        else:
+            if not line.startswith(_HASH_LINE_PREFIX):
+                raise Exception("unexpected Fastboot output")
+            if target == '/bootloader':
+                line_bootloader = _HASH_LINE_PREFIX + str(hashlib.sha1(bootloader).hexdigest())
+                print "dbg: ", line_bootloader
+                linesout.append(line_bootloader)
+            else:
+                linesout.append(line)
 
     return '\n'.join(linesout)
 
