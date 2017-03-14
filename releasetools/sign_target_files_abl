@@ -121,12 +121,12 @@ def process_bootloader(in_f, out_f):
     d1 = tempfile.mkdtemp()
     cmd = ["dumpext2img"]
     cmd.append(in_f)
-    cmd.append("fastboot.bin")
-    cmd.append(os.path.join(d1,"fastboot.bin"))
+    cmd.append("osloader.bin")
+    cmd.append(os.path.join(d1,"osloader.bin"))
     p = common.Run(cmd)
     p.wait()
     #assert p.returncode == 0, "dumpext2img failed: %d" % p.returncode
-    process_iasimage(os.path.join(d1, "fastboot.bin"), os.path.join(d1, "fastboot_resigned.bin"))
+    process_iasimage(os.path.join(d1, "osloader.bin"), os.path.join(d1, "osloader_resigned.bin"))
 
     #make a new directory to prepare for new bootloader file directory
     #which will be used to generate the new ext2fs
@@ -136,9 +136,9 @@ def process_bootloader(in_f, out_f):
     ifwi_fn2 = os.path.join(d2, "ifwi_update.bin")
     shutil.copy2(ifwi_fn, ifwi_fn2)
 
-    #copy the resigned fastboot.bin
-    fastboot_fn = os.path.join(d1, "fastboot_resigned.bin")
-    fastboot_fn2 = os.path.join(d2, "fastboot.bin")
+    #copy the resigned osloader.bin
+    fastboot_fn = os.path.join(d1, "osloader_resigned.bin")
+    fastboot_fn2 = os.path.join(d2, "osloader.bin")
     shutil.copy2(fastboot_fn, fastboot_fn2)
 
     #make the new ext2 fs image
@@ -174,7 +174,7 @@ def process_iasimage(in_f, out_f):
     tf.write(data)
     tf.flush()
 
-    #resign the fastboot with new verity key
+    #resign the osloader with new verity key
     cmd = ["ias_image_signer"]
     cmd.append(tf.name)
     cmd.extend([OPTIONS.oem_key+".pk8", OPTIONS.oem_key+".x509.pem"])
