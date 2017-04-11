@@ -183,6 +183,7 @@ $(TESTOS_RAMDISK): \
 	$(hide) mkdir -p $(TESTOS_ROOT_OUT)/tmp
 	$(hide) mkdir -p $(TESTOS_ROOT_OUT)/data
 	$(hide) mkdir -p $(TESTOS_ROOT_OUT)/mnt
+	$(hide) mkdir -p $(TESTOS_ROOT_OUT)/config
 	$(hide) mkdir -p $(tos_system_out)
 	$(hide) mkdir -p $(tos_system_out)/etc
 	$(hide) mkdir -p $(tos_system_out)/bin
@@ -206,7 +207,7 @@ $(TESTOS_RAMDISK): \
 
 TESTOS_CMDLINE := g_android.fastboot=0
 TESTOS_CMDLINE += $(BOARD_KERNEL_CMDLINE)
-TESTOS_CMDLINE += enforcing=0 androidboot.selinux=permissive
+TESTOS_CMDLINE += enforcing=0 androidboot.selinux=disabled
 
 INTERNAL_TESTOSIMAGE_ARGS := \
        --kernel $(TESTOS_KERNEL) \
@@ -230,7 +231,7 @@ $(TESTOS_BOOTIMAGE): \
 		     $(BOARD_MKBOOTIMG_ARGS) \
 		     --output $@
 	@echo "Created Testos bootimage: $@"
-	$(hide) $(ACP) $(BOARD_FIRST_STAGE_LOADER) $(PRODUCT_OUT)/loader.efi
+##	$(hide) $(ACP) $(BOARD_FIRST_STAGE_LOADER) $(PRODUCT_OUT)/loader.efi
 	$(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
 	$(hide) $(MKBOOTIMG) $(INTERNAL_TESTOSIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(TESTOS_BOOTIMAGE).unsigned, \
 	$(hide) $(MKBOOTIMG) $(INTERNAL_TESTOSIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(TESTOS_BOOTIMAGE) --id > $(TESTOSIMAGE_ID_FILE))
