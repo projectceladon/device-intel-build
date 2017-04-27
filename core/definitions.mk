@@ -128,7 +128,21 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
     -o $(@:.abl=.elf)
 $(hide) $(IAFW_STRIP) -s $(@:.abl=.elf)
-$(hide) $(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(@:.abl=.elf)
+$(hide) rm -rf $(dir $@)/acpi.tables;
+$(hide) find $(TARGET_DEVICE_DIR)/ablvars/acpi_table -type f | while read file; do \
+	detect_size=`od -j4 -N4 -An -t u4 $${file}`; \
+	[ -z "$${detect_size}" ] && detect_size=0; \
+	actual_size=`wc -c < $${file}`; \
+	if [ $${detect_size} -eq $${actual_size} ]; then \
+		echo ACPI table length match: $${file}; \
+		printf "Signature: %s, Length: $${actual_size}\n" `head -c 4 $${file}`; \
+		cat $${file} >> $(dir $@)/acpi.tables; \
+	fi; \
+done
+$(hide) dd if=/dev/zero of=$(dir $@)/cmdline bs=512 count=1;
+$(hide) if [ -s $(dir $@)/acpi.tables ];then \
+	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi.tables; else \
+	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf); fi
 $(hide) if `test $(TARGET_BUILD_VARIANT) == eng`; then \
 	cp $(@:.abl=.ablunsigned) $@ ; else \
 	$(ABLSIGN) $(@:.abl=.ablunsigned) \
