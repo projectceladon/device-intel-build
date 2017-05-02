@@ -146,8 +146,8 @@ $(hide) if [ -s $(dir $@)/acpi.tables ];then \
 $(hide) if `test $(TARGET_BUILD_VARIANT) == eng`; then \
 	cp $(@:.abl=.ablunsigned) $@ ; else \
 	$(ABLSIGN) $(@:.abl=.ablunsigned) \
-	$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 \
-	$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem \
+	$(ABL_OS_KERNEL_KEY).pk8 \
+	$(ABL_OS_KERNEL_KEY).x509.pem \
 	$@ ; fi
 endef
 
