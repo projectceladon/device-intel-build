@@ -28,14 +28,19 @@ export TFP=
 export QUICK=
 export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
-
-while getopts "qst:V:jlof" opt; do
+export PRODUCT_OUT=out/target/product/${TARGET_PRODUCT}
+ELK_IN_IFWI=0
+TOS_IMAGE_PARTITION_SIZE=10485760
+while getopts "qsmt:V:jlof" opt; do
     case $opt in
         s)
             set -x
             ;;
         q)
             export QUICK=1
+            ;;
+        m)
+            export ELK_IN_IFWI=1
             ;;
         t)
             export TFP=$OPTARG
@@ -65,6 +70,7 @@ while getopts "qst:V:jlof" opt; do
             echo "    The build name identifies the build, using A or B is typical"
             echo
             echo "Valid options:"
+            echo "-m: Stitch ELK into the IFWI, by default stitch fastboot into the IFWI"
             echo "-s: Show commands being run"
             echo "-t <tfp>: Don't do own build; use supplied target-files to create a re-signed release"
             echo "-V <variant>: Device variant"
@@ -104,11 +110,21 @@ function sign_tfp {
 
     generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
 
+    unzip $1 RADIO/tos.img -d $OTA_TMP_DIR
+
+    #prebuilts/build-tools/linux-x86/bin/acp -p $OTA_TMP_DIR/RADIO/tos.img ${PRODUCT_OUT}/tos.img
+
+    device/intel/build/test/unsign_boot_img.py $OTA_TMP_DIR/RADIO/tos.img > ${PRODUCT_OUT}/tos.img
+
+    avbtool add_hash_footer --image ${PRODUCT_OUT}/tos.img --partition_size $TOS_IMAGE_PARTITION_SIZE --partition_name tos --algorithm SHA256_RSA4096 --key $PRODKEYS/avb_releasekey.pem
+
+    avbtool extract_public_key --key $PRODKEYS/avb_releasekey.pem --output $OTA_TMP_DIR/avb_pk.bin
+
+    prebuilts/build-tools/linux-x86/bin/acp $PRODKEYS/avb_releasekey.pem external/avb/test/data/testkey_rsa4096.pem
+
     ./build/tools/releasetools/sign_target_files_apks  \
             --verbose \
             --replace_ota_keys \
-            --replace_verity_public_key ${t2}.pub \
-            --replace_verity_private_key $PRODKEYS/verity \
             --default_key_mappings $PRODKEYS $1 $t1
     rm -f ${t2}.pub $t2
 
@@ -132,22 +148,43 @@ function sign_tfp {
           *)  ;;
     esac
 
-    ./device/intel/build/test/unsign_ias_img.py vendor/intel/abl/abl_prebuilt/internal/bxtp_abl/elk \
- > $BASEDIR/ifwi_abl/elk_unsigned
-    ias_image_signer $BASEDIR/ifwi_abl/elk_unsigned $PRODKEYS/verity.pk8  $PRODKEYS/verity.x509.pem \
- $BASEDIR/ifwi_abl/elk
+
+if [[ ${ELK_IN_IFWI} == 0 ]]; then
+
+    echo "...................................stitch fastboot into IFWI..............................."
+    ./device/intel/build/test/extract_fastboot.py \
+            --variant $BOARD_VARIANT  --avb-key $OTA_TMP_DIR/avb_pk.bin --oem-key $PRODKEYS/verity $1 $BASEDIR/ifwi_abl/fastboot
     ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
-           -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
-           -ifwikey $BASEDIR/ifwi_abl/verity.pem \
-           -openssl /usr/bin/openssl \
-           -s vendor/intel/abl/ifwi-apl \
-           -ablcfg $BASEDIR/ifwi_abl/bin/iasImage_config_data.bin \
-           -o $BASEDIR/ifwi_abl/ifwi.bin \
-           -elk $BASEDIR/ifwi_abl/elk \
-           -w $BASEDIR/ifwi_abl/tmp \
-           -si $SILICON_STEP \
-           -qs $SILICON_QS \
-           $BASEDIR/ifwi_abl/abl.zip
+            -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
+            -ifwikey $BASEDIR/ifwi_abl/verity.pem \
+            -openssl /usr/bin/openssl \
+            -s vendor/intel/abl/ifwi-apl \
+            -ablcfg $BASEDIR/ifwi_abl/bin/iasImage_config_data.bin \
+            -o $BASEDIR/ifwi_abl/ifwi.bin \
+            -elk $BASEDIR/ifwi_abl/fastboot \
+            -w $BASEDIR/ifwi_abl/tmp \
+            -si $SILICON_STEP \
+            -qs $SILICON_QS \
+            $BASEDIR/ifwi_abl/abl.zip
+else
+    echo "...................................stitch ELK into IFWI...................................."
+    ./device/intel/build/test/unsign_ias_img.py vendor/intel/abl/abl_prebuilt/internal/bxtp_abl/elk \
+            > $BASEDIR/ifwi_abl/elk_unsigned
+    ias_image_signer $BASEDIR/ifwi_abl/elk_unsigned $PRODKEYS/verity.pk8  $PRODKEYS/verity.x509.pem \
+            $BASEDIR/ifwi_abl/elk
+    ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
+            -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
+            -ifwikey $BASEDIR/ifwi_abl/verity.pem \
+            -openssl /usr/bin/openssl \
+            -s vendor/intel/abl/ifwi-apl \
+            -ablcfg $BASEDIR/ifwi_abl/bin/iasImage_config_data.bin \
+            -o $BASEDIR/ifwi_abl/ifwi.bin \
+            -elk $BASEDIR/ifwi_abl/elk \
+            -w $BASEDIR/ifwi_abl/tmp \
+            -si $SILICON_STEP \
+            -qs $SILICON_QS \
+            $BASEDIR/ifwi_abl/abl.zip
+fi
 
     cp $BASEDIR/ifwi_abl/tmp/dnx_spi.bin $BASEDIR/ifwi_abl/ifwi_dnx.bin
 
@@ -159,8 +196,10 @@ function sign_tfp {
     ./device/intel/build/releasetools/sign_target_files_abl \
             --verbose \
             --oem-key $PRODKEYS/verity \
+            --avb-key $OTA_TMP_DIR/avb_pk.bin \
             --variant $BOARD_VARIANT \
             --ifwi-directory $BASEDIR/ifwi_abl \
+            --tos ${PRODUCT_OUT}/tos.img \
             $t1 $2
     rm $t1
 }

@@ -39,7 +39,8 @@ INTEL_OTATOOLS := \
     $(SESL) \
     $(FASTBOOT) \
     $(CTESL) \
-    $(IASL)
+    $(IASL) \
+    $(AVBTOOL)
 
 ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
     ifeq ($(BOARD_AVB_ENABLE),true)  #VBOOT2.0

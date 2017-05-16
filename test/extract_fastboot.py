@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Re-sign ABL related binaries found in RADIO/provdata.zip with production
+Extract fastboot binary from TFP and resign fastboot binary in ABL based platform
 keys.
-Usage: sign_target_files_abl <options> <input_target_files_zip> <output_file>
+Usage: extract_fastboot.py <options> <input_target_files_zip> <output_file>
   -K  (--oem-key) <path to new keypair>
       Replace the OEM key inside kernelflinger with the replacement copy.
       The OEM keystore must be signed with this key.
       Expects a key pair assuming private key ends in .pk8 and public key
       with .x509.pem
+
+  -A  (--avb-key) <path>
+      Replace the Android Verified Boot key with the key in path
 
   -I  (--ifwi-directory) <path>
       Path to the resigned IFWI, which is a directory contain all the resigned IFWI binaries.
@@ -57,35 +60,97 @@ OPTIONS.ifwi_directory = ""
 OPTIONS.variant = ""
 OPTIONS.all_keys = set()
 OPTIONS.oem_key = None
+OPTIONS.avb_key = None
 OPTIONS.target_product = None
 
 crc_len = 4
+ias_image_type_str = "0x40300"
+section_entry_sz = 0x28
+fastboot_component_num = 4
 
-def process_provzip(input_provzip, output_fn):
-            path = "fastboot"
-            dn = tempfile.mkdtemp()
-            in_fname = input_provzip.extract(path, dn)
-            process_iasimage(in_fname,output_fn)
-            shutil.rmtree(dn)
+def get_section(data, name):
+    section_table_offset = struct.unpack_from("<I", data, 0x20)[0]
+    num_sections, str_table_idx = struct.unpack_from("<HH", data, 0x30)
+    str_table_offset = section_table_offset + (str_table_idx * section_entry_sz)
+    _, _, _, _, str_section_offset, str_section_size, _, _, _, _ = struct.unpack_from("<10I", data, str_table_offset)
 
-def process_bootloader(in_f, out_f):
-    d1 = tempfile.mkdtemp()
-    cmd = ["dumpext2img"]
-    cmd.append(in_f)
-    cmd.append("osloader.bin")
-    cmd.append(os.path.join(d1,"osloader.bin"))
+    for i in range(num_sections):
+        section_offset = section_table_offset + (i * section_entry_sz)
+        section_table_data = struct.unpack_from("<10I", data, section_offset)
+
+        section_name_idx, _, _, _, section_offset, section_size,  _, _, _, _ = section_table_data
+        section_name = data[str_section_offset + section_name_idx:str_section_offset + section_name_idx + len(name)]
+        if section_name != name:
+            continue
+        print "Found", section_name, "at offset", hex(section_offset)
+        return (section_offset, section_size)
+
+    raise common.ExternalError("Section not found")
+
+def replace_raw_keys(data, raw_key, password):
+    (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
+
+    oem_key_file = open(raw_key, "rb")
+    oem_key_data = zero_pad(oem_key_file.read(), oemkeys_size)
+    oem_key_file.close()
+
+    data = (data[:oemkeys_offset] + oem_key_data +
+            data[oemkeys_offset + oemkeys_size:])
+    return data
+
+def zero_pad(data, size):
+    if len(data) > size:
+        raise common.ExternalError("Binary is already larger than pad size")
+
+    return data + (b'\x00' * (size - len(data)))
+
+def process_fastboot(in_f, out_f):
+    """
+       get the abl binary from the in_f
+       replace the .oemkeys section
+       then combine back to a signed ias image
+       with the new key
+    """
+    s = struct.Struct('11I')
+    fh = open(in_f, "rb")
+    u = s.unpack(fh.read(struct.calcsize(s.format)))
+    data_len = u[3]
+    data_off = u[4]
+
+    fp = os.path.dirname(os.path.abspath(in_f))
+    fh.seek(data_off, 0)
+    for i in range(fastboot_component_num):
+        comp_len = u[7+i]
+        fn = os.path.join(fp, "comp"+str(i))
+        fc = open(fn, "wb")
+        data = fh.read(comp_len)
+        if i == 1:
+            print "Replacing .oemkeys inside abl binary"
+            password = None
+            data = replace_raw_keys(data, OPTIONS.avb_key, password)
+        fc.write(data)
+        fc.close()
+
+    #combine the individual component files back into the ias image
+    unsigned_fastboot_fn = os.path.join(fp, "fastboot_unsigned.bin")
+    cmd = ["ias_image_app"]
+    cmd.extend(["-i", ias_image_type_str])
+    cmd.extend(["-o", unsigned_fastboot_fn])
+    for i in range(fastboot_component_num):
+        fn = os.path.join(fp, "comp"+str(i))
+        cmd.append(fn)
     p = common.Run(cmd)
     p.wait()
-    #assert p.returncode == 0, "dumpext2img failed: %d" % p.returncode
-    process_iasimage(os.path.join(d1, "osloader.bin"), os.path.join(d1, "osloader_resigned.bin"))
+    fh.close()
 
-    #copy the resigned osloader.bin
-    fastboot_fn = os.path.join(d1, "osloader_resigned.bin")
-    shutil.copy2(fastboot_fn, out_f)
+    process_iasimage(unsigned_fastboot_fn, out_f)
 
-    #cleanup the temporary directories
-    shutil.rmtree(d1)
-
+def process_provzip(input_provzip, output_fn):
+    path = "fastboot"
+    dn = tempfile.mkdtemp()
+    in_fname = input_provzip.extract(path, dn)
+    process_fastboot(in_fname, output_fn)
+    shutil.rmtree(dn)
 
 def process_iasimage(in_f, out_f):
     """
@@ -120,6 +185,9 @@ def main(argv):
     def option_handler(o, a):
         if o in ("-I", "--ifwi-directory"):
             OPTIONS.ifwi_directory = a
+        elif o in ("-A", "--avb-key"):
+            OPTIONS.avb_key = a
+            OPTIONS.all_keys.add(a)
         elif o in ("-K", "--oem-key"):
             OPTIONS.oem_key = a
             OPTIONS.all_keys.add(a)
@@ -130,8 +198,8 @@ def main(argv):
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "I:K:V:",
-            extra_long_opts = ["ifwi-directory=", "oem-key=", "variant="],
+            extra_opts = "I:A:K:V:",
+            extra_long_opts = ["ifwi-directory=", "avb-key=", "oem-key=", "variant="],
             extra_option_handler = option_handler)
 
     if len(args) != 2:
