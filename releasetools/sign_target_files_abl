@@ -19,12 +19,17 @@ keys.
 Usage: sign_target_files_abl <options> <input_target_files_zip> <output_file>
   -K  (--oem-key) <path to new keypair>
       Replace the OEM key inside kernelflinger with the replacement copy.
-      The OEM keystore must be signed with this key.
       Expects a key pair assuming private key ends in .pk8 and public key
       with .x509.pem
 
+  -A  (--avb-key) <path>
+      Replace the Android Verified Boot key with the key in path
+
   -I  (--ifwi-directory) <path>
       Path to the resigned IFWI, which is a directory contain all the resigned IFWI binaries.
+
+  -T  (--tos) <path>
+      Path to the resigned tos image
 
   -V  (--variant) variant
   variant can be gr_mrb(A0) or gr_mrb_b1(B1)
@@ -61,13 +66,62 @@ OPTIONS.ifwi_directory = ""
 OPTIONS.variant = ""
 OPTIONS.all_keys = set()
 OPTIONS.oem_key = None
+OPTIONS.avb_key = None
+OPTIONS.tos_image = None
 OPTIONS.target_product = None
 GiB = (1 << 30)
 crc_len = 4
+blk_sz  = 1024
+osloader_blk_offset = 8000
 #bootloader.img block size
 bootloader_bs = 1024
 #bootloader.img filesystem size
 bootloader_fs_sz = 30*1024*1024
+ias_image_type_str = "0x40300"
+section_entry_sz = 0x28
+osloader_component_num = 4
+
+def get_section(data, name):
+    section_table_offset = struct.unpack_from("<I", data, 0x20)[0]
+    num_sections, str_table_idx = struct.unpack_from("<HH", data, 0x30)
+    str_table_offset = section_table_offset + (str_table_idx * section_entry_sz)
+    _, _, _, _, str_section_offset, str_section_size, _, _, _, _ = struct.unpack_from("<10I", data, str_table_offset)
+
+    for i in range(num_sections):
+        section_offset = section_table_offset + (i * section_entry_sz)
+        section_table_data = struct.unpack_from("<10I", data, section_offset)
+
+        section_name_idx, _, _, _, section_offset, section_size,  _, _, _, _ = section_table_data
+        section_name = data[str_section_offset + section_name_idx:str_section_offset + section_name_idx + len(name)]
+        if section_name != name:
+            continue
+        print "Found", section_name, "at offset", hex(section_offset)
+        return (section_offset, section_size)
+
+    raise common.ExternalError("Section not found")
+
+def replace_raw_keys(data, raw_key, password):
+    (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
+
+    oem_key_file = open(raw_key, "rb")
+    oem_key_data = zero_pad(oem_key_file.read(), oemkeys_size)
+    oem_key_file.close()
+
+    data = (data[:oemkeys_offset] + oem_key_data +
+            data[oemkeys_offset + oemkeys_size:])
+    return data
+
+def replace_pem_keys(data, oem_key_pair, password):
+    (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
+
+    oem_key_data_der_file = intel_common.pem_cert_to_der_cert(oem_key_pair +
+            OPTIONS.public_key_suffix)
+    oem_key_data = zero_pad(oem_key_data_der_file.read(), oemkeys_size)
+    oem_key_data_der_file.close()
+
+    data = (data[:oemkeys_offset] + oem_key_data +
+            data[oemkeys_offset + oemkeys_size:])
+    return data
 
 def get_named_temp(prefix=None):
     f = tempfile.NamedTemporaryFile(prefix=prefix, delete=False)
@@ -100,7 +154,7 @@ def process_provzip(input_provzip, output_provzip, passwords):
             print "Processing",path
 
         # Replace the ifwi binaries with the new generated content
-        if path == "ifwi.bin" or path == "ifwi_dnx.bin":
+        if path in ["ifwi.bin", "ifwi_dnx.bin", "fastboot"]:
             fn = os.path.join(OPTIONS.ifwi_directory, path)
             with open(fn) as f:
                 data=f.read()
@@ -109,7 +163,7 @@ def process_provzip(input_provzip, output_provzip, passwords):
             out_file = tempfile.NamedTemporaryFile(prefix="bootloader")
             dn = tempfile.mkdtemp()
             in_fname = input_provzip.extract(path, dn)
-            process_bootloader(in_fname,out_file.name)
+            process_bootloader(in_fname, out_file.name)
             output_provzip.write(out_file.name, path)
             shutil.rmtree(dn)
             continue
@@ -119,35 +173,43 @@ def process_provzip(input_provzip, output_provzip, passwords):
 
 def process_bootloader(in_f, out_f):
     d1 = tempfile.mkdtemp()
-    cmd = ["dumpext2img"]
-    cmd.append(in_f)
-    cmd.append("osloader.bin")
-    cmd.append(os.path.join(d1,"osloader.bin"))
+    cmd = ["dd"]
+    cmd.append("if=%s"%(in_f))
+    cmd.append("bs=%d"%(blk_sz))
+    cmd.append("skip=%d"%(osloader_blk_offset))
+    cmd.append("of=%s"%(os.path.join(d1,"osloader.bin")))
     p = common.Run(cmd)
     p.wait()
-    #assert p.returncode == 0, "dumpext2img failed: %d" % p.returncode
-    process_iasimage(os.path.join(d1, "osloader.bin"), os.path.join(d1, "osloader_resigned.bin"))
+    process_osloader(os.path.join(d1, "osloader.bin"), os.path.join(d1, "osloader_resigned.bin"))
 
     #make a new directory to prepare for new bootloader file directory
-    #which will be used to generate the new ext2fs
+    #which will be used to generate the new bootloader
     d2 = tempfile.mkdtemp()
     #copy the resigned ifwi_update.bin
-    ifwi_fn = os.path.join(OPTIONS.ifwi_directory, "ifwi_update.bin")
-    ifwi_fn2 = os.path.join(d2, "ifwi_update.bin")
-    shutil.copy2(ifwi_fn, ifwi_fn2)
+    ifwi_update_fn = os.path.join(OPTIONS.ifwi_directory, "ifwi_update.bin")
+    ifwi_update_fn2 = os.path.join(d2, "ifwi_update.bin")
+    shutil.copy2(ifwi_update_fn, ifwi_update_fn2)
 
     #copy the resigned osloader.bin
-    fastboot_fn = os.path.join(d1, "osloader_resigned.bin")
-    fastboot_fn2 = os.path.join(d2, "osloader.bin")
-    shutil.copy2(fastboot_fn, fastboot_fn2)
+    osloader_fn = os.path.join(d1, "osloader_resigned.bin")
+    osloader_fn2 = os.path.join(d2, "osloader.bin")
+    shutil.copy2(osloader_fn, osloader_fn2)
 
-    #make the new ext2 fs image
-    cmd = ["mkext2img"]
-    cmd.append(out_f)
-    cmd.extend([str(bootloader_bs), str(bootloader_fs_sz), d2])
+    #make the new bootlader image
+    cmd = ["dd"]
+    cmd.append("if=%s"%(ifwi_update_fn2))
+    cmd.append("bs=%d"%(blk_sz))
+    cmd.append("of=%s"%(out_f))
     p = common.Run(cmd)
     p.wait()
-    assert p.returncode == 0, "mkext2img failed: %d" % p.returncode
+    cmd = ["dd"]
+    cmd.append("if=%s"%(osloader_fn2))
+    cmd.append("bs=%d"%(blk_sz))
+    cmd.append("seek=%d"%(osloader_blk_offset))
+    cmd.append("of=%s"%(out_f))
+    p = common.Run(cmd)
+    p.wait()
+    assert p.returncode == 0, "bootader.img generation failed: %d" % p.returncode
 
     #cleanup the temporary directories
     shutil.rmtree(d1)
@@ -183,6 +245,79 @@ def process_iasimage(in_f, out_f):
     p.wait()
     tf.close()
 
+def process_osloader(in_f, out_f):
+    """
+       get the abl binary from the in_f
+       replace the .oemkeys section
+       then combine back to a signed ias image
+       with the new key
+    """
+    s = struct.Struct('11I')
+    fh = open(in_f, "rb")
+    u = s.unpack(fh.read(struct.calcsize(s.format)))
+    data_len = u[3]
+    data_off = u[4]
+
+    fp = os.path.dirname(os.path.abspath(in_f))
+    fh.seek(data_off, 0)
+    for i in range(osloader_component_num):
+        comp_len = u[7+i]
+        fn = os.path.join(fp, "comp"+str(i))
+        fc = open(fn, "wb")
+        data = fh.read(comp_len)
+        if i == 1:
+            print "Replacing .oemkeys inside abl binary"
+            password = None
+            data = replace_raw_keys(data, OPTIONS.avb_key, password)
+        fc.write(data)
+        fc.close()
+
+    #combine the individual component files back into the ias image
+    unsigned_osloader_fn = os.path.join(fp, "osloader_unsigned.bin")
+    cmd = ["ias_image_app"]
+    cmd.extend(["-i", ias_image_type_str])
+    cmd.extend(["-o", unsigned_osloader_fn])
+    for i in range(osloader_component_num):
+        fn = os.path.join(fp, "comp"+str(i))
+        cmd.append(fn)
+    p = common.Run(cmd)
+    p.wait()
+    fh.close()
+
+    process_iasimage(unsigned_osloader_fn, out_f)
+
+def process_tosimage(in_f, out_f):
+    """
+      resign the tos image with new verity key
+    """
+    s = struct.Struct('8B I I I I I I I I')
+    fi = open(in_f, "rb")
+    u = s.unpack(fi.read(struct.calcsize(s.format)))
+    kernelSize = u[8]
+    ramdskSize = u[10]
+    secondSize = u[12]
+    pageSize = u[15]
+    length = pageSize \
+         + ((kernelSize + pageSize - 1) / pageSize) * pageSize \
+         + ((ramdskSize + pageSize - 1) / pageSize) * pageSize \
+         + ((secondSize + pageSize - 1) / pageSize) * pageSize
+    length = ((length + pageSize - 1) / pageSize) * pageSize
+
+    tf = tempfile.NamedTemporaryFile()
+    fi.seek(0, 0)
+    tf.write(fi.read(length))
+    tf.flush()
+    fi.close()
+
+    #resign the tos with new verity key
+    cmd = ["boot_signer"]
+    cmd.append("/tos")
+    cmd.append(tf.name)
+    cmd.extend([OPTIONS.oem_key+".pk8", OPTIONS.oem_key+".x509.pem"])
+    cmd.append(out_f)
+    p = common.Run(cmd)
+    p.wait()
+    tf.close()
 
 def get_output_provzip():
     of_file = get_named_temp("output_provzip")
@@ -194,18 +329,23 @@ def main(argv):
     def option_handler(o, a):
         if o in ("-I", "--ifwi-directory"):
             OPTIONS.ifwi_directory = a
+        elif o in ("-A", "--avb-key"):
+            OPTIONS.avb_key = a
+            OPTIONS.all_keys.add(a)
         elif o in ("-K", "--oem-key"):
             OPTIONS.oem_key = a
             OPTIONS.all_keys.add(a)
         elif o in ("-V", "--variant"):
             OPTIONS.variant = a
+        elif o in ("-T", "--tos"):
+            OPTIONS.tos_image = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "I:K:V:",
-            extra_long_opts = ["ifwi-directory=", "oem-key=", "variant="],
+            extra_opts = "I:A:K:V:T:",
+            extra_long_opts = ["ifwi-directory=", "avb-key=", "oem-key=", "variant=", "tos="],
             extra_option_handler = option_handler)
 
     if len(args) != 2:
@@ -243,6 +383,12 @@ def main(argv):
     #Get the multiboot.img name
     multiboot_fn = "RADIO/multiboot.img"
 
+    #Get the tos.img name
+    tos_fn = "RADIO/tos.img"
+
+    #Get the fastboot binary name
+    fastboot_fn = "RADIO/fastboot"
+
     print "Building destination target-files-package"
     prov_f = "RADIO/provdata_" + OPTIONS.variant + ".zip"
     for zi in input_zip.infolist():
@@ -253,6 +399,11 @@ def main(argv):
             output_multiboot_file = get_named_temp("output_multiboot")
             process_iasimage(input_multiboot_file, output_multiboot_file)
             common.ZipWrite(output_zip, output_multiboot_file, zi.filename)
+        elif zi.filename == tos_fn:
+            #input_tos_file = os.path.join(unpack_dir, tos_fn)
+            #output_tos_file = get_named_temp("output_tos")
+            #process_tosimage(input_tos_file, output_tos_file)
+            common.ZipWrite(output_zip, OPTIONS.tos_image, zi.filename)
         else:
             if (zi.file_size >= 2 * GiB):
                 common.ZipWrite(output_zip, os.path.join(unpack_dir, zi.filename), zi.filename)
