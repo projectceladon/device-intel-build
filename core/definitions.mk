@@ -141,7 +141,8 @@ $(hide) find $(TARGET_DEVICE_DIR)/ablvars/acpi_table -type f | while read file; 
 done
 $(hide) dd if=/dev/zero of=$(dir $@)/cmdline bs=512 count=1;
 $(hide) if [ -s $(dir $@)/acpi.tables ];then \
-	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi.tables; else \
+	echo 8600b1ac | xxd -r -ps > $(dir $@)/acpi_tag; \
+	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi_tag $(dir $@)/acpi.tables; else \
 	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf); fi
 $(hide) if `test $(TARGET_BUILD_VARIANT) == eng`; then \
 	cp $(@:.abl=.ablunsigned) $@ ; else \
