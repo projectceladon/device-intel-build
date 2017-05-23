@@ -1,0 +1,291 @@
+#!/usr/bin/env python
+"""
+Given a target-files zipfile, connect to the device over Fastboot and verify that
+the installed system exactly matches that build.
+
+Usage: verify_from_target_files <target-files-package>
+
+   -V (--variant) <variant name> IRDA device variant, if applicable
+"""
+
+import sys
+import hashlib
+import os
+import subprocess
+import zipfile
+import re
+import tempfile
+
+# Android Release Tools
+sys.path.append("build/tools/releasetools")
+import common
+
+sys.path.append("device/intel/build/releasetools")
+import intel_common
+
+OPTIONS = common.OPTIONS
+OPTIONS.variant = None
+
+_SIMG2IMG = "out/host/linux-x86/bin/simg2img"
+_FASTBOOT = "out/host/linux-x86/bin/fastboot"
+
+def get_hash_and_size_from_file(filename):
+    fd = open(filename)
+    data = fd.read()
+    fd.close()
+    h = hashlib.sha1(data).hexdigest()
+    s = len(data)
+    return (h, s)
+
+
+def hash_sparse_ext4_image(unpack_dir, image_name):
+    img_path = os.path.join(unpack_dir, "IMAGES", image_name)
+    print "Hashing TFP", image_name
+    t = tempfile.NamedTemporaryFile(delete=False)
+    OPTIONS.tempfiles.append(t.name)
+    t.close()
+
+    subprocess.check_call([_SIMG2IMG, img_path, t.name])
+
+    remain = os.path.getsize(t.name)
+    fd = open(t.name)
+    hc = hashlib.sha1()
+
+    while (remain):
+        data = fd.read(1024 * 1024)
+        hc.update(data)
+        remain = remain - len(data)
+
+    fd.close()
+    return hc.hexdigest()
+
+
+def check_bootimage(name, unpack_dir, hashdict):
+    img = common.GetBootableImage(name, name+".img", unpack_dir,
+                name.upper())
+
+    h = hashlib.sha1(img.data).hexdigest()
+    if "/"+name not in hashdict:
+        print "FAILED: Hash for", name, " image not reported by device"
+        return False
+
+    if (h != hashdict["/"+name]):
+        print "FAILED: Hash mismatch for", name, "image"
+        print "got",hashdict["/"+name],"expected",h
+        return False
+
+    print name, "image OK"
+    return True
+
+
+"""
+Sample output:
+
+...
+(bootloader) target: /boot
+(bootloader) hash: d0448a1e91030e5c37277e4a77eabefc36fc8e6c
+(bootloader) target: /recovery
+(bootloader) hash: 411c61de23f6f73934b79eda4f64779706c220f4
+* For EFI devices :
+(bootloader) target: /bootloader/EFI/BOOT/bootx64.efi
+(bootloader) hash: 2773c4c039dc37b96171f6ef131f04dd8faf73e1
+(bootloader) target: /bootloader/loader.efi
+(bootloader) hash: 2773c4c039dc37b96171f6ef131f04dd8faf73e1
+(bootloader) target: /bootloader/fastboot.img
+(bootloader) hash: b0b3d122c4dca255ed2a75268ef30f6cbbc11085
+* For Non-EFI ( Example - Sofia and variants ) :
+(bootloader) target: /boot_signed
+(bootloader) hash: 0ab1df5e94d964e5fa33d05ec0ee19514e6dcd33
+(bootloader) target: /recovery_signed
+(bootloader) hash: 52e7d0e8ad4ab729102511e65d32b9f61e7e6127
+(bootloader) target: /system_signed
+(bootloader) hash: 295282400188ec1900576231d8b4bc8379a0dc1a
+(bootloader) target: /psi_flash_signed
+(bootloader) hash: daff3cff77b988b9e0292285fa9a14b62469f9bb
+(bootloader) target: /slb_signed
+(bootloader) hash: ed08467146ce7080c21a46abed07bf3730ab103f
+(bootloader) target: /ucode_patch_signed
+(bootloader) hash: 5c1409292aacc0d4e111f274f57e76bc35556a10
+(bootloader) target: /mvconfig_smp_signed
+(bootloader) hash: 4de287fdf2fc895507c7ea4c28ae18af847c687d
+(bootloader) target: /secvm_signed
+(bootloader) hash: 607bd9b4b5817d3ea0e0eaaafbd62c1576267fba
+(bootloader) target: /mobilevisor_signed
+(bootloader) hash: 5de7bd93ccbafbb449e9bbbd1eecfed3c5bf4091
+(bootloader) target: /splash_img_signed
+(bootloader) hash: 91802c6f1b87d3b3cfdd53c2ecc8e0660533bee1
+*
+(bootloader) target: /system
+(bootloader) hash: d417239a25df718d73b6326e6c93a7fc1b00afb2
+OKAY [134.307s]
+finished. total time: 134.307s
+"""
+
+_TARGET_LINE_PREFIX = "(bootloader) target: "
+_HASH_LINE_PREFIX = "(bootloader) hash: "
+
+
+def process_fastboot_data(data):
+    hashes = {}
+    lines = data.split("\n")
+    index = 0
+
+    for i in range(len(lines)):
+        line = lines[i]
+        if not line.startswith(_TARGET_LINE_PREFIX):
+            continue
+
+        target = line[len(_TARGET_LINE_PREFIX):]
+        i = i + 1
+        line = lines[i]
+        if not line.startswith(_HASH_LINE_PREFIX):
+            raise Exception("unexpected Fastboot output")
+
+        hashdata = line[len(_HASH_LINE_PREFIX):]
+        print "DUT reported", target, hashdata
+        hashes[target] = hashdata
+    return hashes
+
+
+def main(argv):
+
+    def option_handler(o, a):
+        if o in ("-V", "--variant"):
+            OPTIONS.variant = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__, extra_opts="V:",
+            extra_long_opts=["variant="], extra_option_handler=option_handler)
+
+    if (len(args) != 1):
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    print "Extracting target files package..."
+    unpack_dir, tfp = common.UnzipTemp(args[0])
+    success = True
+    OPTIONS.info_dict = common.LoadInfoDict(tfp)
+    platform_efi, platform_sflte, platform_abl = intel_common.CheckIfSocEFI(unpack_dir, variant=OPTIONS.variant)
+
+    print "Extracting bootloader archive..."
+    data = intel_common.GetBootloaderImageFromTFP(unpack_dir,
+            variant=OPTIONS.variant)
+    image = common.File("bootloader.img", data).WriteToTemp()
+    if not platform_efi:
+        additional_data = intel_common.GetBootloaderImagesfromFls(unpack_dir,
+            variant=OPTIONS.variant)
+        bootloader_img = tempfile.mkdtemp(prefix="bootloader-")
+        OPTIONS.tempfiles.append(bootloader_img)
+    else:
+        esp_root = tempfile.mkdtemp(prefix="bootloader-")
+        OPTIONS.tempfiles.append(esp_root)
+    intel_common.add_dir_to_path("/sbin")
+    bootloader_sizes = ""
+
+    if platform_efi:
+        subprocess.check_output(["mcopy", "-s", "-i", image.name, "::*", esp_root]);
+    else:
+        subprocess.check_output(["cp", image.name, bootloader_img + "/bootloader" ]);
+        if additional_data is not None:
+            for imgname, imgdata in additional_data.iteritems():
+                img = common.File(imgname,imgdata).WriteToTemp()
+                subprocess.check_output(["cp", img.name, bootloader_img + "/" + imgname]);
+                if imgname != 'fw_update' and imgname != 'bootloader' and imgname != 'vrl':
+                    bootloader_sizes += ":" + str(len(imgdata))
+                img.close()
+    image.close();
+
+    for app in [_SIMG2IMG, _FASTBOOT]:
+        if not os.path.exists(app):
+            print "Can't find", app
+            print "Run lunch and 'm fastboot otatools'"
+            sys.exit(1)
+
+    print "Running 'fastboot oem get-hashes" + bootloader_sizes + "'..."
+    fastboot_data = subprocess.check_output([_FASTBOOT, "oem", "get-hashes" + bootloader_sizes],
+            stderr=subprocess.STDOUT)
+    hashdict = process_fastboot_data(fastboot_data)
+
+    sys.stdout.write("Checking boot images...\n")
+    for bootimage in ["boot", "recovery"]:
+        if not check_bootimage(bootimage, unpack_dir, hashdict):
+            success = False
+
+    sys.stdout.write("Checking bootloader...\n")
+    if platform_efi :
+        bootloader_root = esp_root
+        devpath_prefix = "/bootloader/"
+    else :
+        bootloader_root = bootloader_img
+        devpath_prefix = "/"
+
+    bootloaderimg_path = os.path.join(unpack_dir, "RADIO", "bootloader.img")
+    print "bootloaderimg_path=", bootloaderimg_path
+
+    bootloader_hash, bootloader_size = get_hash_and_size_from_file(bootloaderimg_path)
+    print "bootloader_hash=",bootloader_hash
+    print "   =",hashdict["/bootloader"]
+    if hashdict["/bootloader"] != bootloader_hash:
+        print "FAILED: hash mismatch for /bootloader"
+        success = False
+    else:
+        print "/bootloader hash match!"
+
+    for dpath, dname, fnames in os.walk(bootloader_root):
+        for fname in fnames:
+            # Capsule update file -- gets consumed and deleted by the firmware
+            # at first boot, shouldn't try to check it
+            if (fname == "BIOSUPDATE.fv"):
+                continue
+            abspath = os.path.join(dpath, fname)
+            relpath = os.path.relpath(abspath, bootloader_root)
+
+            h, s = get_hash_and_size_from_file(abspath)
+            devpath = devpath_prefix + relpath
+            #FIXME Right now in flashfiles we flash fwu_image.fls onto
+            #the fw_update partition. If we move to fastboot flash bootloader
+            #we will have to change to comparing with fw_update to bootloader.
+            #Skip comparing bootloader until this is figured out.
+            if (devpath == '/bootloader' and not platform_efi):
+                continue
+
+            if devpath not in hashdict:
+                print "FAILED: no hash reported for", devpath
+                success = False
+                continue
+
+            if hashdict[devpath] != h:
+                print "FAILED: hash mismatch for", devpath
+                success = False
+                continue
+
+            print devpath,"OK"
+
+
+    sys.stdout.write("Checking system partition...\n")
+    if "/system" in hashdict:
+        syshash = hash_sparse_ext4_image(unpack_dir, "system.img")
+        if hashdict["/system"] != syshash:
+            print "FAILED: system image hash mismatch"
+            success = False
+        else:
+            print "System image OK"
+    else:
+        print "FAILED: system hash not reported"
+        success = False
+
+
+    if success:
+        print "All tests completed successfully"
+    else:
+        print "OTA Tests FAILED!"
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    finally:
+        common.Cleanup()

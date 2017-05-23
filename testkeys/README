@@ -1,0 +1,87 @@
+The PK, KEK and DB key pairs are required by UEFI BIOS for secure
+boot. The 1st UEFI boot loader should be signed with DB key pairs. and
+certificates of PK, KEK and DB should be enrolled into BIOS with the
+help either from UEFI applications in the installer or operations in
+the BIOS setup menu by the user.
+
+These key pairs are generated for test purposes (secure boot,
+OTA...) only with these commands.
+
+development/tools/make_key PK          "/CN=PK/"
+development/tools/make_key KEK         "/CN=KEK/"
+development/tools/make_key DB          "/CN=DB/"
+development/tools/make_key vendor      "/CN=vendor/"
+development/tools/make_key oem         "/CN=oem/"
+development/tools/make_key odm         "/CN=odm/"
+development/tools/make_key OAK         "/CN=OAK/"
+
+Developers and OEMs should provide their own key pairs if they want to
+use their own private keys to sign the 1st UEFI boot loader and enroll the
+certificates into BIOS. They shall have their own approach to manage
+their keys as well.
+
+Various tools may want the keys in PEM or DER format. Right now the
+private .pk8 key is in DER and the .x509.pem is in PEM.
+
+To convert private key to PEM:
+ openssl pkcs8 -inform DER -nocrypt -in key.pk8 -out key.pem
+
+To convert public key to DER:
+ openssl x509 -inform PEM -outform DER -in key.x509.pem -out key.x509
+
+If Intel provides any signed binary to customers (official released binaries),
+these test keys shall NOT be used.
+
+The following variables control how images are signed. Unless specified,
+defaults to build/target/product/security/testkey
+
+PRODUCT_VERITY_SIGNING_KEY - Key to sign the AOSP boot images
+
+For building EFI executables outside the Android build system using
+generate-prebuilts.sh scripts:
+
+DB_KEY_PAIR - Key to sign uefi_shim. DB key for efitools LockDown.efi.
+GUMMIBOOT_KEY_PAIR - Key to sign Gummiboot 2nd stage loader. Must be either
+    the DB or vendor key. Defaults to vendor.
+KEK_KEY_PAIR - KEK key for efitools LockDown.efi
+PK_KEY_PAIR - PK key for efitools LockDown.efi
+VENDOR_KEY_PAIR - key embedded within shim.efi that can be used to verify
+  later boot stages if the DB key is undesirable to use.
+
+You should leave these as defaults and use sign_target_files_apks to use
+production keys for releases. Developer builds should always use these
+test keys.
+
+BOOTLOADER POLICY:
+
+The bootloader policy is based on two time-based authenticated EFI
+variables:
+- OAK is the SHA256 of the certificate (OAK.x509.pem)
+- BPM is the Bootloader Policy bitMask
+
+These variables are flashed using the "fastboot flash oemvars"
+mechanism.  Flash-able files are generated using the
+device/intel/build/generate_blpolicy_oemvars script.
+
+If you have already flashed the the OAK and BPM OEMVARS signed with
+the wrong odm key you have to delete these variables before you set
+the new values.  To do so, you have to generate a delete flash-able
+file as follow:
+
+$ device/intel/build/generate_blpolicy_oemvars -K device/intel/build/testkeys/odm \
+       -O device/intel/build/testkeys/OAK.x509.pem -B 0x0000000000000000 \
+       -D bpc-delete.txt bpc-default.txt
+
+Then flash flash the bpc-delete.txt in fastboot mode:
+$ fastboot flash oemvars bpc-delete.txt
+
+Or you can use the testkeys/blpolicy-delete.txt which has been
+generated with testkeys/odm and a timestamp far into the future
+(2050/1/1).
+
+At build time, the bootloader_policy-oemvars.txt file is generated
+based on the keys in device/intel/build/testkeys/[odm,OAK] and
+Makefile defined TARGET_BOOTLOADER_POLICY variable (BPM value) using
+the generate_blpolicy_oemvars script.  This
+bootloader_policy-oemvars.txt is flashed during the device
+provisioning.

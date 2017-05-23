@@ -1,0 +1,267 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2015, Intel Corporation
+#
+# Author: Jeremy Compostella <jeremy.compostella@intel.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#
+# This script has no Intel or AOSP releasetools dependencies and must
+# be kept this way.  This script has to run on both Linux and Windows
+# and the AOSP releasetools package does not work well on Windows.
+
+"""Produces a text file suitable for flashing with "fastboot flash
+oemvars" which sets the device's time-based authenticated OAK and BPM
+variables.
+
+Key pair supplied in the command line is expected to be in .pk8 and
+.x509.pem format.
+
+generate_blpolicy_oemvars [options] <output filename>
+
+  -K (--odm-pair) <key pair>: path to the file path prefix (ex:
+     ./testkey/odm for ./testkeys/odm.pk8 and ./testkeys/odm.x509.pem).
+
+  -O (--oak-cert) <cert>: path to the OAK certificate path (ex:
+     ./testkeys/OAK.x509.pem).
+
+  -B (--bpm-value) <bpm-value>: Bootloader Policy BitMask value (ex:
+     0x0 for class B, 0x1 for class A).
+
+  -D (--disable) <file>: produces an additional OEMVARS file to delete
+     the OAK and BPM variables.  Do not even generate such a file for
+     production values !
+
+  -T (--timestamp) <UNIX timestamp>: Timestamp (seconds since the
+     Epoch) to use for authenticated UEFI Variables.  If not supplied,
+     current time is used.
+
+  -P (--password) <password>: password to use if the odm private key
+     (odm.pk8) is password protected.
+
+  -v (--verbose) Print subcommand calls
+
+"""
+import sys
+import tempfile
+import os
+import time
+import struct
+import hashlib
+import subprocess
+import getopt
+
+verbose = False
+# same than define by AOSP scripts.
+private_key_suffix = ".pk8"
+certificate_suffix = ".x509.pem"
+
+def run(args, in_arg):
+    if verbose:
+        print "  running: ", " ".join(args)
+    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    if in_arg:
+        in_arg += "\n"
+    p.communicate(in_arg)
+    return p.returncode
+
+
+def tempfilename(prefix, data):
+    # delete = False is mandatory.  Working with temporary file on
+    # Windows prevent us to use automatic temporary file deletion.
+    # Plus, a temporary file cannot be opened by two processes at the
+    # same time.
+    tf = tempfile.NamedTemporaryFile(prefix=prefix, delete = False)
+    if data:
+        tf.write(data)
+    tf.close()
+    return tf.name
+
+
+def pem_cert_to_der_cert(pem_cert_path):
+    fname = tempfilename("pem_cert_to_der_cert", None)
+    ret = run(["openssl", "x509", "-inform", "PEM", "-outform", "DER",
+               "-in", pem_cert_path, "-out", fname], None)
+    assert ret == 0, "openssl cert conversion failed"
+    with file(fname, "rb") as f:
+        der = f.read()
+    os.remove(fname)
+    return der
+
+
+def pk8_to_pem(der_key_path, password=None):
+    # If the key is already available in converted form, then use that
+    # file. This is important for .pk8 files that actually contain references
+    # to ECSS keys, because they are not fully parseable by openssl.
+    (der_key_path_root,der_key_path_ext) = os.path.splitext(der_key_path)
+    der_key_path_pem = der_key_path_root + ".pem"
+    if os.path.exists(der_key_path_pem):
+        return open(der_key_path_pem)
+
+    # Defaults to 0600 permissions which is defintitely what we want!
+    fname = tempfilename("pk8_to_pem", None)
+    cmd = ["openssl", "pkcs8"];
+    if password:
+        cmd.extend(["-passin", "stdin"])
+    else:
+        cmd.append("-nocrypt")
+
+    cmd.extend(["-inform", "DER", "-outform", "PEM",
+                "-in", der_key_path, "-out", fname])
+    ret = run(cmd, password)
+    assert ret == 0, "openssl key conversion failed"
+    return fname
+
+
+def escaped_value(value):
+    result = ''
+    for char in value:
+        result += "%%%02x" % ord(char)
+    return result
+
+
+def get_auth_data(timestamp, sign_pair, password, guid_str, name, payload):
+    payload_fname = tempfilename("payload-" + name + "-", payload)
+    pemkey_fname = pk8_to_pem(sign_pair + private_key_suffix, password)
+    auth_fname = tempfilename("auth_file-" + name + "-", None)
+    timestampfmt = "%Y-%m-%d %I:%M:%S"
+
+    ret = run(["sign-efi-sig-list", "-t",
+               time.strftime(timestampfmt, time.strptime(time.ctime(timestamp))),
+               "-c", sign_pair + certificate_suffix,
+               "-g", guid_str, "-k", pemkey_fname,
+               name, payload_fname, auth_fname], None)
+    assert ret == 0, "sign-efi-sig-list failed"
+    auth_file = open(auth_fname, 'rb')
+    data = auth_file.read()
+    auth_file.close()
+
+    os.remove(payload_fname)
+    os.remove(pemkey_fname)
+    os.remove(auth_fname)
+    return data
+
+
+def usage():
+    print __doc__.rstrip("\n")
+
+
+class UsageError(RuntimeError):
+  pass
+
+
+def main(argv):
+    guid = "1ac80a82-4f0c-456b-9a99-debeb431fcc1" # BootloaderPolicy GUID = Fastboot GUID
+    odm_pair = None
+    oak_cert = None
+    bpm_value = 0x0
+    disable = False
+    all_keys = set()
+    password = None
+    timestamp = 0
+
+    os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.realpath(sys.argv[0]))
+    try:
+        opts, args = getopt.getopt(argv, "hK:O:B:D:T:P:v",
+                                   ["odm-pair=", "oak-cert=",
+                                    "bpm-value=", "disable=",
+                                    "timestamp=", "password=",
+                                    "help", "verbose" ])
+    except getopt.GetoptError as err:
+        usage()
+        print "**", str(err), "**",
+        sys.exit(2)
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        if o in ("-K", "--odm-pair"):
+            odm_pair = a
+        elif o in ("-O", "--oak-cert"):
+            oak_cert = a
+        elif o in ("-B", "--bpm-value"):
+            bpm_value = a
+        elif o in ("-D", "--disable"):
+            disable = a
+        elif o in ("-T", "--timestamp"):
+            timestamp = int(a)
+        elif o in ("-P", "--password"):
+            password = a
+        elif o in ("-v", "--verbose"):
+            global verbose
+            verbose = True
+        else:
+            assert False, "unknown option \"%s\"" % (o,)
+
+    if len(args) != 1:
+        usage()
+        sys.exit(1)
+
+    if not odm_pair:
+        raise UsageError("use of -K is mandatory")
+
+    if not oak_cert:
+        raise UsageError("use of -O is mandatory")
+
+    if not bpm_value:
+        raise UsageError("use of -B is mandatory")
+
+    if not timestamp:
+        timestamp = int(time.time())
+
+    cert = pem_cert_to_der_cert(oak_cert)
+    m = hashlib.sha256()
+    m.update(cert)
+
+    oak = get_auth_data(timestamp, odm_pair,
+                        password, guid, "OAK", m.digest())
+
+    bpm = get_auth_data(timestamp, odm_pair,
+                        password, guid, "BPM",
+                        struct.pack("<Q", int(bpm_value, 0)))
+
+    output = open(args[0], "wb")
+    output.write("# This file is generated by generate_blpolicy_oemvars to set the \
+Bootloader Policy\n");
+    output.write("GUID = %s\n\n" % guid)
+    output.write("[ad] OAK %s\n\n" % escaped_value(oak))
+    output.write("[ad] BPM %s\n\n" % escaped_value(bpm))
+    output.close()
+
+    if disable:
+        # Add 1 to the timestamp so they can always be disabled; auth variables only apply
+        # for monotonically increasing values
+        disable_oak = get_auth_data(timestamp + 1, odm_pair,
+                                    password, guid, "OAK", None)
+        disable_bpm = get_auth_data(timestamp + 1, odm_pair,
+                                    password, guid, "BPM", None)
+        output = open(disable, "wb")
+        output.write("# This file is generated by generate_blpolicy_oemvars to disable the \
+Bootloader Policy.\n");
+        output.write("# This file clear the secured variables.  Use with caution.\n");
+        output.write("GUID = %s\n\n" % guid)
+        output.write("[ad] OAK %s\n\n" % escaped_value(disable_oak))
+        output.write("[ad] BPM %s\n\n" % escaped_value(disable_bpm))
+        output.close()
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except UsageError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
+
