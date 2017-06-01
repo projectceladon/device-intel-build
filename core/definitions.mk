@@ -13,8 +13,6 @@ CLEAR_VARS := $(IAFW_BUILD_SYSTEM)/clear_vars.mk
 # Interesting binaries
 KEYSTORE_SIGNER := $(HOST_OUT_EXECUTABLES)/keystore_signer
 GENERATE_VERITY_KEY := $(HOST_OUT_EXECUTABLES)/generate_verity_key$(HOST_EXECUTABLE_SUFFIX)
-ABLIMAGE := $(HOST_OUT_EXECUTABLES)/ias_image_app$(HOST_EXECUTABLE_SUFFIX)
-ABLSIGN := $(HOST_OUT_EXECUTABLES)/ias_image_signer$(HOST_EXECUTABLE_SUFFIX)
 MCOPY := $(HOST_OUT_EXECUTABLES)/mcopy$(HOST_EXECUTABLE_SUFFIX)
 SESL :=  $(HOST_OUT_EXECUTABLES)/sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 CTESL :=  $(HOST_OUT_EXECUTABLES)/cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
@@ -25,8 +23,6 @@ SBSIGN := sbsign
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
-    $(ABLIMAGE) \
-    $(ABLSIGN) \
     $(KEYSTORE_SIGNER) \
     $(GENERATE_VERITY_KEY) \
     $(SESL) \
