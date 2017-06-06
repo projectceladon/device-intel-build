@@ -39,6 +39,10 @@ INTEL_OTATOOLS := \
     $(FASTBOOT) \
     $(CTESL)
 
+ifneq (,$(findstring gordon_peak,$(TARGET_PRODUCT)))
+INTEL_OTATOOLS += abl_toolchain
+endif
+
 otatools: $(INTEL_OTATOOLS)
 
 # FIXME: may be unsafe to omit -no-sse
