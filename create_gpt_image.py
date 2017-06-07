@@ -457,6 +457,7 @@ class TableEntryInfos(object):
             'linux': {
                       'android_vbmeta': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_multiboot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'android_tos' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'android_bootloader2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
