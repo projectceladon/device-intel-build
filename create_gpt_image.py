@@ -115,7 +115,12 @@ class MBRInfos(object):
         """
         # reads the image file
         img_file.seek(offset)
-        self.raw = img_file.read(self.block_size)
+        # MBR size is 512 Bytes, so that img_file.read is a fixed size 512 Bytes
+        # fix the issue when block_size is seted 4096 by using UFS
+        if self.block_size > 512:
+            self.raw = img_file.read(512)
+        else:
+            self.raw = img_file.read(self.block_size)
 
         # unpacks the raw MBR to a named tuple
         self.boot, self.os_type, self.lba_start, self.lba_size, self.dummy_1, \
