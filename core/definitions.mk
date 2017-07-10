@@ -148,12 +148,10 @@ $(hide) if [ -s $(dir $@)/acpi.tables ];then \
 	echo 8600b1ac | xxd -r -ps > $(dir $@)/acpi_tag; \
 	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi_tag $(dir $@)/acpi.tables; else \
 	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf); fi
-$(hide) if `test $(TARGET_BUILD_VARIANT) == eng`; then \
-	cp $(@:.abl=.ablunsigned) $@ ; else \
 	$(ABLSIGN) $(@:.abl=.ablunsigned) \
 	$(ABL_OS_KERNEL_KEY).pk8 \
 	$(ABL_OS_KERNEL_KEY).x509.pem \
-	$@ ; fi
+	$@
 endef
 
 # Hook up the prebuilts generation mechanism
