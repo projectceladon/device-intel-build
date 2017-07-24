@@ -207,7 +207,7 @@ $(TESTOS_RAMDISK): \
 
 TESTOS_CMDLINE := g_android.fastboot=0
 TESTOS_CMDLINE += $(BOARD_KERNEL_CMDLINE)
-TESTOS_CMDLINE += enforcing=0 androidboot.selinux=disabled
+TESTOS_CMDLINE += enforcing=0 androidboot.selinux=permissive
 
 INTERNAL_TESTOSIMAGE_ARGS := \
        --kernel $(TESTOS_KERNEL) \
