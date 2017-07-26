@@ -463,7 +463,7 @@ class TableEntryInfos(object):
                       'multiboot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'tos' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'android_bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bootloader2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bldr_utils': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'vendor': '0fc63daf-8483-4772-8e79-3d69d8477de4',
@@ -874,10 +874,7 @@ class GPTImage(object):
         """
         for tlb_part in tlb_infos:
             # removes the prefix "android_"
-            if tlb_part.label == "android_bootloader":
-                truncated_label = tlb_part.label[8:]
-            else:
-                truncated_label = tlb_part.label[0:]
+            truncated_label = tlb_part.label[0:]
 
             # gives the path of binary used to write the partition
             bin_path = binaries_path[truncated_label]
