@@ -455,6 +455,10 @@ class TableEntryInfos(object):
             'misc': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'metadata': '5808C8AA-7E8F-42E0-85D2-E1E90434CFB3',
             'linux': {
+                      'xen_dom0' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'xen_misc' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'xen_guest' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'xen_rootfs' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'vbmeta': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'multiboot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'tos' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
@@ -704,6 +708,10 @@ class GPTImage(object):
                  'gpt_header', 'table')
 
     ANDROID_PARTITIONS = [
+        'xen_dom0',
+        'xen_misc',
+        'xen_guest',
+        'xen_rootfs',
         'vbmeta',
         'multiboot',
         'bootloader',
