@@ -23,6 +23,7 @@ DUMPEXT2IMG := $(HOST_OUT_EXECUTABLES)/dumpext2img
 MCOPY := $(HOST_OUT_EXECUTABLES)/mcopy$(HOST_EXECUTABLE_SUFFIX)
 SESL :=  $(HOST_OUT_EXECUTABLES)/sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 CTESL :=  $(HOST_OUT_EXECUTABLES)/cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
+IASL := $(HOST_OUT_EXECUTABLES)/iasl
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
@@ -37,7 +38,22 @@ INTEL_OTATOOLS := \
     $(GENERATE_VERITY_KEY) \
     $(SESL) \
     $(FASTBOOT) \
-    $(CTESL)
+    $(CTESL) \
+    $(IASL)
+
+ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
+    ifeq ($(BOARD_AVB_ENABLE),true)  #VBOOT2.0
+        ifeq ($(BOARD_SLOT_AB_ENABLE),true)
+            FIRST_STAGE_MOUNT_CFG_FILE := $(TARGET_DEVICE_DIR)/ablvars/asl/first-stage-mount-cfg-avb_ab.asl
+        else
+            FIRST_STAGE_MOUNT_CFG_FILE := $(TARGET_DEVICE_DIR)/ablvars/asl/first-stage-mount-cfg-avb.asl
+        endif
+    else #VBOOT1.0
+        FIRST_STAGE_MOUNT_CFG_FILE := null
+    endif
+else
+    FIRST_STAGE_MOUNT_CFG_FILE := null
+endif
 
 ifneq (,$(findstring gordon_peak,$(TARGET_PRODUCT)))
 INTEL_OTATOOLS += abl_toolchain
@@ -132,6 +148,13 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
     -o $(@:.abl=.elf)
 $(hide) $(IAFW_STRIP) -s $(@:.abl=.elf)
+
+$(hide) if [ -e $(FIRST_STAGE_MOUNT_CFG_FILE) ]; then \
+            $(IASL) -p $(TARGET_DEVICE_DIR)/ablvars/acpi_table/ssdt $(FIRST_STAGE_MOUNT_CFG_FILE); \
+        elif [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table/ssdt.aml ]; then \
+            rm $(TARGET_DEVICE_DIR)/ablvars/acpi_table/ssdt.aml; \
+        fi
+
 $(hide) rm -rf $(dir $@)/acpi.tables;
 $(hide) find $(TARGET_DEVICE_DIR)/ablvars/acpi_table -type f | while read file; do \
 	detect_size=`od -j4 -N4 -An -t u4 $${file}`; \
