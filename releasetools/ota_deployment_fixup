@@ -66,6 +66,7 @@ OPTIONS.incremental = False
 OPTIONS.variant = False
 OPTIONS.base_variant = False
 OPTIONS.source_info_dict = None
+OPTIONS.buildnum = None
 
 # TODO: fetch default for this out default_system_dev_certificate in the TFP
 # once a TFP is a required argument
@@ -93,9 +94,12 @@ def process_metadata(data):
             segments = v.split(':')
             segments[0] = fingerprint_new
             linesout.append('='.join([k,':'.join(segments)]))
-        elif k == "pre-device":
-            if OPTIONS.device:
-                linesout.append('='.join([k,OPTIONS.device]))
+#        elif k == "pre-device":
+#            if OPTIONS.device:
+#                linesout.append('='.join([k,OPTIONS.device]))
+        elif k == "post-build-incremental":
+            if OPTIONS.buildnum:
+                linesout.append('='.join([k,OPTIONS.buildnum]))
         else:
             linesout.append(line)
     return '\n'.join(linesout)
@@ -310,16 +314,18 @@ def main(argv):
             OPTIONS.base_variant = a
         elif o in ("-l", "--lunch"):
             OPTIONS.lunch = a
+        elif o in ("-b", "--buildnum"):
+            OPTIONS.buildnum = a
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "B:P:D:k:M:f:T:S:V:L:l:",
+            extra_opts = "B:P:D:k:M:f:T:S:V:L:l:b",
             extra_long_opts = ["brand=","pre_fish_name=","fish_name=",
                 "product=", "device=", "package_key=", "target_files=",
                 "source_target_files=", "variant=", "legacy_variant=",
-                "lunch="],
+                "lunch=","buildnum="],
             extra_option_handler = option_handler)
 
     check_arg(OPTIONS.tfp, "Missing --target_files option")

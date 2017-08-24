@@ -4,6 +4,7 @@ ifeq ($(TARGET_BUILD_TYPE),debug)
 endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
+BUILDNUM := $(shell $(DATE) +%H%M%3S)
 
 ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := device/intel/build/releasetools/flashfiles_from_target_files
@@ -45,7 +46,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	$(hide) mkdir -p $(dir $@)
 	$(eval y = $(subst -, ,$(basename $(@F))))
 	$(eval DEV = $(word 3, $(y)))
-	$(hide) export ANDROID_BUILD_TOP=$(PWD); $(odf) --verbose --variant=$(DEV) \
+	$(hide) export ANDROID_BUILD_TOP=$(PWD); $(odf) --verbose --buildnum=$(BUILDNUM) --variant=$(DEV) \
 		--target_files $(BUILT_TARGET_FILES_PACKAGE) \
 		$(INTERNAL_OTA_PACKAGE_TARGET) $@
 
