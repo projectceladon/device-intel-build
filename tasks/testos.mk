@@ -42,6 +42,15 @@ testos_extra_vendor_files := \
                 $(ALL_GENERATED_SOURCES) \
                 $(ALL_DEFAULT_INSTALLED_MODULES)))
 
+# testos boot Partition table configuration file
+BOARD_GPT_INI = ./device/intel/mixins/groups/testos/true/gpt.testos.ini
+BOARD_GPT_BIN = $(PRODUCT_OUT)/gpt_testos.bin
+GPT_INI2BIN := ./device/intel/common/gpt_bin/gpt_ini2bin.py
+
+$(BOARD_GPT_BIN): $(BOARD_GPT_INI)
+	$(hide) $(GPT_INI2BIN) $< > $@
+	$(hide) echo GEN $(notdir $@)
+
 # Need a special way to get target copyfiles into testos
 # filter the needed pairs based on the defined lists
 # TARGET_TESTOS_COPY_FILES is a list of file paths in the device
@@ -225,7 +234,8 @@ $(TESTOS_BOOTIMAGE): \
         $(BOOT_SIGNER) \
         $(MKBOOTIMG) \
         $(INSTALLED_BOOTLOADER_MODULE) \
-        $(BOARD_FIRST_STAGE_LOADER)
+        $(BOARD_FIRST_STAGE_LOADER) \
+	$(BOARD_GPT_BIN)
 
 	$(hide) $(MKBOOTIMG)  $(INTERNAL_TESTOSIMAGE_ARGS) \
 		     $(BOARD_MKBOOTIMG_ARGS) \
