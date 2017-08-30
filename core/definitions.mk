@@ -50,7 +50,7 @@ ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
             FIRST_STAGE_MOUNT_CFG_FILE := $(TARGET_DEVICE_DIR)/ablvars/asl/first-stage-mount-cfg-avb.asl
         endif
     else #VBOOT1.0
-        FIRST_STAGE_MOUNT_CFG_FILE := null
+        FIRST_STAGE_MOUNT_CFG_FILE := $(TARGET_DEVICE_DIR)/ablvars/asl/first-stage-mount-cfg.asl
     endif
 else
     FIRST_STAGE_MOUNT_CFG_FILE := null
