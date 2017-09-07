@@ -90,7 +90,7 @@ def process_metadata(data):
             linesout.append(line)
             continue
         k,v = line.split('=')
-        if k == "pre-build" or k == "post-build":
+        if k == "pre-build":
             segments = v.split(':')
             segments[0] = fingerprint_new
             linesout.append('='.join([k,':'.join(segments)]))
