@@ -150,14 +150,17 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     -o $(@:.abl=.elf)
 $(hide) $(IAFW_STRIP) -s $(@:.abl=.elf)
 
+$(hide) cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf
 $(hide) if [ -e $(FIRST_STAGE_MOUNT_CFG_FILE) ]; then \
-            $(IASL) -p $(TARGET_DEVICE_DIR)/ablvars/acpi_table/ssdt $(FIRST_STAGE_MOUNT_CFG_FILE); \
-        elif [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table/ssdt.aml ]; then \
-            rm $(TARGET_DEVICE_DIR)/ablvars/acpi_table/ssdt.aml; \
+            $(IASL) -p $(dir $@)/acpi_table/ssdt $(FIRST_STAGE_MOUNT_CFG_FILE); \
+        elif [ -e $(dir $@)/acpi_table/ssdt.aml ]; then \
+            rm $(dir $@)/acpi_table/ssdt.aml; \
         fi
 
+$(hide) wait
+
 $(hide) rm -rf $(dir $@)/acpi.tables;
-$(hide) find $(TARGET_DEVICE_DIR)/ablvars/acpi_table -type f | while read file; do \
+$(hide) find $(dir $@)/acpi_table -type f | while read file; do \
 	detect_size=`od -j4 -N4 -An -t u4 $${file}`; \
 	[ -z "$${detect_size}" ] && detect_size=0; \
 	actual_size=`wc -c < $${file}`; \
