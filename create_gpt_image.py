@@ -451,6 +451,8 @@ class TableEntryInfos(object):
             'esp': 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B',
             'fat': '024DEE41-33E7-11D3-9D69-0008C781F39F',
             'boot': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+            'boot_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+            'boot_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'recovery': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'misc': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'metadata': '5808C8AA-7E8F-42E0-85D2-E1E90434CFB3',
@@ -460,13 +462,21 @@ class TableEntryInfos(object):
                       'xen_guest' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'xen_rootfs' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'vbmeta': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'vbmeta_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'vbmeta_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'multiboot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'tos' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'tos_a' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'tos_b' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'system_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'system_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bootloader2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bldr_utils': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'vendor': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'vendor_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'vendor_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'cache': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'persistent': ('ebc597d0-2053-4b15-8b64-'
@@ -509,12 +519,13 @@ class TLBInfos(list):
     """
     TLB information extracted from the TLB partition file
     """
-    __slots__ = ('path', 'format')
+    __slots__ = ('path', 'format', 'slotab')
 
     def __init__(self, path):
         super(TLBInfos, self).__init__()
         self.path = path
         self._set_format()
+        self.slotab = 0
 
     def __repr__(self):
         result = ''
@@ -586,6 +597,11 @@ class TLBInfos(list):
         with open(self.path, 'r') as f:
             data = f.read()
 
+            try:
+                self.slotab = cfg.getint('base', 'nb_slot')
+            except NoOptionError:
+                self.slotab = 0
+
             partitions = cfg.get('base', 'partitions').split()
 
             for l in data.split('\n'):
@@ -593,7 +609,6 @@ class TLBInfos(list):
                 if len(words) > 2:
                     if words[0] == 'partitions' and words[1] == '+=':
                         partitions += words[2:]
-
         return partitions
 
     def _read_ini(self, block_size):
@@ -628,6 +643,7 @@ class TLBInfos(list):
             begin = start_lba_prev
             partname = 'partition.{0}'.format(part)
             readlen = cfg.getint(partname, 'len')
+            nb_slots = 0
 
             if readlen > 0:
                 size = (readlen * 1024 * 1024) / block_size
@@ -638,7 +654,20 @@ class TLBInfos(list):
             ptype = cfg.get(partname, 'type')
             uuid = str(uuid4())
             label = cfg.get(partname, 'label')
-            self.append(TLB_INFO(begin, size, ptype, uuid, label))
+
+            if self.slotab == 2:
+                try:
+                    if cfg.get(partname, 'has_slot') == 'true' :
+                        nb_slots = 2
+                except NoOptionError:
+                    nb_slots = 0
+
+            if nb_slots == 0:
+                self.append(TLB_INFO(begin, size, ptype, uuid, label))
+            else:
+                self.append(TLB_INFO(begin, size, ptype, uuid, label+'_a'))
+                self.append(TLB_INFO(begin+size, size, ptype, uuid, label+'_b'))
+
 
     def read(self, block_size):
         """
@@ -875,6 +904,10 @@ class GPTImage(object):
         for tlb_part in tlb_infos:
             # removes the prefix "android_"
             truncated_label = tlb_part.label[0:]
+            # removes the postfix "_a" or "_b" for slotab cases
+            if (truncated_label[len(truncated_label)-2:] == '_a' or
+            truncated_label[len(truncated_label)-2:] == '_b') :
+                truncated_label = truncated_label[:-2]
 
             # gives the path of binary used to write the partition
             bin_path = binaries_path[truncated_label]
