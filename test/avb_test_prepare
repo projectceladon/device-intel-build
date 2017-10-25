@@ -57,11 +57,11 @@ function generate_corrupted_system_images {
     TMP_VBMETA_IMG="$TMP_DIR/tmp.img"
 
     # for system.img
-    read fec_size <<< "$($AVB_TOOL info_image --image $TMP_DIR/$IMG.img | tail -5 | head -1 | awk -F" " '{print $3}')"
+    read fec_size <<< "$($AVB_TOOL info_image --image $TMP_DIR/$IMG.img | grep 'FEC size:' | awk -F" " '{print $3}')"
 
     # for vbmeta.img
-    read authen_blksize <<< "$($AVB_TOOL info_image --image $TMP_DIR/vbmeta.img | head -n 3 | tail -n -1 | awk -F" " '{print $3}')"
-    read auxil_blksize <<< "$($AVB_TOOL info_image --image $TMP_DIR/vbmeta.img | head -n 4 | tail -n -1 | awk -F" " '{print $3}')"
+    read authen_blksize <<< "$($AVB_TOOL info_image --image $TMP_DIR/vbmeta.img | grep 'Authentication Block:' | awk -F" " '{print $3}')"
+    read auxil_blksize <<< "$($AVB_TOOL info_image --image $TMP_DIR/vbmeta.img | grep 'Auxiliary Block:' | awk -F" " '{print $3}')"
 
     authen_offset=256
     hash_offset=$authen_offset
@@ -160,7 +160,7 @@ function generate_corrupted_boot_images {
     TMP_BOOT_IMG="$TMP_DIR/tmp.img"
 
     echo "Calculate boot partition size."
-    read boot_parsize <<< "$($AVB_TOOL info_image --image $TMP_DIR/$IMG.img | tail -20 | head -1 | awk -F" " '{print $3}')"
+    read boot_parsize <<< "$($AVB_TOOL info_image --image $TMP_DIR/$IMG.img | grep 'Image size:' | awk -F" " '{print $3}')"
     echo "Unsigning $IMG image."
 
     $UNSIGN_BOOT_TOOL $TMP_DIR/$IMG.img > $TMP_DIR/raw_$IMG.img
