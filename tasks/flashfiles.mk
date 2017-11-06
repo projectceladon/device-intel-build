@@ -10,7 +10,6 @@ ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := device/intel/build/releasetools/flashfiles_from_target_files
 odf := device/intel/build/releasetools/ota_deployment_fixup
 
-ifeq ($(PLATFORM_VERSION), 8.0.0)
 ifneq ($(FLASHFILE_VARIANTS),)
   # Generate variant specific flashfiles if VARIANT_SPECIFIC_FLASHFILES is True
   ifeq ($(VARIANT_SPECIFIC_FLASHFILES),true)
@@ -52,7 +51,6 @@ ifneq ($(FLASHFILE_VARIANTS),)
 
   otapackage: $(INTEL_OTA_PACKAGES)
 endif # Generate variant-specific files
-endif
 
 #Flag for unified flashfile when variants exist
 ifneq ($(FLASHFILE_VARIANTS),)
