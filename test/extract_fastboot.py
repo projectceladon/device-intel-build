@@ -149,7 +149,10 @@ def process_provzip(input_provzip, output_fn):
     path = "fastboot"
     dn = tempfile.mkdtemp()
     in_fname = input_provzip.extract(path, dn)
-    process_fastboot(in_fname, output_fn)
+    if OPTIONS.avb_key == None:
+        process_iasimage(in_fname, output_fn)
+    else:
+        process_fastboot(in_fname, output_fn)
     shutil.rmtree(dn)
 
 def process_iasimage(in_f, out_f):
