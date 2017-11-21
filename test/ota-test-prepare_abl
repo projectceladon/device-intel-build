@@ -28,7 +28,8 @@ export TFP=
 export QUICK=
 export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
-export PRODUCT_OUT=out/target/product/${TARGET_PRODUCT}
+export IS_AVB=
+export PRODUCT_OUT=out/target/product/${TARGET_DEVICE}
 ELK_IN_IFWI=0
 TOS_IMAGE_PARTITION_SIZE=10485760
 while getopts "qsmt:V:jlof" opt; do
@@ -103,6 +104,19 @@ function has_variants {
     fi
 }
 
+avb_enable_string="# Source: device/intel/mixins/groups/avb/true/BoardConfig.mk"
+function check_avb {
+    product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+    IS_AVB=$(grep "$avb_enable_string" ${product_dir}/BoardConfig.mk | wc -l || true)
+}
+
+function is_avb_enabled {
+    if [[ $IS_AVB -ge 1 ]]; then
+            return 0 # 0 is true
+    fi
+    return 1 # 1 is false
+}
+
 # Args: <input TFP> <output TFP>
 function sign_tfp {
     t1=`$MKTEMP tmp.tfp1.XXXXXXXX`
@@ -110,22 +124,35 @@ function sign_tfp {
 
     generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
 
-    unzip $1 RADIO/tos.img -d $OTA_TMP_DIR
+    check_avb
 
-    #prebuilts/build-tools/linux-x86/bin/acp -p $OTA_TMP_DIR/RADIO/tos.img ${PRODUCT_OUT}/tos.img
+    if is_avb_enabled; then
+        unzip $1 RADIO/tos.img -d $OTA_TMP_DIR
 
-    device/intel/build/test/unsign_boot_img.py $OTA_TMP_DIR/RADIO/tos.img > ${PRODUCT_OUT}/tos.img
+        #prebuilts/build-tools/linux-x86/bin/acp -p $OTA_TMP_DIR/RADIO/tos.img ${PRODUCT_OUT}/tos.img
 
-    avbtool add_hash_footer --image ${PRODUCT_OUT}/tos.img --partition_size $TOS_IMAGE_PARTITION_SIZE --partition_name tos --algorithm SHA256_RSA4096 --key $PRODKEYS/avb_releasekey.pem
+        device/intel/build/test/unsign_boot_img.py $OTA_TMP_DIR/RADIO/tos.img > ${PRODUCT_OUT}/tos.img
 
-    avbtool extract_public_key --key $PRODKEYS/avb_releasekey.pem --output $OTA_TMP_DIR/avb_pk.bin
+        avbtool add_hash_footer --image ${PRODUCT_OUT}/tos.img --partition_size $TOS_IMAGE_PARTITION_SIZE --partition_name tos --algorithm SHA256_RSA4096 --key $PRODKEYS/avb_releasekey.pem
 
-    prebuilts/build-tools/linux-x86/bin/acp $PRODKEYS/avb_releasekey.pem external/avb/test/data/testkey_rsa4096.pem
+        avbtool extract_public_key --key $PRODKEYS/avb_releasekey.pem --output $OTA_TMP_DIR/avb_pk.bin
 
-    ./build/tools/releasetools/sign_target_files_apks  \
-            --verbose \
-            --replace_ota_keys \
-            --default_key_mappings $PRODKEYS $1 $t1
+        prebuilts/build-tools/linux-x86/bin/acp $PRODKEYS/avb_releasekey.pem external/avb/test/data/testkey_rsa4096.pem
+    fi
+
+    if is_avb_enabled; then
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --default_key_mappings $PRODKEYS $1 $t1
+    else
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --replace_verity_public_key ${t2}.pub \
+                --replace_verity_private_key $PRODKEYS/verity \
+                --default_key_mappings $PRODKEYS $1 $t1
+    fi
     rm -f ${t2}.pub $t2
 
     mkdir -p $BASEDIR/ifwi_abl/tmp
@@ -152,8 +179,13 @@ function sign_tfp {
 if [[ ${ELK_IN_IFWI} == 0 ]]; then
 
     echo "...................................stitch fastboot into IFWI..............................."
-    ./device/intel/build/test/extract_fastboot.py \
-            --variant $BOARD_VARIANT  --avb-key $OTA_TMP_DIR/avb_pk.bin --oem-key $PRODKEYS/verity $1 $BASEDIR/ifwi_abl/fastboot
+    if is_avb_enabled; then
+        ./device/intel/build/test/extract_fastboot.py \
+                --variant $BOARD_VARIANT  --avb-key $OTA_TMP_DIR/avb_pk.bin --oem-key $PRODKEYS/verity $1 $BASEDIR/ifwi_abl/fastboot
+    else
+        ./device/intel/build/test/extract_fastboot.py \
+                --variant $BOARD_VARIANT  --oem-key $PRODKEYS/verity $1 $BASEDIR/ifwi_abl/fastboot
+    fi
     ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
             -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
             -ifwikey $BASEDIR/ifwi_abl/verity.pem \
@@ -193,14 +225,23 @@ fi
     ias_image_signer $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin $PRODKEYS/verity.pk8 $PRODKEYS/verity.x509.pem \
  $BASEDIR/ifwi_abl/ifwi_update.bin
 
-    ./device/intel/build/releasetools/sign_target_files_abl \
-            --verbose \
-            --oem-key $PRODKEYS/verity \
-            --avb-key $OTA_TMP_DIR/avb_pk.bin \
-            --variant $BOARD_VARIANT \
-            --ifwi-directory $BASEDIR/ifwi_abl \
-            --tos ${PRODUCT_OUT}/tos.img \
-            $t1 $2
+    if is_avb_enabled; then
+        ./device/intel/build/releasetools/sign_target_files_abl \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --avb-key $OTA_TMP_DIR/avb_pk.bin \
+                --variant $BOARD_VARIANT \
+                --ifwi-directory $BASEDIR/ifwi_abl \
+                --tos ${PRODUCT_OUT}/tos.img \
+                $t1 $2
+    else
+        ./device/intel/build/releasetools/sign_target_files_abl \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --variant $BOARD_VARIANT \
+                --ifwi-directory $BASEDIR/ifwi_abl \
+                $t1 $2
+    fi
     rm $t1
 }
 
