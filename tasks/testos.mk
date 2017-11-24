@@ -43,11 +43,12 @@ testos_extra_vendor_files := \
                 $(ALL_DEFAULT_INSTALLED_MODULES)))
 
 # testos boot Partition table configuration file
-BOARD_GPT_INI = ./device/intel/mixins/groups/testos/true/gpt.testos.ini
-BOARD_GPT_BIN = $(PRODUCT_OUT)/gpt_testos.bin
+BOARD_GPT_INI_TEST_OS = ./device/intel/mixins/groups/testos/true/gpt.testos.ini
+BOARD_GPT_BIN_TEST_OS = $(PRODUCT_OUT)/gpt_testos.bin
 GPT_INI2BIN := ./device/intel/common/gpt_bin/gpt_ini2bin.py
+INSTALLED_RADIOIMAGE_TARGET += $(BOARD_GPT_BIN_TEST_OS)
 
-$(BOARD_GPT_BIN): $(BOARD_GPT_INI)
+$(BOARD_GPT_BIN_TEST_OS): $(BOARD_GPT_INI_TEST_OS)
 	$(hide) $(GPT_INI2BIN) $< > $@
 	$(hide) echo GEN $(notdir $@)
 
@@ -173,11 +174,12 @@ tos_vendor_out := $(TESTOS_ROOT_OUT)/vendor
 
 TESTOS_RAMDISK := $(tos_out)/ramdisk-testos.img.gz
 TESTOS_BOOTIMAGE := $(PRODUCT_OUT)/testos.img
+INSTALLED_RADIOIMAGE_TARGET += $(TESTOS_BOOTIMAGE)
 
 $(TESTOS_RAMDISK): \
         kernel \
         device/intel/build/tasks/testos.mk \
-        $(BOARD_GPT_BIN) \
+        $(BOARD_GPT_BIN_TEST_OS) \
         $(BOARD_GPT_MFG_BIN) \
         $(MKBOOTFS) \
         $(INSTALLED_RAMDISK_TARGET) \
@@ -235,7 +237,7 @@ $(TESTOS_BOOTIMAGE): \
         $(MKBOOTIMG) \
         $(INSTALLED_BOOTLOADER_MODULE) \
         $(BOARD_FIRST_STAGE_LOADER) \
-	$(BOARD_GPT_BIN)
+	$(BOARD_GPT_BIN_TEST_OS)
 
 	$(hide) $(MKBOOTIMG)  $(INTERNAL_TESTOSIMAGE_ARGS) \
 		     $(BOARD_MKBOOTIMG_ARGS) \
@@ -259,6 +261,8 @@ testos-bootimage: $(TESTOS_BOOTIMAGE)
 
 .PHONY: testosimage
 testosimage: $(TESTOS_BOOTIMAGE)
+
+droidcore: testosimage
 else
 testosimage:
 endif
