@@ -138,6 +138,15 @@ publish_gptimage:
 	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
 endif
 
+.PHONY: publish_cwpimage
+ifdef CWP_EXT4_BIN
+publish_cwpimage: publish_mkdir_dest $(CWP_EXT4_BIN)
+	@$(ACP) $(CWP_EXT4_BIN) $(publish_dest)
+else
+publish_cwpimage:
+	@echo "Warning: Unable to fulfill publish_cwpimage makefile request"
+endif
+
 
 .PHONY: publish_androidia_image
 ifdef ANDROID_IA_IMAGE
@@ -174,7 +183,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_cwpimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -214,5 +223,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) publish_androidia_image
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_cwpimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) publish_androidia_image
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
