@@ -104,7 +104,8 @@ fast_flashfiles: $(fftf) $(MKDOSFS) $(MCOPY) $(FAST_FLASHFILES_DEPS) | $(ACP)
 # add dependencies
 droid: fast_flashfiles
 flashfiles: fast_flashfiles
-
+else
+droid: $(INSTALLED_RADIOIMAGE_TARGET)
 endif #FAST_FLASHFILES
 
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
