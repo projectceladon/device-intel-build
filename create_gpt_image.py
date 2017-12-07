@@ -450,6 +450,7 @@ class TableEntryInfos(object):
             'Unused': '00000000-0000-0000-0000-000000000000',
             'esp': 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B',
             'fat': '024DEE41-33E7-11D3-9D69-0008C781F39F',
+            'bootloader': '2568845D-2332-4675-BC39-8FA5A4748D15',
             'boot': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'boot_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'boot_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
