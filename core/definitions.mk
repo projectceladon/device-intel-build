@@ -25,6 +25,9 @@ SESL :=  $(HOST_OUT_EXECUTABLES)/sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 CTESL :=  $(HOST_OUT_EXECUTABLES)/cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 IASL := $(HOST_OUT_EXECUTABLES)/iasl
 
+# Generation
+KF4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4abl_symbols.zip
+
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
@@ -147,8 +150,9 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
     --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
-    -o $(@:.abl=.elf)
-$(hide) $(IAFW_STRIP) -s $(@:.abl=.elf)
+    -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
+$(hide) $(IAFW_STRIP) -s $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
+$(hide) zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf)
 
 $(hide) if [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table ]; then \
             cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
