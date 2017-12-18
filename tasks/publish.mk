@@ -79,6 +79,16 @@ $(PUB_OSAGNOSTIC_TAG): publish_mkdir_dest $(OS_AGNOSTIC_INFO)
 	$(hide)($(ACP) $(OS_AGNOSTIC_INFO) $@)
 endif
 
+# Publish kf4abl debug files
+.PHONY: publish_kf4abl_symbols
+ifeq ($(TARGET_BUILD_VARIANT)|$(KERNELFLINGER_SUPPORT_ABL_BOOT),userdebug|true)
+publish_kf4abl_symbols: publish_mkdir_dest kf4abl-$(TARGET_BUILD_VARIANT)
+	$(hide)($(ACP) $(KF4ABL_SYMBOLS_ZIP) $(publish_dest))
+else
+publish_kf4abl_symbols:
+	@echo "Publish kf4abl symbols: skipped"
+endif
+
 # Publish Firmware symbols
 .PHONY: publish_firmware_symbols
 FIRMWARE_SYMBOLS_FILE := $(TARGET_DEVICE)-symbols_firmware.zip
@@ -223,5 +233,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_cwpimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) publish_androidia_image
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_cwpimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
