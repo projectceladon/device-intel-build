@@ -32,19 +32,23 @@ FB4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4abl_symbols.zip
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
-    $(SBSIGN) \
     $(ABLIMAGE) \
     $(ABLSIGN) \
-    $(MKDOSFS) \
     $(MKEXT2IMG) \
     $(DUMPEXT2IMG) \
-    $(MCOPY) \
     $(GENERATE_VERITY_KEY) \
-    $(SESL) \
     $(FASTBOOT) \
-    $(CTESL) \
     $(IASL) \
     $(AVBTOOL)
+
+ifneq ($(TARGET_UEFI_ARCH),)
+INTEL_OTATOOLS += \
+    $(SBSIGN) \
+    $(MKDOSFS) \
+    $(MCOPY) \
+    $(SESL) \
+    $(CTESL)
+endif
 
 ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
     ifeq ($(BOARD_AVB_ENABLE),true)  #VBOOT2.0

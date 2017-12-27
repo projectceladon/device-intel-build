@@ -6,6 +6,12 @@ name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 
+ifneq ($(TARGET_UEFI_ARCH),)
+UEFI_ADDITIONAL_TOOLS := $(MKDOSFS) $(MCOPY)
+else
+UEFI_ADDITIONAL_TOOLS :=
+endif
+
 ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
 odf := $(INTEL_PATH_BUILD)/releasetools/ota_deployment_fixup
@@ -22,7 +28,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	    $(eval INTEL_FACTORY_FLASHFILES_TARGET += $(ff_zip)) \
 	    $(call dist-for-goals,droidcore,$(ff_zip):$(notdir $(ff_zip))))
 
-    $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDOSFS) $(MCOPY)
+    $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	  $(hide) mkdir -p $(dir $@)
 	  $(eval y = $(subst -, ,$(basename $(@F))))
 	  $(eval DEV = $(word 3, $(y)))
@@ -65,7 +71,7 @@ else
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)
 endif
 
-$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(MKDOSFS) $(MCOPY)
+$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
 
@@ -96,7 +102,7 @@ FAST_FLASHFILES_DEPS := \
     $(USERFASTBOOT_BOOTIMAGE) \
     $(INSTALLED_VBMETAIMAGE_TARGET) \
 
-fast_flashfiles: $(fftf) $(MKDOSFS) $(MCOPY) $(FAST_FLASHFILES_DEPS) | $(ACP)
+fast_flashfiles: $(fftf) $(UEFI_ADDITIONAL_TOOLS) $(FAST_FLASHFILES_DEPS) | $(ACP)
 	$(hide) rm -rf $(FAST_FLASHFILES_DIR)
 	$(hide) mkdir -p $(FAST_FLASHFILES_DIR)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
