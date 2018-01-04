@@ -79,9 +79,9 @@ $(PUB_OSAGNOSTIC_TAG): publish_mkdir_dest $(OS_AGNOSTIC_INFO)
 	$(hide)($(ACP) $(OS_AGNOSTIC_INFO) $@)
 endif
 
-# Publish kf4abl debug files
+# Publish kf4abl symbols files
 .PHONY: publish_kf4abl_symbols
-ifeq ($(TARGET_BUILD_VARIANT)|$(KERNELFLINGER_SUPPORT_ABL_BOOT),userdebug|true)
+ifeq ($(TARGET_BUILD_VARIANT)|$(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),userdebug|true)
 publish_kf4abl_symbols: publish_mkdir_dest kf4abl-$(TARGET_BUILD_VARIANT)
 	$(hide)($(ACP) $(KF4ABL_SYMBOLS_ZIP) $(publish_dest))
 else
