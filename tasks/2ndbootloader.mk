@@ -68,9 +68,9 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_ABL_VARS)
 .PHONY: $(BOARD_ABL_VARS)
 $(BOARD_ABL_VARS):
 	$(hide) if [ -n "$(BOARD_ABL_ACPI_SRCS)" ];then \
-				cat $(BOARD_ABL_ACPI_FILE_PATHS) > $(BOARD_ABL_ACPI_DIR)/acpi.tables; \
-				vendor/intel/abl/abl_build_tools/ias_image_app -o $@ -i 0x30000 -v $(BOARD_ABL_ACPI_DIR)/acpi.tables; \
-				rm -f $(BOARD_ABL_ACPI_DIR)/acpi.tables;\
+				cat $(BOARD_ABL_ACPI_FILE_PATHS) > $(ABL_BUILD_OUT)/acpi.tables; \
+				vendor/intel/abl/abl_build_tools/ias_image_app -o $@ -i 0x30000 -v $(ABL_BUILD_OUT)/acpi.tables; \
+				rm -f $(ABL_BUILD_OUT)/acpi.tables;\
 			fi
 
 endif
