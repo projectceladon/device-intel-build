@@ -27,6 +27,7 @@ IASL := $(HOST_OUT_EXECUTABLES)/iasl
 
 # Generation
 KF4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4abl_symbols.zip
+FB4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4abl_symbols.zip
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
@@ -152,7 +153,6 @@ $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
     -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
 $(hide) $(IAFW_STRIP) -s $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
-$(hide) zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf)
 
 $(hide) if [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table ]; then \
             cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
@@ -187,6 +187,12 @@ $(hide) if [ -s $(dir $@)/acpi.tables ];then \
 	$(ABL_OS_KERNEL_KEY).pk8 \
 	$(ABL_OS_KERNEL_KEY).x509.pem \
 	$@
+$(hide) if [ "$(PRIVATE_MODULE)" == fb4abl-userdebug ]; then \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $@; \
+elif [ "$(PRIVATE_MODULE)" == kf4abl-userdebug ]; then \
+	zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+fi
 endef
 
 # Hook up the prebuilts generation mechanism
