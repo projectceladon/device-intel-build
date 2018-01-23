@@ -60,7 +60,7 @@ else
     FIRST_STAGE_MOUNT_CFG_FILE := null
 endif
 
-ifneq (,$(findstring gordon_peak,$(TARGET_PRODUCT)))
+ifeq ($(BOARD_USE_ABL),true)
 INTEL_OTATOOLS += abl_toolchain
 endif
 
