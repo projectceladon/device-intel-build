@@ -96,7 +96,10 @@ export MKTEMP="mktemp --tmpdir=ota/tmp/"
 variants_enable_string="# Source: device/intel/mixins/groups/variants/true/AndroidBoard.mk"
 function has_variants {
     if [ -z "$TFP" ]; then
-        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
+                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
     else
         HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l || true)
