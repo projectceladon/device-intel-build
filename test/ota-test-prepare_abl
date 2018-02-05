@@ -163,7 +163,7 @@ function sign_tfp {
 
     mkdir -p $BASEDIR/ifwi_abl/tmp
 
-    vendor/intel/abl/abl_config_tool/abl_config_gen.sh -config device/intel/broxton/bxtp_abl/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
+    vendor/intel/abl/abl_config_tool/abl_config_gen.sh -config ${product_dir}/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
 
     openssl pkcs8 -inform DER -nocrypt -in $PRODKEYS/verity.pk8 -out $BASEDIR/ifwi_abl/verity.pem
 
