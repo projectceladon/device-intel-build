@@ -183,6 +183,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
+ifneq ($(TARGET_UEFI_ARCH),)
 publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
@@ -195,6 +196,12 @@ publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifw
 publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 	@$(hide) mkdir -p $(publish_tool_destw)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_CROSS_ZIP) $(publish_tool_destw)
+else
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+	$(if $(wildcard $(publish_dest)), \
+	  $(foreach f,$(PUBLISH_CI_FILES), \
+	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
+endif
 
 else # !PUBLISH_SDK
 # Unfortunately INTERNAL_SDK_TARGET is always defined, so its existence does
