@@ -43,7 +43,7 @@ testos_extra_vendor_files := \
                 $(ALL_DEFAULT_INSTALLED_MODULES)))
 
 # testos boot Partition table configuration file
-BOARD_GPT_INI_TEST_OS = ./device/intel/mixins/groups/testos/true/gpt.testos.ini
+BOARD_GPT_INI_TEST_OS = $(TARGET_DEVICE_DIR)/extra_files/testos/gpt.testos.ini
 BOARD_GPT_BIN_TEST_OS = $(PRODUCT_OUT)/gpt_testos.bin
 GPT_INI2BIN := ./device/intel/common/gpt_bin/gpt_ini2bin.py
 INSTALLED_RADIOIMAGE_TARGET += $(BOARD_GPT_BIN_TEST_OS)
