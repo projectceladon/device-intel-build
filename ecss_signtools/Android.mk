@@ -66,7 +66,7 @@ endif
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := verity/VeritySigner.java verity/Utils.java
 LOCAL_MODULE := VeritySigner_ecss
-LOCAL_JAR_MANIFEST := ../../../../system/extras/verity/VeritySigner.mf
+LOCAL_JAR_MANIFEST := verity/VeritySigner.mf
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(HOST_ECSS_OUT_JAVA_LIBRARIES)
 LOCAL_STATIC_JAVA_LIBRARIES := bouncycastle-host bouncycastle-bcpkix-host intel-ecss-jce-provider
@@ -75,7 +75,7 @@ include $(BUILD_HOST_JAVA_LIBRARY)
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := verity/BootSignature.java verity/VeritySigner.java verity/Utils.java
 LOCAL_MODULE := BootSignature_ecss
-LOCAL_JAR_MANIFEST := ../../../../system/extras/verity/BootSignature.mf
+LOCAL_JAR_MANIFEST := verity/BootSignature.mf
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(HOST_ECSS_OUT_JAVA_LIBRARIES)
 LOCAL_STATIC_JAVA_LIBRARIES := bouncycastle-host bouncycastle-bcpkix-host intel-ecss-jce-provider
@@ -84,7 +84,7 @@ include $(BUILD_HOST_JAVA_LIBRARY)
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := verity/BootSignature.java verity/KeystoreSigner.java verity/Utils.java
 LOCAL_MODULE := BootKeystoreSigner_ecss
-LOCAL_JAR_MANIFEST := ../../../../system/extras/verity/KeystoreSigner.mf
+LOCAL_JAR_MANIFEST := verity/KeystoreSigner.mf
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(HOST_ECSS_OUT_JAVA_LIBRARIES)
 LOCAL_STATIC_JAVA_LIBRARIES := bouncycastle-host bouncycastle-bcpkix-host intel-ecss-jce-provider
