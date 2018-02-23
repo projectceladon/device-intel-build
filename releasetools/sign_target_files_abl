@@ -385,9 +385,15 @@ def main(argv):
 
     #Get the multiboot.img name
     multiboot_fn = "RADIO/multiboot.img"
+    multiboot_fn2 = "IMAGES/multiboot.img"
 
     #Get the tos.img name
     tos_fn = "RADIO/tos.img"
+    tos_fn2 = "IMAGES/tos.img"
+
+    #Get the bootloder.img name
+    bootloader_fn = "RADIO/bootloader.img"
+    bootloader_fn2 = "IMAGES/bootloader.img"
 
     #Get the fastboot binary name
     fastboot_fn = "RADIO/fastboot"
@@ -402,6 +408,11 @@ def main(argv):
             output_multiboot_file = get_named_temp("output_multiboot")
             process_iasimage(input_multiboot_file, output_multiboot_file)
             common.ZipWrite(output_zip, output_multiboot_file, zi.filename)
+            input_multiboot_file2 = os.path.join(unpack_dir, multiboot_fn2)
+            if os.path.exists(input_multiboot_file2):
+                 common.ZipWrite(output_zip, output_multiboot_file, multiboot_fn2)
+        elif zi.filename == multiboot_fn2:
+            pass
         elif zi.filename == tos_fn:
             if OPTIONS.avb_key == None:
                 input_tos_file = os.path.join(unpack_dir, tos_fn)
@@ -410,6 +421,22 @@ def main(argv):
                 common.ZipWrite(output_zip, output_tos_file, zi.filename)
             else:
                 common.ZipWrite(output_zip, OPTIONS.tos_image, zi.filename)
+                output_tos_file = OPTIONS.tos_image
+            input_tos_file2 = os.path.join(unpack_dir, tos_fn2)
+            if os.path.exists(input_tos_file2):
+                 common.ZipWrite(output_zip, output_tos_file, tos_fn2)
+        elif zi.filename == tos_fn2:
+            pass
+        elif zi.filename == bootloader_fn:
+            input_bootloader_file = os.path.join(unpack_dir, bootloader_fn)
+            output_bootloader_file = get_named_temp("output_bootloader")
+            process_bootloader(input_bootloader_file, output_bootloader_file)
+            common.ZipWrite(output_zip, output_bootloader_file, zi.filename)
+            input_bootloader_file2 = os.path.join(unpack_dir, bootloader_fn2)
+            if os.path.exists(input_bootloader_file2):
+                 common.ZipWrite(output_zip, output_bootloader_file, bootloader_fn2)
+        elif zi.filename == bootloader_fn2:
+            pass
         else:
             if (zi.file_size >= 2 * GiB):
                 common.ZipWrite(output_zip, os.path.join(unpack_dir, zi.filename), zi.filename)
