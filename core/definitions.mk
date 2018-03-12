@@ -65,12 +65,22 @@ otatools: $(INTEL_OTATOOLS)
 # FIXME: may be unsafe to omit -no-sse
 TARGET_IAFW_GLOBAL_CFLAGS := -ggdb -O3 -fno-stack-protector \
 	-fno-strict-aliasing -fpic \
-	-fshort-wchar -mno-red-zone -maccumulate-outgoing-args \
-	-mno-mmx -fno-builtin -fno-tree-loop-distribute-patterns \
-	-ffreestanding -fno-stack-check
+	-fshort-wchar -mno-red-zone \
+	-mno-mmx -fno-builtin \
+	-m64 -mstackrealign \
+	-mstack-alignment=32 \
+	-ffreestanding -fno-stack-check \
+	-Wno-pointer-sign \
+	-Wno-address-of-packed-member \
+	-Wno-macro-redefined \
+	-Wno-pointer-bool-conversion \
+	-Wno-unused-const-variable \
+	-Wno-constant-conversion \
+	-Wno-unused-function \
+	-Wno-tautological-pointer-compare
 
 TARGET_IAFW_GLOBAL_LDFLAGS := -nostdlib --no-undefined \
-	--fatal-warnings -Bsymbolic -znocombreloc
+	-Wl,--fatal-warnings -Bsymbolic -Wl,-znocombreloc
 
 ifneq ($(TARGET_UEFI_ARCH),)
     TARGET_IAFW_ARCH := $(TARGET_UEFI_ARCH)
@@ -97,14 +107,19 @@ TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS := \
 	-j .dynamic -j .dynsym  -j .rel \
 	-j .rela -j .rela.dyn -j .reloc -j .eh_frame
 
-IAFW_TOOLCHAIN_ROOT := prebuilts/gcc/$(HOST_PREBUILT_TAG)/x86/x86_64-linux-android-$(TARGET_GCC_VERSION)
-IAFW_TOOLS_PREFIX := $(IAFW_TOOLCHAIN_ROOT)/bin/x86_64-linux-android-
-IAFW_STRIP := $(IAFW_TOOLS_PREFIX)strip$(HOST_EXECUTABLE_SUFFIX)
-IAFW_LD := $(IAFW_TOOLS_PREFIX)ld.bfd$(HOST_EXECUTABLE_SUFFIX)
-IAFW_CC := $(IAFW_TOOLS_PREFIX)gcc$(HOST_EXECUTABLE_SUFFIX)
-IAFW_OBJCOPY := $(IAFW_TOOLS_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
+IAFW_TOOLCHAIN_GCC_ROOT := prebuilts/gcc/$(HOST_PREBUILT_TAG)/x86/x86_64-linux-android-$(TARGET_GCC_VERSION)
+IAFW_TOOLCHAIN_CLANG_ROOT := prebuilts/clang/host/$(HOST_PREBUILT_TAG)/clang-4691093
+IAFW_TOOLS_GCC_PREFIX := $(IAFW_TOOLCHAIN_GCC_ROOT)/bin/x86_64-linux-android-
+IAFW_TOOLS_CLANG_PREFIX := $(IAFW_TOOLCHAIN_CLANG_ROOT)/bin
+IAFW_LD := $(IAFW_TOOLS_CLANG_PREFIX)/clang
+IAFW_CC := $(IAFW_TOOLS_CLANG_PREFIX)/clang
+IAFW_OBJCOPY := $(IAFW_TOOLS_GCC_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
 EFI_OBJCOPY := $(IAFW_OBJCOPY)
-IAFW_LIBGCC := $(shell $(IAFW_CC) $(TARGET_IAFW_GLOBAL_CFLAGS) -print-libgcc-file-name)
+ifeq ($(TARGET_IAFW_ARCH),x86_64)
+IAFW_LIBCLANG := $(IAFW_TOOLCHAIN_CLANG_ROOT)/lib64/clang/6.0.2/lib/linux/libclang_rt.builtins-x86_64-android.a
+else
+IAFW_LIBCLANG := $(IAFW_TOOLCHAIN_CLANG_ROOT)/lib64/clang/6.0.2/lib/linux/libclang_rt.builtins-i686-android.a
+endif
 
 # Transformation definitions, ala build system's definitions.mk
 
@@ -131,7 +146,7 @@ define transform-o-to-efi-executable
 $(hide) mkdir -p $(dir $@)
 $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
     --whole-archive $(call module-built-files,$(GNU_EFI_CRT0)) --no-whole-archive \
-    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
+    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
     -o $(@:.efi=.so)
 $(hide) $(IAFW_OBJCOPY) $(PRIVATE_OBJCOPY_FLAGS) \
     --target=efi-app-$(TARGET_IAFW_ARCH_NAME) $(@:.efi=.so) $(@:.efi=.efiunsigned)
@@ -142,13 +157,12 @@ define transform-o-to-abl-executable
 @echo "target ABL Executable: $(PRIVATE_MODULE) ($@)"
 $(hide) mkdir -p $(dir $@)
 $(hide) $(IAFW_LD) $(PRIVATE_LDFLAGS) \
-    --defsym=CONFIG_LP_BASE_ADDRESS=$(LIBPAYLOAD_BASE_ADDRESS) \
-    --defsym=CONFIG_LP_HEAP_SIZE=$(LIBPAYLOAD_HEAP_SIZE) \
-    --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
-    --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
-    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBGCC) \
-    -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
-$(hide) $(IAFW_STRIP) -s $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
+    -Wl,--defsym=CONFIG_LP_BASE_ADDRESS=$(LIBPAYLOAD_BASE_ADDRESS) \
+    -Wl,--defsym=CONFIG_LP_HEAP_SIZE=$(LIBPAYLOAD_HEAP_SIZE) \
+    -Wl,--defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
+    -Wl,--whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) -Wl,--no-whole-archive \
+    $(PRIVATE_ALL_OBJECTS) -Wl,--start-group $(PRIVATE_ALL_STATIC_LIBRARIES) -Wl,--end-group $(IAFW_LIBCLANG) \
+    -Wl,-Map,$(@:.abl=.map) -Wl,--strip-all -o $(@:.abl=.elf)
 
 $(hide) if [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table ]; then \
             cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
