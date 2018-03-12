@@ -11,11 +11,12 @@ LOCAL_MODULE_PATH := $(PRODUCT_OUT)/abl
 endif
 
 LOCAL_CC := $(IAFW_CC)
+LOCAL_CLANG := true
 LOCAL_NO_DEFAULT_COMPILER_FLAGS := true
 LOCAL_CFLAGS += $(TARGET_IAFW_GLOBAL_CFLAGS)
 LOCAL_ASFLAGS += $(TARGET_IAFW_ASFLAGS)
 LOCAL_LDFLAGS := $(TARGET_IAFW_GLOBAL_LDFLAGS) -static \
-	-T $(TARGET_ABL_LDS) $(LOCAL_LDFLAGS)
+	-Wl,-T $(TARGET_ABL_LDS) $(LOCAL_LDFLAGS)
 # If kernel enforce superpages the .text section gets aligned at
 # offset 0x200000 which break multiboot compliance.
 LOCAL_LDFLAGS += -z max-page-size=0x1000
