@@ -205,7 +205,7 @@ def main(argv):
         check_tfp(gbl.tfp_source)
 
     ### Get variants informations ###
-    variants_enable_string = "# Source: device/intel/mixins/groups/variants/true/AndroidBoard.mk"
+    variants_enable_string = "BOARD_DEVICE_MAPPING :="
     omitstring = '! -path */build/* -prune ! -path */common/* -prune ! -path */mixins/* -prune ! -path */sepolicy/* -prune'
     cmd = "find %s/device -type f -name *.mk %s -exec grep -l" % (gbl.android_top, omitstring)
     cmd = cmd.split(" ")
