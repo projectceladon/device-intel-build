@@ -93,7 +93,7 @@ export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
 export OTA_TMP_DIR=ota/tmp/
 export MKTEMP="mktemp --tmpdir=ota/tmp/"
 
-variants_enable_string="# Source: device/intel/mixins/groups/variants/true/AndroidBoard.mk"
+variants_enable_string="BOARD_DEVICE_MAPPING :="
 function has_variants {
     if [ -z "$TFP" ]; then
         product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
