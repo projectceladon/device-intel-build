@@ -17,6 +17,21 @@ function bail {
 
 trap 'bail ${LINENO}' ERR
 
+# Get the exact value of a external variable.
+function get_external_var()
+{
+    local T=$ANDROID_BUILD_TOP
+    if [ ! "$T" ]; then
+        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+        return
+    fi
+    (\cd $T; CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
+      command make --no-print-directory -f build/core/config.mk dumpvar-$1 | tail -1 | awk '{print $1}')
+}
+
+export DEVICENAME=$(get_external_var TARGET_DEVICE)
+echo "get TARGET_DEVICE: $DEVICENAME"
+
 export TESTKEYS=device/intel/build/testkeys
 export PRODKEYS=device/intel/build/testkeys/production-test
 export ANDROID_PW_FILE=$PRODKEYS/pwfile
@@ -29,7 +44,8 @@ export QUICK=
 export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
 export IS_AVB=
-export PRODUCT_OUT=out/target/product/${TARGET_DEVICE}
+export PRODUCT_OUT=out/target/product/${DEVICENAME}
+
 ELK_IN_IFWI=0
 TOS_IMAGE_PARTITION_SIZE=10485760
 while getopts "qsmt:V:jlof" opt; do
