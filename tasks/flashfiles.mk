@@ -7,8 +7,8 @@ name := $(name)-flashfiles-$(FILE_NAME_TAG)
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 
 ifeq ($(USE_INTEL_FLASHFILES),true)
-fftf := device/intel/build/releasetools/flashfiles_from_target_files
-odf := device/intel/build/releasetools/ota_deployment_fixup
+fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
+odf := $(INTEL_PATH_BUILD)/releasetools/ota_deployment_fixup
 
 ifneq ($(FLASHFILE_VARIANTS),)
   # Generate variant specific flashfiles if VARIANT_SPECIFIC_FLASHFILES is True

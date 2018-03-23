@@ -345,20 +345,20 @@ LOCAL_AOSP_PROJECT_LIST :=   \
 			hardware/broadcom/libbt  \
 			hardware/broadcom/wlan  \
 			hardware/google/apf  \
-			hardware/intel/audio_media  \
-			hardware/intel/bootstub  \
-			hardware/intel/common/bd_prov  \
-			hardware/intel/common/libmix  \
-			hardware/intel/common/libstagefrighthw  \
-			hardware/intel/common/libva  \
-			hardware/intel/common/libwsbm  \
-			hardware/intel/common/omx-components  \
-			hardware/intel/common/utils  \
-			hardware/intel/common/wrs_omxil_core  \
-			hardware/intel/img/hwcomposer  \
-			hardware/intel/img/psb_headers  \
-			hardware/intel/img/psb_video  \
-			hardware/intel/sensors  \
+			$(INTEL_PATH_HARDWARE)/audio_media  \
+			$(INTEL_PATH_HARDWARE)/bootstub  \
+			$(INTEL_PATH_HARDWARE)/common/bd_prov  \
+			$(INTEL_PATH_HARDWARE)/common/libmix  \
+			$(INTEL_PATH_HARDWARE)/common/libstagefrighthw  \
+			$(INTEL_PATH_HARDWARE)/common/libva  \
+			$(INTEL_PATH_HARDWARE)/common/libwsbm  \
+			$(INTEL_PATH_HARDWARE)/common/omx-components  \
+			$(INTEL_PATH_HARDWARE)/common/utils  \
+			$(INTEL_PATH_HARDWARE)/common/wrs_omxil_core  \
+			$(INTEL_PATH_HARDWARE)/img/hwcomposer  \
+			$(INTEL_PATH_HARDWARE)/img/psb_headers  \
+			$(INTEL_PATH_HARDWARE)/img/psb_video  \
+			$(INTEL_PATH_HARDWARE)/sensors  \
 			hardware/interfaces  \
 			hardware/invensense  \
 			hardware/libhardware  \

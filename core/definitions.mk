@@ -1,5 +1,5 @@
 # Base directory for our Makefiles.
-IAFW_BUILD_SYSTEM := device/intel/build/core
+IAFW_BUILD_SYSTEM := $(INTEL_PATH_BUILD)/core
 
 # Used in Android.mk to produce a binary
 BUILD_EFI_STATIC_LIBRARY := $(IAFW_BUILD_SYSTEM)/iafw_static_library.mk
@@ -196,7 +196,7 @@ fi
 endef
 
 # Hook up the prebuilts generation mechanism
-include device/intel/common/external/external.mk
+include $(INTEL_PATH_COMMON)/external/external.mk
 
 # Hook to check all modules
-BUILD_NOTICE_FILE := device/intel/common/notice_files.mk
+BUILD_NOTICE_FILE := $(INTEL_PATH_COMMON)/notice_files.mk

@@ -1,4 +1,4 @@
-# INTEL_OTATOOLS defined in device/intel/build/core/definitions.mk
+# INTEL_OTATOOLS defined in $(INTEL_PATH_BUILD)/core/definitions.mk
 # These are here because these INTERNAL_* variables are only defined
 # halfway through build/core/Makefile, long after definitions.mk has
 # been imported

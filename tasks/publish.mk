@@ -92,7 +92,7 @@ endif
 # Publish Firmware symbols
 .PHONY: publish_firmware_symbols
 FIRMWARE_SYMBOLS_FILE := $(TARGET_DEVICE)-symbols_firmware.zip
-FIRMWARE_SYMBOLS_PATH := $(wildcard hardware/intel/$(TARGET_BOARD_PLATFORM)-fls/$(PRODUCT_MODEL)/symbols/*.elf)
+FIRMWARE_SYMBOLS_PATH := $(wildcard $(INTEL_PATH_HARDWARE)/$(TARGET_BOARD_PLATFORM)-fls/$(PRODUCT_MODEL)/symbols/*.elf)
 
 publish_firmware_symbols: publish_mkdir_dest publish_flashfiles
 ifneq ($(BUILD_OSAS),1) # prebuilt
@@ -140,7 +140,7 @@ ifdef GPTIMAGE_BIN
 publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
 	@$(ACP) $(GPTIMAGE_BIN) $(publish_dest)
 ifdef CRAFFIMAGE_BIN
-	$(TOP)/device/intel/build/createcraffimage.py --image $(GPTIMAGE_BIN)
+	$(TOP)/$(INTEL_PATH_BUILD)/createcraffimage.py --image $(GPTIMAGE_BIN)
 	@$(ACP) $(CRAFFIMAGE_BIN) $(publish_dest)
 endif
 else
