@@ -45,7 +45,7 @@ testos_extra_vendor_files := \
 # testos boot Partition table configuration file
 BOARD_GPT_INI_TEST_OS = $(TARGET_DEVICE_DIR)/extra_files/testos/gpt.testos.ini
 BOARD_GPT_BIN_TEST_OS = $(PRODUCT_OUT)/gpt_testos.bin
-GPT_INI2BIN := ./device/intel/common/gpt_bin/gpt_ini2bin.py
+GPT_INI2BIN := ./$(INTEL_PATH_COMMON)/gpt_bin/gpt_ini2bin.py
 INSTALLED_RADIOIMAGE_TARGET += $(BOARD_GPT_BIN_TEST_OS)
 
 $(BOARD_GPT_BIN_TEST_OS): $(BOARD_GPT_INI_TEST_OS)
@@ -178,7 +178,7 @@ INSTALLED_RADIOIMAGE_TARGET += $(TESTOS_BOOTIMAGE)
 
 $(TESTOS_RAMDISK): \
         kernel \
-        device/intel/build/tasks/testos.mk \
+        $(INTEL_PATH_BUILD)/tasks/testos.mk \
         $(BOARD_GPT_BIN_TEST_OS) \
         $(BOARD_GPT_MFG_BIN) \
         $(MKBOOTFS) \

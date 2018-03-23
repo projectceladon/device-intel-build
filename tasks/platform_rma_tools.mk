@@ -15,9 +15,9 @@ RMA_TO_COPY := key_maker/bin/win32/key_maker.exe signing_module/bin/win32/sec_si
 else
 RMA_TO_COPY := key_maker/bin/linux/key_maker32 signing_module/bin/linux/m32/sec_signing signing_module/bin/linux/m32/libsigningmodule.so
 endif
-RMA_TO_COPY := $(addprefix hardware/intel/mrd-3gr-sofia/secure_vm/src/security_framework/tools/,$(RMA_TO_COPY))
+RMA_TO_COPY := $(addprefix $(INTEL_PATH_HARDWARE)/mrd-3gr-sofia/secure_vm/src/security_framework/tools/,$(RMA_TO_COPY))
 
-RMA_TO_COPY += device/intel/$(TARGET_PROJECT)/security/oem_oak_flag.bin $(HOST_OUT)/bin/action-authorization$(EXECUTABLE_SUFFIX) $(HOST_OUT)/bin/openssl$(EXECUTABLE_SUFFIX) vendor/intel/external/openssl/apps/openssl.cnf
+RMA_TO_COPY += device/intel/$(TARGET_PROJECT)/security/oem_oak_flag.bin $(HOST_OUT)/bin/action-authorization$(EXECUTABLE_SUFFIX) $(HOST_OUT)/bin/openssl$(EXECUTABLE_SUFFIX) $(INTEL_PATH_VENDOR)/external/openssl/apps/openssl.cnf
 
 $(PLATFORM_RMA_TOOLS_ZIP): action-authorization openssl $(RMA_TO_COPY)
 	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_DIR) $(PLATFORM_RMA_TOOLS_ZIP)
@@ -30,11 +30,11 @@ else
 $(PLATFORM_RMA_TOOLS_ZIP): action-authorization sign-efi-sig-list openssl
 	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_DIR)
 	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_DIR)
-	$(hide) $(ACP) -fp device/intel/build/generate_blpolicy_oemvars $(PLATFORM_RMA_TOOLS_DIR)/generate_blpolicy_oemvars.py
+	$(hide) $(ACP) -fp $(INTEL_PATH_BUILD)/generate_blpolicy_oemvars $(PLATFORM_RMA_TOOLS_DIR)/generate_blpolicy_oemvars.py
 	$(hide) $(ACP) -fp $(HOST_OUT)/bin/action-authorization$(EXECUTABLE_SUFFIX) $(PLATFORM_RMA_TOOLS_DIR)/
 	$(hide) $(ACP) -fp $(HOST_OUT)/bin/sign-efi-sig-list$(EXECUTABLE_SUFFIX) $(PLATFORM_RMA_TOOLS_DIR)/
 	$(hide) $(ACP) -fp $(HOST_OUT)/bin/openssl$(EXECUTABLE_SUFFIX) $(PLATFORM_RMA_TOOLS_DIR)/openssl$(EXECUTABLE_SUFFIX)
-	$(hide) $(ACP) -fp vendor/intel/external/openssl/apps/openssl.cnf $(PLATFORM_RMA_TOOLS_DIR)/
+	$(hide) $(ACP) -fp $(INTEL_PATH_VENDOR)/external/openssl/apps/openssl.cnf $(PLATFORM_RMA_TOOLS_DIR)/
 	$(hide) tar czf $(PLATFORM_RMA_TOOLS_DIR)/efitools.tar.gz external/efitools
 	$(hide) cd $(HOST_OUT) && zip -r $(PLATFORM_RMA_TOOLS).zip $(PLATFORM_RMA_TOOLS)
 
@@ -45,11 +45,11 @@ ifneq (,$(findstring cht,$(TARGET_PRODUCT)))
 $(PLATFORM_RMA_TOOLS_CROSS_ZIP): host_cross_action-authorization host_cross_sign-efi-sig-list host_cross_openssl
 	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_CROSS_DIR)
 	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_CROSS_DIR)
-	$(hide) $(ACP) -fp device/intel/build/generate_blpolicy_oemvars $(PLATFORM_RMA_TOOLS_CROSS_DIR)/generate_blpolicy_oemvars.py
+	$(hide) $(ACP) -fp $(INTEL_PATH_BUILD)/generate_blpolicy_oemvars $(PLATFORM_RMA_TOOLS_CROSS_DIR)/generate_blpolicy_oemvars.py
 	$(hide) $(ACP) -fp $(HOST_CROSS_OUT)/bin/action-authorization$(EXECUTABLE_CROSS_SUFFIX) $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
 	$(hide) $(ACP) -fp $(HOST_CROSS_OUT)/bin/sign-efi-sig-list$(EXECUTABLE_CROSS_SUFFIX) $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
 	$(hide) $(ACP) -fp $(HOST_CROSS_OUT)/bin/openssl$(EXECUTABLE_CROSS_SUFFIX) $(PLATFORM_RMA_TOOLS_CROSS_DIR)/openssl$(EXECUTABLE_CROSS_SUFFIX)
-	$(hide) $(ACP) -fp vendor/intel/external/openssl/apps/openssl.cnf $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
+	$(hide) $(ACP) -fp $(INTEL_PATH_VENDOR)/external/openssl/apps/openssl.cnf $(PLATFORM_RMA_TOOLS_CROSS_DIR)/
 	$(hide) tar czf $(PLATFORM_RMA_TOOLS_CROSS_DIR)/efitools.tar.gz external/efitools
 	$(hide) cd $(HOST_CROSS_OUT) && zip -r $(PLATFORM_RMA_TOOLS_CROSS).zip $(PLATFORM_RMA_TOOLS_CROSS)
 

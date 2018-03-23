@@ -12,7 +12,7 @@ $(SYSTEM_FLS): build_operator_system_img
 
 build_operator_system_img: $(FLSTOOL) $(INTEL_PRG_FILE) systemimage $(INSTALLED_SYSTEMIMAGE) $(FLASHLOADER_FLS)
 	@echo "start operator system image generation"
-	sh $(CURDIR)/device/intel/build/sofia_lte/generate_operator_system_img.sh  "$(INTEL_PRG_FILE)" "$(INJECT_FLASHLOADER_FLS)" "$(ANIMATION_ZIP_PATH)"
+	sh $(CURDIR)/$(INTEL_PATH_BUILD)/sofia_lte/generate_operator_system_img.sh  "$(INTEL_PRG_FILE)" "$(INJECT_FLASHLOADER_FLS)" "$(ANIMATION_ZIP_PATH)"
 
 endif
 

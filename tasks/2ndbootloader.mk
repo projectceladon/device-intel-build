@@ -1,7 +1,7 @@
 ifdef BOARD_BLOBSTORE_CONFIG
 
-build_blobstore := device/intel/build/build_blobstore.py
-blobstore_deps := $(build_blobstore) device/intel/build/blobstore.py $(BOARD_BLOBSTORE_CONFIG)
+build_blobstore := $(INTEL_PATH_BUILD)/build_blobstore.py
+blobstore_deps := $(build_blobstore) $(INTEL_PATH_BUILD)/blobstore.py $(BOARD_BLOBSTORE_CONFIG)
 ifdef BOARD_DEVICE_MAPPING
 blobstore_deps += $(BOARD_DEVICE_MAPPING)
 blobstore_extra_args := --device-map $(BOARD_DEVICE_MAPPING)
@@ -69,7 +69,7 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_ABL_VARS)
 $(BOARD_ABL_VARS):
 	$(hide) if [ -n "$(BOARD_ABL_ACPI_SRCS)" ];then \
 				cat $(BOARD_ABL_ACPI_FILE_PATHS) > $(ABL_BUILD_OUT)/acpi.tables; \
-				vendor/intel/abl/abl_build_tools/ias_image_app -o $@ -i 0x30000 -v $(ABL_BUILD_OUT)/acpi.tables; \
+				$(INTEL_PATH_VENDOR)/abl/abl_build_tools/ias_image_app -o $@ -i 0x30000 -v $(ABL_BUILD_OUT)/acpi.tables; \
 				rm -f $(ABL_BUILD_OUT)/acpi.tables;\
 			fi
 

@@ -11,7 +11,7 @@ LOCAL_MODULE_PATH := $(PRODUCT_OUT)/efi
 endif
 
 ifeq ($(strip $(LOCAL_EFI_KEY_PAIR)),)
-LOCAL_EFI_KEY_PAIR := device/intel/build/testkeys/DB
+LOCAL_EFI_KEY_PAIR := $(INTEL_PATH_BUILD)/testkeys/DB
 endif
 
 LOCAL_CC := $(IAFW_CC)

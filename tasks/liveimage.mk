@@ -27,7 +27,7 @@ live_sfs := $(live_artifact_dir)/images.sfs
 liveimage_zip := $(live_artifact_dir)/live.zip
 
 $(live_sfs): \
-		device/intel/build/tasks/liveimage.mk \
+		$(INTEL_PATH_BUILD)/tasks/liveimage.mk \
 		$(INSTALLED_SYSTEMIMAGE) \
 		$(HOST_OUT_EXECUTABLES)/simg2img \
 		| $(ACP) \
@@ -42,10 +42,10 @@ else
 endif
 	$(hide) PATH=/sbin:/usr/sbin:$(PATH) mksquashfs $(sfs_dir) $@ -no-recovery -noappend
 
-live_initrc := device/intel/common/boot/init.live.rc
+live_initrc := $(INTEL_PATH_COMMON)/boot/init.live.rc
 
 $(live_ramdisk): \
-		device/intel/build/tasks/liveimage.mk \
+		$(INTEL_PATH_BUILD)/tasks/liveimage.mk \
 		$(PRODUCT_OUT)/preinit/preinit \
 		$(INSTALLED_RAMDISK_TARGET) \
 		$(MKBOOTFS) \
@@ -66,7 +66,7 @@ $(live_ramdisk): \
 	$(hide) $(MKBOOTFS) $(ramdisk_dir) | $(MINIGZIP) > $@
 
 $(live_bootimage): \
-		device/intel/build/tasks/liveimage.mk \
+		$(INTEL_PATH_BUILD)/tasks/liveimage.mk \
 		$(INSTALLED_KERNEL_TARGET) \
 		$(live_ramdisk) \
 		$(MKBOOTIMG) $(BOOT_SIGNER) \
@@ -80,7 +80,7 @@ $(live_bootimage): \
 	$(hide) $(BOOT_SIGNER) /fastboot $@ $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $@
 
 $(liveimage_zip): \
-		device/intel/build/tasks/liveimage.mk \
+		$(INTEL_PATH_BUILD)/tasks/liveimage.mk \
 		$(live_sfs) \
 		$(BOARD_FIRST_STAGE_LOADER) \
 		$(BOARD_EFI_MODULES) \
@@ -100,14 +100,14 @@ endif
 
 
 $(INTEL_LIVEIMAGE_TARGET): \
-		device/intel/build/tasks/liveimage.mk \
+		$(INTEL_PATH_BUILD)/tasks/liveimage.mk \
 		$(liveimage_zip) \
 		$(MKDOSFS) \
 		$(MCOPY) \
                 $(live_bootimage) \
-		device/intel/build/bootloader_from_zip \
+		$(INTEL_PATH_BUILD)/bootloader_from_zip \
 
-	$(hide) device/intel/build/bootloader_from_zip \
+	$(hide) $(INTEL_PATH_BUILD)/bootloader_from_zip \
 		--fastboot $(live_bootimage) \
 		--zipfile $(liveimage_zip) \
                 --bootable \

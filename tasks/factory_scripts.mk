@@ -7,7 +7,7 @@ FACTORY_SCRIPTS_PACKAGE_TARGET := $(PRODUCT_OUT)/$(TARGET_PRODUCT)-$(BUILD_ID_LC
 FACTORY_SCRIPTS_RADIO := $(if $(BOARD_RADIOIMAGE), --radio $(BOARD_RADIOIMAGE))
 
 $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
-		device/intel/build/generate_factory_images \
+		$(INTEL_PATH_BUILD)/generate_factory_images \
 		$(PRODUCT_OUT)/bootloader \
 		$(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		$(BOARD_RADIOIMAGE) \
@@ -15,7 +15,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 
 	@echo "Package: $@"
 	# Generate Package
-	$(hide) ./device/intel/build/generate_factory_images \
+	$(hide) ./$(INTEL_PATH_BUILD)/generate_factory_images \
 		--product $(TARGET_PRODUCT) --release $(BUILD_ID) \
 		--bootloader $(PRODUCT_OUT)/bootloader \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
