@@ -213,7 +213,8 @@ def main(argv):
 
     print "Extracting the provdata.zip"
     prov_file = "provdata_"+OPTIONS.variant+".zip"
-    unpack_dir, input_zip = common.UnzipTemp(args[0])
+    unpack_dir = common.UnzipTemp(args[0])
+    input_zip = zipfile.ZipFile(args[0], "r")
     input_provzip = zipfile.ZipFile(os.path.join(unpack_dir,
                 "RADIO", prov_file), "r")
 

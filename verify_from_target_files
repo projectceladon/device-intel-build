@@ -164,7 +164,8 @@ def main(argv):
         sys.exit(1)
 
     print "Extracting target files package..."
-    unpack_dir, tfp = common.UnzipTemp(args[0])
+    unpack_dir = common.UnzipTemp(args[0])
+    tfp = zipfile.ZipFile(args[0], "r")
     success = True
     OPTIONS.info_dict = common.LoadInfoDict(tfp)
     platform_efi, platform_sflte, platform_abl = intel_common.CheckIfSocEFI(unpack_dir, variant=OPTIONS.variant)

@@ -344,7 +344,8 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant +".zip")
         if base_variant and (os.path.isfile(provdata_name) == False):
             provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + base_variant +".zip")
-        provdata, provdata_zip = common.UnzipTemp(provdata_name)
+        provdata = common.UnzipTemp(provdata_name)
+        provdata_zip = zipfile.ZipFile(provdata_name, "r")
         cap_path = os.path.join(provdata,"capsule.fv")
         if os.path.exists(cap_path):
             extra_files.append((cap_path, "capsules/current.fv"))
@@ -367,7 +368,8 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
             provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
         else:
             provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
-        provdata, provdata_zip = common.UnzipTemp(provdata_name)
+        provdata = common.UnzipTemp(provdata_name)
+        provdata_zip = zipfile.ZipFile(provdata_name, "r")
         filename = os.path.join(provdata, "bootloader")
     else:
         bootloader = tempfile.NamedTemporaryFile(delete=False)
@@ -442,7 +444,8 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, block_size
     caller, will be 101% the size of the containing files"""
 
     if zipped:
-        root, root_zip = common.UnzipTemp(root_zip)
+        root = common.UnzipTemp(root_zip)
+        root_zip = zipfile.ZipFile(root_zip, "r")
     else:
         root = root_zip
 
@@ -586,7 +589,8 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     ramdisk_img = tempfile.NamedTemporaryFile()
     img = tempfile.NamedTemporaryFile()
 
-    ramdisk_tmp, ramdisk_zip = common.UnzipTemp(ramdisk_path)
+    ramdisk_tmp = common.UnzipTemp(ramdisk_path)
+    ramdisk_zip = zipfile.ZipFile(ramdisk_path, "r")
 
     cmd1 = ["mkbootfs", ramdisk_tmp]
     try:
@@ -776,7 +780,8 @@ def build_fls(unpack_dir, target, variant=None):
     tag = get_tag(target2tag)
     provdata_zip  = 'provdata_%s.zip' % variant if variant else 'provdata.zip'
     provdata_name = os.path.join(unpack_dir, "RADIO", provdata_zip)
-    provdata, provdata_zip = common.UnzipTemp(provdata_name)
+    provdata = common.UnzipTemp(provdata_name)
+    provdata_zip = zipfile.ZipFile(provdata_name, "r")
 
     target2file = open(os.path.join(provdata, "fftf_build.opt")).read().strip()
     t2f = init_t2f_dict(target2file)
@@ -1011,7 +1016,8 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant + ".zip")
     else:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata" + ".zip")
-    provdata, provdata_zip = common.UnzipTemp(provdata_name)
+    provdata = common.UnzipTemp(provdata_name)
+    provdata_zip = zipfile.ZipFile(provdata_name, "r")
     additional_data_hash = collections.OrderedDict()
     partition_to_target = get_partition_target_hash(unpack_dir)
 

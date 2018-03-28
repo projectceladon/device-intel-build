@@ -62,7 +62,8 @@ def main(argv):
         sys.exit(1)
 
     print "unzipping target-files..."
-    OPTIONS.input_tmp, input_zip = common.UnzipTemp(args[0])
+    OPTIONS.input_tmp = common.UnzipTemp(args[0])
+    input_zip = zipfile.ZipFile(args[0], "r")
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
 
     extras = []

@@ -155,8 +155,10 @@ def process_updater_script(data, unpack_dir):
 
     # Check the provdata archive for extra edify commands to inject into the OTA
     # script
-    provdata, provdata_zip = common.UnzipTemp(os.path.join(unpack_dir,
+    provdata = common.UnzipTemp(os.path.join(unpack_dir,
                 "RADIO", "provdata_" + OPTIONS.variant +".zip"))
+    provdata_zip = zipfile.ZipFile(os.path.join(unpack_dir,
+                "RADIO", "provdata_" + OPTIONS.variant +".zip"), "r")
     extra_script_path = os.path.join(provdata, "extra_script.edify")
     if os.path.exists(extra_script_path):
         print "Appending extra Edify script commands"
@@ -341,11 +343,13 @@ def main(argv):
     input_zip = zipfile.ZipFile(args[0])
 
     print "Decompressing target-files-packages..."
-    tfp_dir, tfp_zip = common.UnzipTemp(OPTIONS.tfp, ["RADIO/*"])
+    tfp_dir = common.UnzipTemp(OPTIONS.tfp, ["RADIO/*"])
+    tfp_zip = zipfile.ZipFile(OPTIONS.tfp, "r")
     OPTIONS.info_dict = common.LoadInfoDict(tfp_zip)
 
     if OPTIONS.incremental:
-        source_tfp_dir, source_tfp_zip = common.UnzipTemp(OPTIONS.source_tfp, ["RADIO/*"])
+        source_tfp_dir = common.UnzipTemp(OPTIONS.source_tfp, ["RADIO/*"])
+        source_tfp_zip = zipfile.ZipFile(OPTIONS.source_tfp, "r")
         OPTIONS.source_info_dict = common.LoadInfoDict(source_tfp_zip)
 
     dmap = intel_common.load_device_mapping_from_tfp(tfp_dir)

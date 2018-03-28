@@ -329,7 +329,8 @@ def main(argv):
     output_zip = zipfile.ZipFile(args[1], "w")
 
     print "Extracting bootloader.zip"
-    unpack_dir, input_zip = common.UnzipTemp(args[0])
+    unpack_dir = common.UnzipTemp(args[0])
+    input_zip = zipfile.ZipFile(args[0], "r")
     input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
                 "RADIO", "bootloader.zip"), "r")
 
