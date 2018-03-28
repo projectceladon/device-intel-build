@@ -350,7 +350,8 @@ def main(argv):
         flashfile = getIntermediates(product_out, "flashfiles", "flashfiles")
     else:
         print "Unzipping target-files..."
-        unpack_dir, input_zip = common.UnzipTemp(args[0])
+        unpack_dir = common.UnzipTemp(args[0])
+        input_zip = zipfile.ZipFile(args[0], "r")
         OPTIONS.info_dict = common.LoadInfoDict(input_zip)
         if OPTIONS.unified_variants:
             OPTIONS.variants = getProvdataVariants(unpack_dir)
