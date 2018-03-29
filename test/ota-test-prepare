@@ -205,12 +205,12 @@ function build_release {
 
     echo "Adding extra test case files to TFP for $RELNAME"
     season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
-                    device/intel/common/recovery/$BBIN \
+                    ${INTEL_PATH_HARDWARE}/bootctrl/recovery/$BBIN \
                     bootloader.zip $BLOBS1 B.bin
 
     if [ -n "$BOARD_VARIANT" ]; then
         season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
-                    device/intel/common/recovery/$BBIN \
+                    ${INTEL_PATH_HARDWARE}/bootctrl/recovery/$BBIN \
                     provdata_${BOARD_VARIANT}.zip \
                     $BLOBS2 BOOTLOADER/E.bin
     fi
