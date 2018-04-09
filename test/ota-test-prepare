@@ -1,0 +1,404 @@
+#!/bin/bash
+
+# Allow job control
+set -m
+
+# make sure our trap works
+set -o pipefail
+set -o errtrace
+set -o errexit
+
+function bail {
+    local CALLER_LINENO=$1
+    local EXIT_CODE=${2:-1}
+    echo "Failed near line $CALLER_LINENO with status $EXIT_CODE"
+    exit $EXIT_CODE
+}
+
+trap 'bail ${LINENO}' ERR
+
+export TESTKEYS=device/intel/build/testkeys
+export PRODKEYS=device/intel/build/testkeys/production-test
+export ANDROID_PW_FILE=$PRODKEYS/pwfile
+export BOARD_VARIANT=
+export PARALLEL=
+export NO_LOGS=
+export NO_BUILD_OTATOOLS=
+export TFP=
+export QUICK=
+export FORCE_BUILD_TFPS=
+export HAS_VARIANTS=
+
+while getopts "qst:V:jlof" opt; do
+    case $opt in
+        s)
+            set -x
+            ;;
+        q)
+            export QUICK=1
+            ;;
+        t)
+            export TFP=$OPTARG
+            ;;
+        V)
+            export BOARD_VARIANT=$OPTARG
+            ;;
+        j)
+            export PARALLEL=YES
+            ;;
+        l)
+            export NO_LOGS=YES
+            ;;
+        o)
+            export NO_BUILD_OTATOOLS=YES
+            ;;
+        f)
+            export FORCE_BUILD_TFPS=YES
+            ;;
+        \?)
+            echo "Usage:"
+            echo
+            echo "  ota-test-prepare [-s -q -d <device>]"
+            echo "    Create two builds A and B with deliverables for performing OTA + Secure Boot test cases"
+            echo
+            echo "OR"
+            echo
+            echo "  ota-test-prepare [-s -d <device>] -t <path to TFP zipfile> <build name>"
+            echo "    Use an existing TFP and create 1 set of deliverables for performing OTA + Secure Boot test cases"
+            echo "    The ota/ directory will contain a re-signed TFP, factory archive, and full-image OTA."
+            echo "    The build name identifies the build, using A or B is typical"
+            echo
+            echo "Valid options:"
+            echo "-q: Just build testkey signed images for the 'quick' test cases"
+            echo "-s: Show commands being run"
+            echo "-t <tfp>: Don't do own build; use supplied target-files to create a re-signed release"
+            echo "-V <variant>: Device variant"
+            echo "-j: Build output images in parallel (SSD recommended)"
+            echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
+            echo "-o: skip building otatools, assume they are there"
+            echo "-f: force building target files packages even if they exist"
+            exit 1
+            ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
+NUM_CPUS=`grep -c ^processor /proc/cpuinfo`
+if [ -n "`grep -o '^flags\b.*: .*\bht\b' /proc/cpuinfo | tail -1`" ]; then
+    NUM_CPUS=$(($NUM_CPUS / 2))
+fi
+
+export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
+export OTA_TMP_DIR=ota/tmp/
+export MKTEMP="mktemp --tmpdir=ota/tmp/"
+
+variants_enable_string="# Source: device/intel/mixins/groups/variants/true/AndroidBoard.mk"
+function has_variants {
+    if [ -z "$TFP" ]; then
+        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
+                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+        HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
+    else
+        HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l || true)
+    fi
+}
+
+# Args: <input TFP> <output TFP>
+function sign_tfp {
+    t1=`$MKTEMP tmp.tfp1.XXXXXXXX`
+    t2=`$MKTEMP tmp.derkey.XXXXXXXX`
+
+    generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
+
+    ./build/tools/releasetools/sign_target_files_apks  \
+            --verbose \
+            --replace_ota_keys \
+            --default_key_mappings $PRODKEYS $1 $t1
+    rm -f ${t2}.pub $t2
+
+    ./device/intel/build/releasetools/sign_target_files_efis \
+            --verbose \
+            $t1 $2
+#            --oem-key $PRODKEYS/verity \
+#            --key-mapping loader.efi=$PRODKEYS/DB \
+#            $t1 $2
+    rm $t1
+}
+
+# Args: <input target files package> <output flashfiles>
+function build_provimg {
+    if [ -z "$BOARD_VARIANT" ]; then
+        ./device/intel/build/releasetools/flashfiles_from_target_files \
+                --verbose $1 $2
+    else
+        ./device/intel/build/releasetools/flashfiles_from_target_files \
+                --verbose --variant $BOARD_VARIANT $1 $2
+    fi
+}
+
+# Args: <tfp> <output zip> <optional package key>
+function build_ota {
+    if [ -n "$3" ]; then
+        EXTRA_ARGS="--package_key $3"
+    else
+        EXTRA_ARGS=
+    fi
+
+    [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
+
+    ./device/intel/build/releasetools/generate_otas --verbose \
+            $EXTRA_ARGS $1 -f $2
+}
+
+# Args: <source tfp> <target tfp> <output zip> <optional package key>
+function build_inc_ota {
+    if [ -n "$4" ]; then
+        EXTRA_ARGS="--package_key $4"
+    else
+        EXTRA_ARGS=
+    fi
+
+    [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
+
+    ./device/intel/build/releasetools/generate_otas --verbose \
+            $EXTRA_ARGS -s $1 $2 -f $3
+}
+
+function rename_in_zip {
+    printf "@ $2\n@=$3\n" | zipnote -w $1
+}
+
+function reset_tree {
+    # Force EFI binaries to be rebuilt
+    rm -rf $OUT/obj/EFI
+
+    echo "Cleaning source tree"
+    make installclean &> /dev/null
+}
+
+function build_release {
+    RELNAME=$1
+    BLOB=$2
+    F1=$3
+    F2=$4
+
+    reset_tree
+
+    echo "Building source software version $RELNAME"
+    log_to make-${RELNAME}.log make -j$CONCURRENCY_LEVEL target-files-package
+    cp $OUT/obj/PACKAGING/target_files_intermediates/$TARGET_PRODUCT-target_files*.zip \
+            $BASEDIR/tfp-$RELNAME-testkey.zip
+
+    if [[ "$RELNAME" == "A" ]]; then
+        BBIN=blob1.bin
+        BLOBS1="A.bin"
+        BLOBS2="BOOTLOADER/D.bin"
+    else
+        BBIN=blob2.bin
+        BLOBS1="C.bin"
+        BLOBS2="BOOTLOADER/F.bin"
+    fi
+
+    echo "Adding extra test case files to TFP for $RELNAME"
+    season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
+                    device/intel/common/recovery/$BBIN \
+                    bootloader.zip $BLOBS1 B.bin
+
+    if [ -n "$BOARD_VARIANT" ]; then
+        season_tfp $BASEDIR/tfp-$RELNAME-testkey.zip \
+                    device/intel/common/recovery/$BBIN \
+                    provdata_${BOARD_VARIANT}.zip \
+                    $BLOBS2 BOOTLOADER/E.bin
+    fi
+}
+
+
+# Does an in-place modification of a target-files-package to ensure that
+# bootloader updates are working corectly. We add two extra files to
+# the bootloader image which are copies of the supplied blob.
+# In the source TFP, these will be called A.bin and B.bin.
+# In the target TFP, these will be B.bin and C.bin.
+# During the incremental OTA, A should be deleted, C created,
+# and B patched.
+# ARGS: <TFP> <blob filename> <archive path in TFP under RADIO/> <filename1> <filename2>
+function season_tfp {
+    local_archive=`$MKTEMP tmp.bootloader.XXXXXXXX`
+    tfp=$1
+    blob=$2
+    archive=RADIO/$3
+    fn1=$4
+    fn2=$5
+
+    unzip -jp $tfp $archive > $local_archive
+
+    zip -j $local_archive $blob
+    rename_in_zip $local_archive $(basename $blob) $fn1
+
+    zip -j $local_archive $blob
+    rename_in_zip $local_archive $(basename $blob) $fn2
+
+    zip -d $tfp $archive
+    zip -jm $tfp $local_archive
+    rename_in_zip $tfp $(basename $local_archive) $archive
+
+    rm -rf $local_archive
+}
+
+
+# Args: <logfile> <command> <args...>
+function background {
+    if [ -n "$PARALLEL" ]; then
+        log_to $@ &
+    else
+        log_to $@
+    fi
+}
+
+# Args: <logfile> <command> <args...>
+function log_to {
+    if [ -n "$NO_LOGS" ]; then
+        shift
+        $@
+    else
+        local LOGFILE=$BASEDIR/logs/$1
+        shift
+        $@ &> $LOGFILE
+    fi
+}
+
+# Args: <number of processes to wait for>
+function wait_complete {
+    if [ -n "$PARALLEL" ]; then
+        for i in `seq 1 $1`; do
+            wait -n
+        done
+    fi
+}
+
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+if [[ -n "$TFP" ]]; then
+    if [[ -z "$1" ]]; then
+        echo "No build name provided!"
+        exit 1
+    fi
+fi
+
+if [ -z "$BOARD_VARIANT" ]; then
+    has_variants
+    if [ $HAS_VARIANTS -ge 1 ]; then
+        echo "${TARGET_PRODUCT} builds require use of -V parameter"
+        exit 1
+    fi
+
+    BASEDIR=ota/$TARGET_PRODUCT/
+else
+    BASEDIR=ota/$TARGET_PRODUCT-$BOARD_VARIANT/
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
+mkdir -p $BASEDIR
+rm -rf $BASEDIR/ota*.zip $BASEDIR/flashfiles*.zip $BASEDIR/*.unfixed
+rm -rf ota/tmp
+mkdir -p ota/tmp
+rm -rf $BASEDIR/logs
+mkdir -p $BASEDIR/logs
+
+if [ -z "$NO_BUILD_OTATOOLS" ]; then
+    echo "Building support tools"
+    log_to make-otatools.log make -j$CONCURRENCY_LEVEL otatools
+fi
+
+TS=`date +"%s"`
+
+echo "Generating lockdown oemvars"
+background oemvars-pt.log device/intel/build/generate_bios_oemvars \
+        -D $PRODKEYS/DB \
+        -K $PRODKEYS/KEK \
+        -P $PRODKEYS/PK \
+        -T $TS \
+        --unlock ota/unlock-pt.txt ota/oemvars-pt.txt
+
+background oemvars-testkeys.log device/intel/build/generate_bios_oemvars \
+        -D $TESTKEYS/DB \
+        -K $TESTKEYS/KEK \
+        -P $TESTKEYS/PK \
+        -T $TS \
+        --unlock ota/unlock-testkeys.txt ota/oemvars-testkeys.txt
+
+
+wait_complete 2
+
+if [[ -n "$TFP" ]]; then
+    log_to sign_tfp-${1}.log sign_tfp $TFP $BASEDIR/tfp-${1}.zip
+    background flashfiles-${1}.log build_provimg $BASEDIR/tfp-${1}.zip $BASEDIR/flashfiles-${1}.zip
+    background ota-${1}.log build_ota $BASEDIR/tfp-${1}.zip $BASEDIR/ota-${1}.zip $PRODKEYS/releasekey
+    wait_complete 2
+    echo "All done!"
+    exit
+fi
+
+if [[ -n $FORCE_BUILD_TFPS || ! -f $BASEDIR/tfp-A-testkey.zip ]]; then
+    build_release A
+    RESIGN_A=true
+fi
+
+if [[ -n $FORCE_BUILD_TFPS || ! -f $BASEDIR/tfp-B-testkey.zip ]]; then
+    build_release B
+    RESIGN_B=true
+fi
+
+if [[ "$QUICK" != "1" ]]; then
+    echo "Re-signing target-files-packages"
+    NUM_WAIT=0
+    if [[ -n "$RESIGN_A" || ! -f $BASEDIR/tfp-A.zip ]]; then
+        NUM_WAIT=$(($NUM_WAIT + 1))
+        background sign_tfp-A.log sign_tfp $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-A.zip
+    fi
+    if [[ -n "$RESIGN_B" || ! -f $BASEDIR/tfp-B.zip ]]; then
+        NUM_WAIT=$(($NUM_WAIT + 1))
+        background sign_tfp-B.log sign_tfp $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-B.zip
+    fi
+    wait_complete $NUM_WAIT
+fi
+
+echo "Building flashfiles..."
+NUM_WAIT=0
+if [[ "$QUICK" != "1" ]]; then
+    background flashfiles-A.log build_provimg $BASEDIR/tfp-A.zip $BASEDIR/flashfiles-A.zip
+    background flashfiles-B.log build_provimg $BASEDIR/tfp-B.zip $BASEDIR/flashfiles-B.zip
+    NUM_WAIT=$(($NUM_WAIT + 2))
+fi
+
+background flashfiles-A-testkey.log build_provimg $BASEDIR/tfp-A-testkey.zip $BASEDIR/flashfiles-A-testkey.zip
+background flashfiles-B-testkey.log build_provimg $BASEDIR/tfp-B-testkey.zip $BASEDIR/flashfiles-B-testkey.zip
+NUM_WAIT=$(($NUM_WAIT + 2))
+
+wait_complete $NUM_WAIT
+
+NUM_WAIT=0
+echo "Building OTA update packages..."
+if [[ "$QUICK" != "1" ]]; then
+    background ota-A.log build_ota $BASEDIR/tfp-A.zip $BASEDIR/ota-A.zip $PRODKEYS/releasekey
+    background ota-B.log build_ota $BASEDIR/tfp-B.zip $BASEDIR/ota-B.zip $PRODKEYS/releasekey
+    background ota-A-B.log build_inc_ota $BASEDIR/tfp-A.zip $BASEDIR/tfp-B.zip $BASEDIR/ota-A-B.zip $PRODKEYS/releasekey
+    background ota-B-A.log build_inc_ota $BASEDIR/tfp-B.zip $BASEDIR/tfp-A.zip $BASEDIR/ota-B-A.zip $PRODKEYS/releasekey
+    NUM_WAIT=$(($NUM_WAIT + 4))
+fi
+
+background ota-A-testkey.log build_ota $BASEDIR/tfp-A-testkey.zip $BASEDIR/ota-A-testkey.zip
+background ota-B-testkey.log build_ota $BASEDIR/tfp-B-testkey.zip $BASEDIR/ota-B-testkey.zip
+background ota-A-B-testkey.log build_inc_ota $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-B-testkey.zip $BASEDIR/ota-A-B-testkey.zip
+background ota-B-A-testkey.log build_inc_ota $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-A-testkey.zip $BASEDIR/ota-B-A-testkey.zip
+NUM_WAIT=$(($NUM_WAIT + 4))
+
+wait_complete $NUM_WAIT
+
+popd
+echo "OTA preparations complete!"
+
