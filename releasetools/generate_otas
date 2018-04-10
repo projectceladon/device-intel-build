@@ -1,0 +1,302 @@
+#!/usr/bin/env python
+
+"""
+This script generates ota files for current target (lunch must have been called before)
+It takes care of generating an ota file for each derivative platform if needed.
+By default, full OTA package is generated with TFP_DST.
+Incremental OTA can be generated too using the options.
+
+Usage: generate_otas [options] TFP_DST
+
+Options:
+  -h, --help
+	Display this help
+
+  -v, --verbose
+	Show command lines being executed
+
+  -F, --file_based
+	Build a file based OTA (default is block based)
+
+  -V VARIANT, --variant=VARIANT
+	Build OTA only for VARIANT (relevant only if lunch target uses variants)
+
+  -k KEY, --package_key=KEY
+	Use KEY to sign the output OTA package
+	Defaults to AOSP testkey
+
+  -o DIR, --output_dir=DIR
+	Store ota files and metadata file into DIR. Default to current directory
+
+  -s TFP, --tfp_source=TFP
+	Generate incremental OTA from TFP to target_files_package instead of full OTA
+
+  -a, --all
+	Generate full OTA and incremental OTA (-s is then mandatory)
+
+  -f FILE, --output_file FILE
+	This option is valid if only one file is generated
+	In this case, the generated file will be FILE and -o is ignored
+"""
+
+import sys
+import os
+import zipfile
+import getopt
+import subprocess
+import re
+import threading
+import json
+import signal
+
+class GLOBAL :
+    def __init__(self):
+        return
+
+gbl = GLOBAL()
+gbl.output_dir = os.getcwd()
+gbl.tfp_source = None
+gbl.tfp_destination = None
+gbl.processes = []
+gbl.ota_list = []
+gbl.variants = None
+gbl.target_product = None
+gbl.ota_args = ["--block"]
+gbl.android_top = None
+gbl.package_key = None
+gbl.generate_all = False
+gbl.output_file = None
+
+def check_tfp(tfp):
+    zip = zipfile.ZipFile(tfp)
+    product_line = "ro.product.name=%s\n" % gbl.target_product
+    if not product_line in zip.open("SYSTEM/build.prop").readlines():
+        raise Exception("package %s is not for product %s" % (tfp, gbl.target_product))
+
+def finish_all(signal, frame):
+    for p in gbl.processes:
+        p.terminate()
+
+def generate_variants(lock, type, ota_generic):
+    processes = []
+    ota_list = []
+
+    for var in gbl.variants:
+        ota_file = "%s-ota-%s-%s.zip" % (gbl.target_product, type, var)
+        cmd = [os.path.join(gbl.android_top, "device/intel/build/releasetools/ota_deployment_fixup")]
+        cmd.extend(["--variant", var])
+
+        if type == "incremental":
+            cmd.extend(["--source_target_files", gbl.tfp_source])
+        if gbl.package_key:
+            cmd.extend(gbl.package_key)
+
+        cmd.extend(["--target_files", gbl.tfp_destination])
+        cmd.append(os.path.join(gbl.output_dir, ota_generic))
+        cmd.append(os.path.join(gbl.output_dir, ota_file))
+        if "" in cmd:
+            cmd.remove("")
+
+        p = subprocess.Popen(cmd)
+        processes.append((p, var, "".join(cmd)))
+        ota_list.append((type, ota_file))
+
+        lock.acquire()
+        gbl.processes.append(p)
+        lock.release()
+
+    for p, var, cmd in processes:
+        if p.wait() != 0:
+            raise Exception("Failed to generate variant %s\nCommand was: %s" % (var, cmd))
+
+    return ota_list
+
+def generate(lock, type):
+    ota_generic = "%s-ota-%s.zip" % (gbl.target_product, type)
+    ota_list = [(type, ota_generic)]
+
+
+    cmd = [os.path.join(gbl.android_top, "build/tools/releasetools/ota_from_target_files")]
+    if type == "incremental":
+        cmd.extend(["--incremental_from", gbl.tfp_source])
+    if gbl.package_key:
+        cmd.extend(gbl.package_key)
+    cmd.extend(gbl.ota_args)
+    cmd.append(gbl.tfp_destination)
+    cmd.append(os.path.join(gbl.output_dir, ota_generic))
+    if "" in cmd:
+        cmd.remove("")
+
+    subprocess.check_call(cmd)
+
+    if gbl.variants:
+        ota_list = generate_variants(lock, type, ota_generic)
+        os.unlink(os.path.join(gbl.output_dir, ota_generic))
+
+    lock.acquire()
+    gbl.ota_list.extend(ota_list)
+    lock.release()
+
+def main(argv):
+    def option_handler(o, a):
+        if o in ("-h", "--help"):
+            print __doc__
+            sys.exit(1)
+        elif o in ("-v", "--verbose"):
+            gbl.ota_args.append("--verbose")
+        elif o in ("-F", "--file_based"):
+            gbl.ota_args.remove("--block")
+        elif o in ("-V", "--variant"):
+            gbl.variants = [a]
+        elif o in ("-k", "--package_key"):
+            gbl.package_key = a
+        elif o in ("-o", "--output_dir"):
+            gbl.output_dir = a
+        elif o in ("-s", "--tfp_source"):
+            gbl.tfp_source = a
+        elif o in ("-a", "--all"):
+            gbl.generate_all = True
+        elif o in ("-f", "--output_file"):
+            gbl.output_file = a
+        else:
+            return False
+        return True
+
+    try:
+        opts, args = getopt.gnu_getopt(argv[1:], "hvFV:k:o:s:af:",
+                                   ["help", "verbose", "file_based",
+                                    "variant=", "package_key=",
+                                    "output_dir=", "tfp_source=", "all",
+                                    "output_file="])
+    except getopt.GetoptError as err:
+        print __doc__
+        print "**", str(err), "**"
+        sys.exit(1)
+
+    for o,a in opts:
+        if not option_handler(o,a):
+            assert False, "unknown option \"%s\"" % o
+
+    if len(args) != 1:
+        print __doc__
+        sys.exit(1)
+    gbl.tfp_destination = args[0]
+
+    gbl.android_top = os.environ.get('ANDROID_BUILD_TOP')
+    if None == gbl.android_top:
+        raise Exception("ANDROID_BUILD_TOP undefined, please execute lunch")
+
+    gbl.target_product = os.environ.get('TARGET_PRODUCT')
+    if None == gbl.target_product:
+        raise Exception("TARGET_PRODUCT undefined, please execute lunch")
+
+    if gbl.generate_all and gbl.output_file:
+        raise Exception("-f option can't be used with -a\n"
+                        "Try %s --help for more information" % os.path.basename(argv[0]))
+
+    if gbl.generate_all and not gbl.tfp_source:
+       raise Exception("tfp_source is needed to generate incremental OTA")
+
+    if not os.path.exists(gbl.output_dir):
+        os.makedirs(gbl.output_dir)
+
+    check_tfp(gbl.tfp_destination)
+    if gbl.tfp_source:
+        check_tfp(gbl.tfp_source)
+
+    ### Get variants informations ###
+    variants_enable_string = "# Source: device/intel/mixins/groups/variants/true/AndroidBoard.mk"
+    omitstring = '! -path */build/* -prune ! -path */common/* -prune ! -path */mixins/* -prune ! -path */sepolicy/* -prune'
+    cmd = "find %s/device -type f -name *.mk %s -exec grep -l" % (gbl.android_top, omitstring)
+    cmd = cmd.split(" ")
+    cmd.append("PRODUCT_NAME := %s$" % gbl.target_product)
+    cmd.extend("{} ;".split(" "))
+    product_dir = os.path.dirname(subprocess.check_output(cmd))
+    has_variants = 0 == subprocess.call(["grep", variants_enable_string,
+                                         os.path.join(product_dir, "AndroidBoard.mk")],
+                                        stdout = os.open(os.devnull, os.O_WRONLY))
+
+    if has_variants:
+        if not gbl.variants:
+            cmd = "make -p -f %s/variants-%s.mk" % (product_dir, gbl.target_product)
+            p = subprocess.Popen(cmd.split(" "), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            o,_ = p.communicate()
+            for line in o.split("\n"):
+                if "ROOT_VARIANTS" in line:
+                    _, root_variants = line.split("=")
+            gbl.variants = re.sub(' +', ' ', root_variants.strip()).split(" ")
+    else:
+        if gbl.variants:
+            raise Exception("target %s does not support variant.\n"
+                            "Please remove -V option" % gbl.target_product)
+
+    # Get package_key path relative to ANDROID_BUILD_TOP, required to get password file working
+    if gbl.package_key:
+        gbl.package_key = ["--package_key", os.path.relpath(gbl.package_key, gbl.android_top)]
+
+    lock = threading.Lock()
+    signal.signal(signal.SIGINT, finish_all)
+    threads = []
+    ### Generate full OTA ###
+    if not gbl.tfp_source or gbl.generate_all:
+        t = threading.Thread(target=generate, args=[lock, "full"])
+        t.start()
+        threads.append(t)
+
+    ### Generate incremental OTA ###
+    if gbl.tfp_source:
+        t = threading.Thread(target=generate, args=[lock, "incremental"])
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    if gbl.output_file:
+        _, file = gbl.ota_list.pop()
+        os.rename(os.path.join(gbl.output_dir,file), gbl.output_file)
+        sys.exit(0)
+
+    ### Generate metadata.json ###
+    metadata = os.path.join(gbl.output_dir, "metadata.json")
+    js = {}
+    js["version"] = 1
+    js["files"] = {}
+
+    for type, file in gbl.ota_list:
+        zip = zipfile.ZipFile(os.path.join(gbl.output_dir,file))
+        data = zip.open("META-INF/com/android/metadata")
+        pre_build = None
+        for line in data:
+            if "pre-build" in line:
+                _, pre_build = line.strip().split("=")
+            if "post-build" in line:
+                _, post_build = line.strip().split("=")
+            if "pre-device" in line:
+                _, pre_device = line.strip().split("=")
+
+        if pre_build:
+            pre_tag = "-"+pre_build.split("/")[4].split(":")[0]
+        else:
+            pre_tag = ""
+
+        post_tag = post_build.split("/")[4].split(":")[0]
+
+        rename_file = type + "_ota-" + pre_device + pre_tag + "-" + post_tag + ".zip"
+        os.rename(os.path.join(gbl.output_dir, file), os.path.join(gbl.output_dir, rename_file))
+
+        entry = {}
+        if pre_tag:
+            entry["pre_build"] = pre_build
+        entry["post_build"] = post_build
+        entry["pre_device"] = pre_device
+        js["files"][rename_file] = entry
+
+    meta_file = open(metadata, "w")
+    meta_file.write(json.dumps(js, indent=4))
+    meta_file.close()
+
+    return 0
+
+if __name__ == '__main__':
+    main(sys.argv)
