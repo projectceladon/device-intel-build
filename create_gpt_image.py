@@ -644,7 +644,8 @@ class TLBInfos(list):
             debug('The start_lab value read in the TLB partition file')
 
         except NoOptionError:
-            start_lba_prev = 2048
+            # set start lba to offset 1M bytes, align with kernelflinger
+            start_lba_prev = 1024 * 1024 / block_size
             info('The start_lab value is undefined in the TLB partition file,'
                  ' the default value is used: {0}'.format(start_lba_prev))
 
