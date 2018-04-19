@@ -676,7 +676,8 @@ class TLBInfos(list):
                 self.append(TLB_INFO(begin, size, ptype, uuid, label))
             else:
                 self.append(TLB_INFO(begin, size, ptype, uuid, label+'_a'))
-                self.append(TLB_INFO(begin+size, size, ptype, uuid, label+'_b'))
+                uuid_b = str(uuid4())
+                self.append(TLB_INFO(begin+size, size, ptype, uuid_b, label+'_b'))
 
 
     def read(self, block_size):
