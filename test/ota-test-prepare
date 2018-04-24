@@ -113,6 +113,30 @@ function sign_tfp {
 
     generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
 
+    avbtool extract_public_key --key $PRODKEYS/avb_releasekey.pem --output $OTA_TMP_DIR/avb_pk.bin
+    prebuilts/build-tools/linux-x86/bin/acp $PRODKEYS/avb_releasekey.pem external/avb/test/data/testkey_rsa4096.pem
+    unzip $1 RADIO/bootloader.zip -d $OTA_TMP_DIR
+    unzip $OTA_TMP_DIR/RADIO/bootloader.zip -d $OTA_TMP_DIR/RADIO/bootloader
+    cp $OTA_TMP_DIR/RADIO/bootloader/EFI/BOOT/bootx64.efi $OTA_TMP_DIR/RADIO/kernelflinger.efi
+    let key_offset=0x$(objdump -h $OTA_TMP_DIR/RADIO/kernelflinger.efi | grep '\.oemkeys' | awk '{print $6}')
+    let key_length=$(stat -c "%s" $OTA_TMP_DIR/avb_pk.bin)
+    let after_key_offset=$key_offset+$key_length
+    dd if=$OTA_TMP_DIR/RADIO/kernelflinger.efi of=$OTA_TMP_DIR/RADIO/kernelflinger_after_key.efi bs=1 skip=$after_key_offset
+    dd if=$OTA_TMP_DIR/avb_pk.bin of=$OTA_TMP_DIR/RADIO/kernelflinger.efi bs=1 seek=$key_offset
+    dd if=$OTA_TMP_DIR/RADIO/kernelflinger_after_key.efi of=$OTA_TMP_DIR/RADIO/kernelflinger.efi bs=1 seek=$after_key_offset
+    cp $OTA_TMP_DIR/RADIO/kernelflinger.efi $OTA_TMP_DIR/RADIO/bootloader/loader.efi
+    cp $OTA_TMP_DIR/RADIO/kernelflinger.efi $OTA_TMP_DIR/RADIO/bootloader/EFI/BOOT/bootx64.efi
+    mv $OTA_TMP_DIR/RADIO/bootloader.zip $OTA_TMP_DIR/RADIO/bootloader_old.zip
+    cd $OTA_TMP_DIR/RADIO/bootloader/
+    zip -qry ../bootloader.zip .
+    cd ../../../../
+    zip -d $1 RADIO/bootloader.zip
+    rm -rf RADIO/
+    mkdir RADIO
+    cp $OTA_TMP_DIR/RADIO/bootloader.zip RADIO/
+    zip -m $1 RADIO/bootloader.zip
+    rm -rf RADIO/
+
     ./build/tools/releasetools/sign_target_files_apks  \
             --verbose \
             --replace_ota_keys \
@@ -122,9 +146,6 @@ function sign_tfp {
     ./device/intel/build/releasetools/sign_target_files_efis \
             --verbose \
             $t1 $2
-#            --oem-key $PRODKEYS/verity \
-#            --key-mapping loader.efi=$PRODKEYS/DB \
-#            $t1 $2
     rm $t1
 }
 
