@@ -933,7 +933,7 @@ class GPTImage(object):
 
             # no binary file used to build the partition
             if bin_path == 'none':
-                line = '\0x00'
+                line = '\0'
                 img_file.seek(offset)
                 img_file.write(line)
                 bin_size = 0
