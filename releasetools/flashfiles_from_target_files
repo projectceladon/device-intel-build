@@ -1,0 +1,466 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2008 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Usage: flashfiles_from_target_files [options] <input_target_files_zip> <output_file>
+
+  -U  (--unified-variants)
+      Toggle ON mega (all variants) flash files from target file.
+
+  -V  (--variant) <variant_name>
+      Generate a single variant-specific flash files from target file.
+
+  -f (--fast)
+      Generate a Fast flashfiles (take images directly from out/, and
+      use hardlink instead of doing a big zip)
+
+  -M (--mv_config_default)
+      Specify the default mv configuration to flash
+      This option is mandatory for Sofia targets only
+"""
+
+import sys
+import os
+import re
+import tempfile
+import zipfile
+import shutil
+import iniparser
+import flash_cmd_generator
+import flashxml
+import flashflsxml
+import json
+
+# Sources:
+# fastboot - build a Fastboot boot image
+# boot:xxxx - build an AOSP boot image xxxx (either "boot" or "recovery")
+# provdatazip: Pull a named file out of RADIO/flashfiles.zip
+# images - pull a named file out of tfp IMAGES/
+# bootloader - Build a bootloader image
+# bootloaderzip - Pull a named file out of RADIO/bootloader.zip
+
+# Import Android Release Tools
+sys.path.append("build/tools/releasetools")
+import common
+
+sys.path.append("device/intel/build/releasetools")
+import intel_common
+
+OPTIONS = common.OPTIONS
+OPTIONS.variants = None
+OPTIONS.unified_variants = False
+OPTIONS.fast = False
+OPTIONS.mv_config_default = None
+
+flashfile_content = []
+variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img", "cse_spi.bin", "firmware-info.txt", "cfgpart.xml", "ifwi.bin", "ifwi_debug.bin"]
+
+class VariantIpGenerator:
+    def __init__(self, ip, configs, variants, variant_files, flashfile):
+        # Original iniparser object
+        self.ip = ip
+        # List of variant IPs
+        self.variant_ips = []
+        # List of variants
+        self.variants = variants
+        # List of variant-specific files
+        self.variant_files_common = variant_files
+        # List of output "sections" to cycle through
+        self.output_sections = []
+        for c in configs:
+            self.output_sections.append('output.' + c[0])
+        # Prefix path for variants flashfiles
+        self.flashfile = flashfile
+        # Only one configuration can be the default one,
+        # save it when parsing variants configurations
+        self.default_config = None
+
+        self.variant_exclude_files = []
+        self.variant_include_files = []
+
+    def __add_variant_flashfile(self, ip, variant):
+        variant_flashfile = self.flashfile + "_" + variant + ".ini"
+        print "Variant flashfile = %s"%variant_flashfile
+        # Sanity check to avoid future silent removal
+        eg = self.empty_groups(ip)
+        if eg:
+            raise AssertionError("Unexpected malformed section %s" % eg[0])
+
+        if os.path.isfile(variant_flashfile):
+            print "Reading INI configuration for %s ..."%variant
+            with open(variant_flashfile, "r") as f:
+                ip.parse(f)
+        self.variant_files = self.variant_files_common
+        # Remove variant 'additional-files' from list to avoid Phone Flash Tool issues
+        if ip.has_option('global', 'additional-files'):
+            exclude_files_variant = set(ip.get('global', 'additional-files').split())
+            exclude_files_generic = set(self.ip.get('global', 'additional-files').split())
+            self.variant_files = sorted(set(self.variant_files) - exclude_files_variant)
+
+            exclude = set(exclude_files_generic) - set(exclude_files_variant)
+            include = set(exclude_files_variant) - set(exclude_files_generic)
+            for f in exclude:
+                _,name = f.split(":")
+                self.variant_exclude_files.append(variantFilename(name, variant))
+            for f in include:
+                self.variant_include_files.append((variant, f))
+        # Remove empty groups from list to avoid Phone Flash Tool issues.
+        # This may happen when a mixin (platform level) disables a feature, while
+        # local flashfile.ini (variant level) is kept and customizes this feature.
+        for s in self.empty_groups(ip):
+            print "Removing malformed section : ", s
+            ip.delete_section(s)
+
+    def empty_groups(self, ip):
+        return [s for s, _ in ip.sectionsfilter("group.") if \
+               not "name" in ip.options(s) or not "description" in ip.options(s)]
+
+    def generate_variant_ip(self):
+        # Add variant files to ip
+
+        for variant in self.variants:
+            new_ip = self.ip.copy()
+            self.variant_ips.append(new_ip)
+            self.__add_variant_flashfile(new_ip, variant)
+            self.__add_variant_files(new_ip, variant)
+
+            # Cycle through output "sections"
+            for section,_ in new_ip.sectionsfilter("output."):
+                config_list = []
+                if not new_ip.has_option(section, 'configurations'):
+                    # For outputs without "configurations" like
+                    # installer.cmd, we will have to generate one output
+                    # file per variant.
+                    self.variantize_output(variant, new_ip, section)
+                    continue
+                # Add variant configs for each configuration "section"
+                for config in new_ip.get(section, 'configurations').split():
+                    config_list.append(self.variantize_config(variant, new_ip, config))
+                # Modify output "section" to use new variant configs instead of original "generics"
+                new_ip.sec[section]['configurations'] = ' '.join(config_list)
+
+    def __add_variant_files(self, ip, variant):
+        # add all files from provdata into the variant files as well
+        commands = [c for c,_ in ip.sectionsfilter('command.')]
+        all_files = set([])
+        for command in commands:
+            for option in ip.options(command):
+                opt_arg = ip.get(command, option)
+                if type(opt_arg) != str:
+                    continue
+                all_files |= set([ip.get(command, a[1:]) for a in opt_arg.split() if a.startswith('$')])
+
+        all_filenames = set(a.split(':')[-1] for a in all_files)
+        provdata_files = set(f[len('provdatazip:'):] for f in all_files
+                             if f.startswith('provdatazip:'))
+        if ip.has_option('global', 'additional-files'):
+            provdata_files -= set(ip.get('global', 'additional-files').split())
+        self.variant_files = sorted((provdata_files | set(self.variant_files)) & all_filenames)
+
+        for item in self.variant_files:
+            ip.new_section('[file.{}]'.format(item))
+            ip.append_option(variant, variantFilename(item, variant))
+
+    def variantize_output(self, variant, ip, output):
+        l = output.split(".")
+        l[len(l) - 2] += "_" + variant
+        new_output = '.'.join(l)
+        ip.rename_section(output, new_output)
+        ip.append_option("suffix", variant)
+
+    def variantize_config(self, variant, ip, config):
+        section = 'configuration.' + config
+        if ip.has_option(section, "default") and ip.get(section, "default") == True:
+            if self.default_config == None:
+                self.default_config = config
+            else:
+                ip.sec[section]["default"] = False
+        new_config = config + "_" + variant
+        new_section = 'configuration.' + new_config
+        ip.rename_section(section, new_section)
+        for item in self.variant_files:
+            ip.append_option('parameters', '{}:{}'.format(os.path.splitext(item)[0], variant))
+        return new_config
+
+def variantFilename(filename, variant):
+    base, suffix = os.path.splitext(filename)
+    return base + "_" + variant + suffix
+
+def getBuildProp(path, prop):
+    with open(os.path.join(path, "build.prop"), "r") as fp:
+        for line in fp.readlines():
+            if line.startswith(prop):
+                return line.split("=")[1].strip()
+    raise Exception("property not found in build.prop: " + prop)
+
+def getFromZip(zip_path, filename):
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        data = zf.open(filename).read()
+    return common.File(filename, data)
+
+def getProvdataVariants(unpack_dir):
+    variants = []
+    working_path = os.path.join(unpack_dir, "RADIO")
+    # Use regex analysis of provdata files to determine current variants
+    regex = re.compile('provdata_(?P<variant>\w+).zip')
+    for f in os.listdir(working_path):
+        m = regex.match(os.path.basename(f))
+        if m and m.group('variant'):
+            variants.append(m.group('variant'))
+    return variants
+
+def getProvdataVariants_fast(product_out):
+    variants = []
+    working_path = os.path.join(product_out, "obj", "PACKAGING", "flashfiles_intermediates")
+    # Use regex analysis of provdata files to determine current variants
+    regex = re.compile('provdata_(?P<variant>\w+).zip')
+    for f in os.listdir(working_path):
+        m = regex.match(os.path.basename(f))
+        if m and m.group('variant'):
+            variants.append(m.group('variant'))
+    return variants
+
+def getIntermediates(product_out, component, subdir):
+    return os.path.join(product_out, "obj", "PACKAGING",
+                        component + "_intermediates", subdir)
+
+def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out=None):
+    if target_out is None:
+        target_out = target
+
+    # Determine if target is already inserted into zipfile
+    if target_out in flashfile_content:
+        return
+    else:
+        print "-- Adding", target_out
+    # Retrieve file from target file package based on source & target strings
+    if source == "fastboot":
+        ifile = intel_common.GetFastbootImage(unpack_dir)
+    elif source == "bootloader":
+        bdata = intel_common.GetBootloaderImageFromTFP(unpack_dir, variant=variant)
+        ifile = common.File(target, bdata)
+    elif source == "images":
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
+    elif source == "fls_images":
+        intel_common.build_fls(unpack_dir, target, variant=variant)
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
+    elif source == "provdatazip":
+        suffix = "_" + variant if variant else ""
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix), os.path.basename(target))
+    elif source == "bootloaderzip":
+        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
+    elif source.startswith("boot:"):
+        _, iname = source.split(":")
+        ifile = common.GetBootableImage(target, iname+".img", unpack_dir, iname.upper())
+    elif source == "radio":
+        ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "RADIO", target))
+    else:
+        raise Exception("unknown source image type " + source)
+    # Add file to zip, using target_out for naming.  According to the
+    # documentation the File.AddToZip() interface is not suitable for
+    # file larger than 2GiB and common.ZipWrite() must be used
+    # instead.
+    if ifile.size >= (1 << 31):
+        tmpfile = ifile.WriteToTemp()
+        common.ZipWrite(dest_zip, tmpfile.name, target_out)
+    else:
+        ifile.name = target_out
+        ifile.AddToZip(dest_zip)
+    flashfile_content.append(target_out)
+
+def process_image_fast(product_out, flashfiles_out, source, target, variant=None, target_out=None):
+    if target_out is None:
+        target_out = target
+
+    if target_out in flashfile_content:
+        return
+
+    print "-- Adding", target_out
+    outfile = os.path.join(flashfiles_out, target_out)
+    if not os.path.exists(os.path.dirname(outfile)):
+        os.mkdir(os.path.dirname(outfile))
+
+    if source == "bootloader":
+        bdir = getIntermediates(product_out, "bootloader_zip", "root")
+        intel_common.GetBootloaderImageFromOut(product_out, bdir, outfile)
+    elif source == "images" or source == "radio" or source.startswith("boot:") or source == "fastboot":
+        os.link(os.path.join(product_out, target), outfile)
+    elif source == "provdatazip":
+        suffix = "_" + variant if variant else ""
+        infile = os.path.join(getIntermediates(product_out, "flashfiles", "root%s" % suffix), os.path.basename(target))
+        if not os.path.isfile(infile):
+            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata%s" % suffix), os.path.basename(target))
+        os.link(infile, outfile)
+    elif source == "bootloaderzip":
+        infile = os.path.join(getIntermediates(product_out, "bootloader_zip", "root"), target)
+        os.link(infile, outfile)
+    elif source == "fls_images":
+        intermediate = getIntermediates(product_out, "flashfiles", "provdata")
+        
+        intel_common.build_fls_out(product_out, intermediate, target, outfile, variant=OPTIONS.variants)
+    else:
+        raise Exception("unknown source image type " + source)
+
+    flashfile_content.append(target_out)
+
+def main(argv):
+    def option_handler(o, a):
+        if o in ("-V", "--variant"):
+            OPTIONS.variants = [a]
+        elif o in ("-U", "--unified-variants"):
+            OPTIONS.unified_variants = True
+        elif o in ("-f", "--fast"):
+            OPTIONS.fast = True
+        elif o in ("-M", "--mv_config_default"):
+            OPTIONS.mv_config_default = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__,
+            extra_opts = "V:UfM:",
+            extra_long_opts = ["variant=","unified-variants","fast","mv_config_default="],
+            extra_option_handler = option_handler)
+    if len(args) < 2 or (OPTIONS.variants and OPTIONS.unified_variants):
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    if OPTIONS.fast:
+        product_out = args[0]
+        if OPTIONS.unified_variants:
+            OPTIONS.variants = getProvdataVariants_fast(product_out)
+
+        system = os.path.join(product_out, "system")
+        build_type = getBuildProp(system, "ro.build.type")
+        platform = getBuildProp(system, "ro.product.name")
+
+        flashfile = getIntermediates(product_out, "flashfiles", "flashfiles")
+    else:
+        print "Unzipping target-files..."
+        unpack_dir, input_zip = common.UnzipTemp(args[0])
+        OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+        if OPTIONS.unified_variants:
+            OPTIONS.variants = getProvdataVariants(unpack_dir)
+
+        system = os.path.join(unpack_dir, "SYSTEM")
+        build_type = getBuildProp(system, "ro.build.type")
+        platform = getBuildProp(system, "ro.product.name")
+
+        flashfile = os.path.join(unpack_dir, "RADIO", "flashfiles")
+
+    # Retrieve "generic" PFT instructions from target file package
+    if os.path.isfile(flashfile + ".ini"):
+        print "Reading INI configuration..."
+        with open(flashfile + ".ini", "r") as f:
+            ip = iniparser.IniParser()
+            ip.parse(f)
+        configs, files = flash_cmd_generator.parse_config([ip], build_type, platform)
+    elif os.path.isfile(flashfile + ".json") and not OPTIONS.unified_variants:
+        print "Reading JSON configuration..."
+        with open(flashfile + ".json", "r") as f:
+            conf = json.loads(f.read())
+        configs, files = flashxml.parse_config(conf, build_type, platform)
+    elif os.path.isfile(flashfile + "_fls.json") and not OPTIONS.unified_variants:
+        if not OPTIONS.mv_config_default:
+            common.Usage(__doc__)
+            sys.exit(1)
+        print "Reading JSON FLS configuration..."
+        with open(flashfile + "_fls.json", "r") as f:
+            conf = json.loads(f.read())
+        configs, files = flashflsxml.parse_config(conf, build_type, platform, OPTIONS.mv_config_default, system)
+    else:
+        print "Exiting, Missing correct flashfile configuration for generating Flashfiles."
+        sys.exit(1)
+
+    if OPTIONS.fast:
+        fastff_dir = args[1]
+        # If mega flashfile is enabled, create multi-variant version of PFT instructions
+        if OPTIONS.unified_variants or OPTIONS.variants :
+            print "Adding variant specific configurations to ip..."
+            vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files, flashfile)
+            vip.generate_variant_ip()
+            configs, cmd_files = flash_cmd_generator.parse_config(vip.variant_ips, build_type, platform)
+            cmd_files = set([i for _,i in cmd_files])
+
+        print "Adding required binaries..."
+        for src, target in files:
+            if OPTIONS.variants:
+                for variant in OPTIONS.variants:
+                    target_out = None
+                    if variantFilename(target, variant) in cmd_files or target in variant_files:
+                        target_out = variantFilename(target, variant)
+                    if variantFilename(target, variant) in vip.variant_exclude_files \
+                       or (target_out == None and target not in cmd_files):
+                        continue
+                    process_image_fast(product_out, fastff_dir, src, target, variant, target_out)
+            else:
+                process_image_fast(product_out, fastff_dir, src, target)
+        if OPTIONS.variants:
+            for variant, file in vip.variant_include_files:
+                src,target = file.split(":")
+                process_image_fast(product_out, fastff_dir, src, target, variant, variantFilename(target, variant))
+
+        print "Generating JSON flash configuration files..."
+        for fn, data in configs:
+            with open(os.path.join(fastff_dir,fn), 'w') as file:
+                file.write(data)
+    else:
+        with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
+            # If mega flashfile is enabled, create multi-variant version of PFT instructions
+            if OPTIONS.unified_variants or OPTIONS.variants :
+                print "Adding variant specific configurations to ip..."
+                vip = VariantIpGenerator(ip, configs, OPTIONS.variants, variant_files, flashfile)
+                vip.generate_variant_ip()
+                configs, cmd_files = flash_cmd_generator.parse_config(vip.variant_ips, build_type, platform)
+                cmd_files = set([i for _,i in cmd_files])
+
+            # Using "generic" instructions as reference, grab required files & insert into flashfile zip
+            print "Adding required binaries..."
+            for src, target in files:
+                if OPTIONS.variants:
+                    for variant in OPTIONS.variants:
+                        target_out = None
+                        if variantFilename(target, variant) in cmd_files or target in variant_files:
+                            target_out = variantFilename(target, variant)
+                        if variantFilename(target, variant) in vip.variant_exclude_files \
+                           or (target_out == None and target not in cmd_files):
+                            continue
+                        process_image(unpack_dir, dest_zip, src, target, variant, target_out)
+                else:
+                    process_image(unpack_dir, dest_zip, src, target)
+            if OPTIONS.variants:
+                for variant, file in vip.variant_include_files:
+                    src,target = file.split(":")
+                    process_image(unpack_dir, dest_zip, src, target, variant, variantFilename(target, variant))
+
+            # Write flash_cmd_generator parsed PFT flashing instructions to file & insert into flashfile zip
+            print "Generating JSON flash configuration files..."
+            for fn, data in configs:
+                ifile = common.File(fn, data)
+                ifile.AddToZip(dest_zip)
+    print "All done."
+
+if __name__ == '__main__':
+    try:
+        common.CloseInheritedPipes()
+        main(sys.argv[1:])
+    except common.ExternalError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
+    finally:
+        common.Cleanup()
