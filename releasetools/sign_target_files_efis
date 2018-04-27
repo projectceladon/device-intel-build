@@ -1,0 +1,400 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2014 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Re-sign EFI bootloader binaries found in RADIO/bootloader.zip with production
+keys. Can also substitute the vendor key inside the uefi_shim, or substitute
+a new shim entirely.
+
+Usage: sign_target_files_efiss <options> <input_target_files_zip> <output_file>
+
+  -k  (--key-mapping) <loader.efi=keypair>
+      For the loader binary specified, if found inside the TFP will be re-signed
+      with the pair key provided. Call this multiple times to set the mapping for
+      different loader binaries. Do not provide filename extensions; by default
+      assumes private key ends in .pk8 and public key with .x509.pem
+
+      Example: -k gummiboot.efi=path/to/keys/vendor
+         Will use vendor.pk8 and vendor.x509.pem in the provided PATH to re-sign
+         gummiboot.efi.
+
+      This is a bit different from the --key_mapping option for
+      sign_target_files_apks, as typically there are only 2 loaders to sign.
+
+  -R  (--replace) <path inside archive>=<path>
+      Replace existing EFI binary with one supplied on the command line. Intended
+      for situations where we want to use a first stage loader signed by Microsoft.
+
+  -O  (--oem-keystore) <path to keypair>
+      If used, generates a new OEM keystore with the supplied public key in .x509.pem
+      format. This may be called multiple times to include multiple keys in the
+      keystore.
+      Expects a key pair assuming public key ends with .x509.pem; the private key
+      is not used.
+
+  -K  (--oem-key) <path to new keypair>
+      Replace the OEM key inside kernelflinger with the replacement copy.
+      The OEM keystore must be signed with this key.
+      Expects a key pair assuming private key ends in .pk8 and public key
+      with .x509.pem
+
+  -L  (--kernelflinger) <path>
+      Path inside ESP to kernelflinger binary. Defaults to the first-stage loader.
+
+  -F  (--first-stage) <path inside archive>
+      Indicate the name of the first-stage loader. Put a copy of it in
+      EFI/BOOT/bootx64.efi or EFI/BOOT/bootia32.efi (depending on the type of
+      PE/COFF executable it is. Defaults to "loader.efi"
+"""
+
+import sys
+import shutil
+import zipfile
+import os
+import os.path
+import shlex
+import tempfile
+import subprocess
+import struct
+from pyasn1.error import PyAsn1Error
+from pyasn1.codec.ber import decoder as ber_decoder
+from pyasn1_modules import rfc5208 as pkcs8
+
+import json
+
+if sys.hexversion < 0x02040000:
+    print >> sys.stderr, "Python 2.4 or newer is required."
+    sys.exit(1)
+
+# Android Release Tools
+sys.path.append("build/tools/releasetools")
+import common
+
+sys.path.append("device/intel/build/releasetools")
+import intel_common
+
+OPTIONS = common.OPTIONS
+OPTIONS.key_map = {}
+OPTIONS.first_stage = "loader.efi"
+OPTIONS.kernelflinger = None  # if None, use OPTIONS.first_stage
+OPTIONS.replace = {}
+OPTIONS.all_keys = set()
+OPTIONS.keystore_certs = []
+OPTIONS.oem_key = None
+OPTIONS.target_product = None
+GiB = (1 << 30)
+
+def is_32bit_efi(data):
+    tf = tempfile.NamedTemporaryFile()
+    tf.write(data)
+    cmd = ["file", tf.name]
+    out = subprocess.check_output(cmd)
+    tf.close()
+    return "80386" in out
+
+
+def sign_ecss(src_path, dest_path, priv_path, cert_path):
+    signfile_path = os.environ.get('SIGNFILE_PATH')
+    assert signfile_path is not None, "Must set SIGNFILE_PATH environment variable"
+
+    # extract content of private key
+    with open(priv_path, 'rb') as priv_key:
+        key_data = priv_key.read()
+        try:
+            parsed_pk8, remaining = ber_decoder.decode(key_data, asn1Spec = pkcs8.PrivateKeyInfo())
+            params_octets, remaining = ber_decoder.decode(parsed_pk8['privateKey'])
+            params = ("%s" % params_octets).split()
+            assert params[0] == 'ECSS!', "Input private key is not an ECSS reference"
+            params = params[1:]
+        except PyAsn1Error:
+            raise Exception("'%s' does not contain a valid private key." % priv_path)
+
+    # FIXME -- FIXME -- FIXME
+    # This is a hack to re-sign the input file with the testkey so that the
+    # signature is valid before passing it to the ECSS SignFile, which
+    # requires signature to be valid before resigning.
+    # Uncomment -out parameter to SignFile when this hack is removed
+    testpriv = intel_common.pk8_to_pem("build/target/product/security/testkey.pk8")
+    sign_efi(src_path, dest_path, testpriv.name, "build/target/product/security/testkey.x509.pem")
+    # END FIXME -- END FIXME -- END FIXME
+
+    cmd = [os.path.join(signfile_path, 'SignFile'),
+            '-vv', '-ts',
+            '-ha', 'SHA256']
+    cmd.extend(params)
+    cmd.append('-sb')
+    cmd.append(dest_path)
+    #cmd.append(src_path)
+    #cmd.extend(['-out', dest_path])
+    p = common.Run(cmd)
+    p.wait()
+    assert p.returncode == 0, "SignFile failed: %d" % p.returncode
+
+def sign_efi(src_path, dest_path, priv_path, cert_path):
+    cmd = ["sbsign", "--key", priv_path, "--cert", cert_path,
+            "--output", dest_path, src_path,]
+    p = common.Run(cmd)
+    p.communicate()
+    assert p.returncode == 0, "sbsign failed"
+
+
+def get_named_temp(prefix=None):
+    f = tempfile.NamedTemporaryFile(prefix=prefix, delete=False)
+    OPTIONS.tempfiles.append(f.name)
+    f.close()
+    return f.name
+
+
+def extract_to_temp(input_zip, path, prefix=None):
+    f = tempfile.NamedTemporaryFile(prefix=prefix, delete=False)
+    OPTIONS.tempfiles.append(f.name)
+    f.write(input_zip.read(path))
+    f.close()
+    return f.name
+
+
+def zero_pad(data, size):
+    if len(data) > size:
+        raise common.ExternalError("Binary is already larger than pad size")
+
+    return data + (b'\x00' * (size - len(data)))
+
+
+# Useful: http://bbs.pediy.com/upload/bbs/unpackfaq/ARTeam%20PE_appendix1_offsets.htm
+def get_section(data, name):
+    pe_header_offset = struct.unpack_from("<I", data, 0x3c)[0]
+    num_sections = struct.unpack_from("<H", data, pe_header_offset + 0x6)[0]
+    opt_header_size = struct.unpack_from("<H", data, pe_header_offset +0x14)[0]
+    section_table_offset = pe_header_offset + 0x18 + opt_header_size
+
+    for i in range(num_sections):
+        section_offset = section_table_offset + (i * 0x28)
+        section_table_data = struct.unpack_from("<8sIIIIIIHHI", data, section_offset)
+
+        section_name, section_size, _, _, section_offset, _, _, _, _, _ = section_table_data
+        if section_name != name:
+            continue
+        print "Found", section_name, "at offset", hex(section_offset)
+        return (section_offset, section_size)
+
+    raise common.ExternalError("Section not found")
+
+
+def replace_keys(data, oem_key_pair, password):
+    (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
+
+    oem_key_data_der_file = intel_common.pem_cert_to_der_cert(oem_key_pair +
+            OPTIONS.public_key_suffix)
+    oem_key_data = zero_pad(oem_key_data_der_file.read(), oemkeys_size)
+    oem_key_data_der_file.close()
+
+    data = (data[:oemkeys_offset] + oem_key_data +
+            data[oemkeys_offset + oemkeys_size:])
+    return data
+
+
+def process_bootzip(input_bootzip, output_bootzip, passwords):
+    for zi in input_bootzip.infolist():
+        path = zi.filename
+        data = input_bootzip.read(zi)
+
+        if OPTIONS.verbose:
+            print "Processing",path
+
+        # Don't bother copying these over
+        if path.startswith("EFI/BOOT/boot") or path == "shim.efi":
+            continue
+
+        if OPTIONS.oem_key and path == OPTIONS.kernelflinger:
+            print "Replacing keys inside", path
+            password = None
+            if OPTIONS.oem_key in passwords:
+                password = passwords[OPTIONS.oem_key]
+            data = replace_keys(data, OPTIONS.oem_key, password)
+
+        if path in OPTIONS.key_map:
+            print "Re-signing", path
+            cert_path = OPTIONS.key_map[path] + OPTIONS.public_key_suffix
+
+            password = None
+            if OPTIONS.key_map[path] in passwords:
+                password = passwords[OPTIONS.key_map[path]]
+            priv = intel_common.pk8_to_pem(OPTIONS.key_map[path] + OPTIONS.private_key_suffix,
+                    password=password, none_on_fail_convert=True)
+            print "priv is %s" % priv
+
+            in_efi = tempfile.NamedTemporaryFile(prefix="in_efi")
+            in_efi.write(data)
+            in_efi.flush()
+
+            out_efi = tempfile.NamedTemporaryFile(prefix="out_efi")
+
+            # If the private key couldn't be converted to PEM, we assume it's
+            # because it's a PKCS #8 blob with an ECSS reference instead of
+            # a raw private key.
+            if priv is None:
+                # The ECSS SignFile utility will create a new inode, so the
+                # output file must be closed and reopened after signing.
+                out_efi_name = out_efi.name;
+                out_efi.close();
+                sign_ecss(in_efi.name, out_efi_name, OPTIONS.key_map[path] + OPTIONS.private_key_suffix, cert_path)
+                common.OPTIONS.tempfiles.append(out_efi_name)
+                out_efi = open(out_efi_name);
+            else:
+                sign_efi(in_efi.name, out_efi.name, priv.name, cert_path)
+
+            in_efi.close()
+            if priv is not None:
+                priv.close()
+            out_efi.seek(os.SEEK_SET, 0)
+            data = out_efi.read()
+            out_efi.close()
+
+        if path in OPTIONS.replace:
+            f = open(OPTIONS.replace[path])
+            data = f.read()
+            f.close()
+
+        output_bootzip.writestr(zi, data)
+        if path == OPTIONS.first_stage:
+            if is_32bit_efi(data):
+                output_bootzip.writestr("EFI/BOOT/bootia32.efi", data)
+            else:
+                output_bootzip.writestr("EFI/BOOT/bootx64.efi", data)
+                if OPTIONS.target_product == "coho":
+                    output_bootzip.writestr("shim.efi", data)
+
+
+
+def get_output_bootzip():
+    of_file = get_named_temp("output_bootzip")
+    output_bootzip = zipfile.ZipFile(of_file, "w")
+    return output_bootzip, of_file
+
+
+def main(argv):
+
+    def option_handler(o, a):
+        if o in ("-k", "--key-mapping"):
+            k,v = a.split("=")
+            OPTIONS.key_map[k] = v
+            OPTIONS.all_keys.add(v)
+        elif o in ("-R", "--replace"):
+            k,v = a.split("=")
+            OPTIONS.replace[k] = v
+        elif o in ("-F", "--first-stage"):
+            OPTIONS.first_stage = a
+        elif o in ("-K", "--oem-key"):
+            OPTIONS.oem_key = a
+            OPTIONS.all_keys.add(a)
+        elif o in ("-L", "--kernelflinger"):
+            OPTIONS.kernelflinger = a
+        else:
+            return False
+        return True
+
+    args = common.ParseOptions(argv, __doc__,
+            extra_opts = "k:R:F:O:K:L:",
+            extra_long_opts = ["key-mapping=",
+                "replace=", "first-stage=", "oem-key=", "kernelflinger="],
+            extra_option_handler = option_handler)
+
+    if not OPTIONS.kernelflinger:
+        OPTIONS.kernelflinger = OPTIONS.first_stage
+
+    # Do some sanity checks on provided options
+    if set(OPTIONS.key_map.keys()) & set(OPTIONS.replace.keys()):
+        raise common.ExternalError("The same loaders can't be in --replace and --key_mapping\n")
+
+    if OPTIONS.oem_key and OPTIONS.kernelflinger not in OPTIONS.key_map:
+        raise common.ExternalError("Replacement kernelflinger keys supplied, but no key mapping for kernelflinger supplied\n")
+
+    if len(args) != 2:
+        common.Usage(__doc__)
+        sys.exit(1)
+
+    output_zip = zipfile.ZipFile(args[1], "w")
+
+    print "Extracting bootloader.zip"
+    unpack_dir, input_zip = common.UnzipTemp(args[0])
+    input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
+                "RADIO", "bootloader.zip"), "r")
+
+    print "Parsing build.prop for target_product"
+    d = {}
+    try:
+        with open(os.path.join(unpack_dir, "SYSTEM", "build.prop")) as f:
+            d = common.LoadDictionaryFromLines(f.read().split("\n"))
+    except IOError, e:
+       if e.errno == errno.ENOENT:
+          raise KeyError(f)
+    OPTIONS.target_product = d["ro.product.name"]
+
+    print "Processing private keys"
+    OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+    passwords = common.GetKeyPasswords(OPTIONS.all_keys)
+
+    output_bootzip, output_bz_file = get_output_bootzip()
+
+    process_bootzip(input_bootzip, output_bootzip, passwords)
+    output_bootzip.close()
+
+    print "Creating UserFastboot image if necessary"
+    if os.path.exists(os.path.join(unpack_dir, "RADIO", "fastboot.img")):
+        os.unlink(os.path.join(unpack_dir, "RADIO", "fastboot.img"))
+        fastboot = intel_common.GetFastbootImage(unpack_dir)
+    else:
+        fastboot = intel_common.GetFastbootImage(unpack_dir)
+        if fastboot:
+            common.ZipWriteStr(output_zip, "RADIO/fastboot.img", fastboot.data)
+
+    print "Creating TDOS image if necessary"
+    if os.path.exists(os.path.join(unpack_dir, "RADIO", "tdos.img")):
+        os.unlink(os.path.join(unpack_dir, "RADIO", "tdos.img"))
+        tdos = intel_common.GetTdosImage(unpack_dir)
+    else:
+        tdos = intel_common.GetTdosImage(unpack_dir)
+        if tdos:
+            common.ZipWriteStr(output_zip, "RADIO/tdos.img", tdos.data)
+
+    print "Building destination target-files-package"
+    for zi in input_zip.infolist():
+        if zi.filename == "RADIO/bootloader.zip":
+            common.ZipWrite(output_zip, output_bz_file, zi.filename)
+        elif zi.filename == "RADIO/fastboot.img":
+            common.ZipWriteStr(output_zip, zi, fastboot.data)
+        elif zi.filename == "RADIO/tdos.img":
+            common.ZipWriteStr(output_zip, zi, tdos.data)
+        else:
+            if (zi.file_size >= 2 * GiB):
+                common.ZipWrite(output_zip, os.path.join(unpack_dir, zi.filename), zi.filename)
+            else:
+                common.ZipWriteStr(output_zip, zi, input_zip.read(zi))
+
+    common.ZipClose(output_zip)
+    print "All done."
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[1:])
+    except common.ExternalError, e:
+        print
+        print "   ERROR: %s" % (e,)
+        print
+        sys.exit(1)
+    finally:
+        common.Cleanup()
+
