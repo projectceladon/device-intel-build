@@ -41,7 +41,7 @@ INTEL_OTATOOLS := \
     $(IASL) \
     $(AVBTOOL)
 
-ifneq ($(TARGET_UEFI_ARCH),)
+ifneq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
 INTEL_OTATOOLS += \
     $(SBSIGN) \
     $(MKDOSFS) \
