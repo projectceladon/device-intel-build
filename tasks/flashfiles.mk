@@ -6,7 +6,7 @@ name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 
-ifneq ($(TARGET_UEFI_ARCH),)
+ifneq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), true)
 UEFI_ADDITIONAL_TOOLS := $(MKDOSFS) $(MCOPY)
 else
 UEFI_ADDITIONAL_TOOLS :=
