@@ -44,14 +44,18 @@ export QUICK=
 export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
 export IS_AVB=
+export IS_AAAG=
 export PRODUCT_OUT=out/target/product/${DEVICENAME}
 
 ELK_IN_IFWI=0
 TOS_IMAGE_PARTITION_SIZE=10485760
-while getopts "qsmt:V:jlof" opt; do
+while getopts "qgsmt:V:jlof" opt; do
     case $opt in
         s)
             set -x
+            ;;
+        g)
+            export IS_AAAG=YES
             ;;
         q)
             export QUICK=1
@@ -88,6 +92,7 @@ while getopts "qsmt:V:jlof" opt; do
             echo
             echo "Valid options:"
             echo "-m: Stitch ELK into the IFWI, by default stitch fastboot into the IFWI"
+            echo "-g: use for AaaG"
             echo "-s: Show commands being run"
             echo "-t <tfp>: Don't do own build; use supplied target-files to create a re-signed release"
             echo "-V <variant>: Device variant"
@@ -176,6 +181,28 @@ function sign_tfp {
                 --default_key_mappings $PRODKEYS $1 $t1
     fi
     rm -f ${t2}.pub $t2
+
+    if [ -n "$IS_AAAG" ]; then
+        if is_avb_enabled; then
+            ./device/intel/build/releasetools/sign_target_files_abl \
+                    --verbose \
+                    --oem-key $TESTKEYS/slimboot \
+                    --avb-key $OTA_TMP_DIR/avb_pk.bin \
+                    --variant $BOARD_VARIANT \
+                    --tos ${PRODUCT_OUT}/tos.img \
+                    --guest-target \
+                    $t1 $2
+        else
+            ./device/intel/build/releasetools/sign_target_files_abl \
+                    --verbose \
+                    --oem-key $TESTKEYS/slimboot \
+                    --variant $BOARD_VARIANT \
+                    --guest-target \
+                    $t1 $2
+        fi
+        rm $t1
+        return
+    fi
 
     mkdir -p $BASEDIR/ifwi_abl/tmp
 

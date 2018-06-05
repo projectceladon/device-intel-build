@@ -33,6 +33,9 @@ Usage: sign_target_files_abl <options> <input_target_files_zip> <output_file>
 
   -V  (--variant) variant
   variant can be gr_mrb(A0) or gr_mrb_b1(B1)
+
+  -G  (--guest-target)
+      To be used for ACRN/AaaG
 """
 
 import sys
@@ -69,21 +72,23 @@ OPTIONS.oem_key = None
 OPTIONS.avb_key = None
 OPTIONS.tos_image = None
 OPTIONS.target_product = None
+OPTIONS.guest_target = False
 GiB = (1 << 30)
 crc_len = 4
 blk_sz  = 1024
+# osloader_blk_offset will be set to 16384 in AaaG case
 osloader_blk_offset = 8000
 #bootloader.img block size
 bootloader_bs = 1024
 #bootloader.img filesystem size
 bootloader_fs_sz = 30*1024*1024
 ias_image_type_str = "0x40300"
-section_entry_sz = 0x28
+# osloader_component_num will be set to 2 in AaaG case
 osloader_component_num = 4
 
-def get_section(data, name):
+def get_section_elf32(data, name):
     section_table_offset = struct.unpack_from("<I", data, 0x20)[0]
-    num_sections, str_table_idx = struct.unpack_from("<HH", data, 0x30)
+    section_entry_sz, num_sections, str_table_idx = struct.unpack_from("<HHH", data, 0x2E)
     str_table_offset = section_table_offset + (str_table_idx * section_entry_sz)
     _, _, _, _, str_section_offset, str_section_size, _, _, _, _ = struct.unpack_from("<10I", data, str_table_offset)
 
@@ -99,6 +104,34 @@ def get_section(data, name):
         return (section_offset, section_size)
 
     raise common.ExternalError("Section not found")
+
+def get_section_elf64(data, name):
+    section_table_offset = struct.unpack_from("<Q", data, 0x28)[0]
+    section_entry_sz, num_sections, str_table_idx = struct.unpack_from("<HHH", data, 0x3A)
+    str_table_offset = section_table_offset + (str_table_idx * section_entry_sz)
+    _, _, _, _, str_section_offset, str_section_size, _, _, _, _ = struct.unpack_from("<IIQQQQIIQQ", data, str_table_offset)
+
+    for i in range(num_sections):
+        section_offset = section_table_offset + (i * section_entry_sz)
+        section_table_data = struct.unpack_from("<IIQQQQIIQQ", data, section_offset)
+
+        section_name_idx, _, _, _, section_offset, section_size,  _, _, _, _ = section_table_data
+        section_name = data[str_section_offset + section_name_idx:str_section_offset + section_name_idx + len(name)]
+        if section_name != name:
+            continue
+        print "Found", section_name, "at offset", hex(section_offset)
+        return (section_offset, section_size)
+
+    raise common.ExternalError("Section not found")
+
+def get_section(data, name):
+    e_machine = struct.unpack_from("<H", data, 0x12)[0]
+    if e_machine == 0x3E:
+        # Found x86_64 ELF binary type
+        return get_section_elf64(data, name)
+    else:
+        # By default use x86_32 ELF binary type
+        return get_section_elf32(data, name)
 
 def replace_raw_keys(data, raw_key, password):
     (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
@@ -153,11 +186,12 @@ def process_provzip(input_provzip, output_provzip, passwords):
         if OPTIONS.verbose:
             print "Processing",path
 
-        # Replace the ifwi binaries with the new generated content
-        if path in ["ifwi.bin", "ifwi_dnx.bin", "fastboot"]:
-            fn = os.path.join(OPTIONS.ifwi_directory, path)
-            with open(fn) as f:
-                data=f.read()
+        if OPTIONS.guest_target == False:
+            # Replace the ifwi binaries with the new generated content
+            if path in ["ifwi.bin", "ifwi_dnx.bin", "fastboot"]:
+                fn = os.path.join(OPTIONS.ifwi_directory, path)
+                with open(fn) as f:
+                    data=f.read()
 
         if path == "bootloader":
             out_file = tempfile.NamedTemporaryFile(prefix="bootloader")
@@ -185,10 +219,11 @@ def process_bootloader(in_f, out_f):
     #make a new directory to prepare for new bootloader file directory
     #which will be used to generate the new bootloader
     d2 = tempfile.mkdtemp()
-    #copy the resigned ifwi_update.bin
-    ifwi_update_fn = os.path.join(OPTIONS.ifwi_directory, "ifwi_update.bin")
-    ifwi_update_fn2 = os.path.join(d2, "ifwi_update.bin")
-    shutil.copy2(ifwi_update_fn, ifwi_update_fn2)
+    if OPTIONS.guest_target == False:
+        #copy the resigned ifwi_update.bin
+        ifwi_update_fn = os.path.join(OPTIONS.ifwi_directory, "ifwi_update.bin")
+        ifwi_update_fn2 = os.path.join(d2, "ifwi_update.bin")
+        shutil.copy2(ifwi_update_fn, ifwi_update_fn2)
 
     #copy the resigned osloader.bin
     osloader_fn = os.path.join(d1, "osloader_resigned.bin")
@@ -196,12 +231,13 @@ def process_bootloader(in_f, out_f):
     shutil.copy2(osloader_fn, osloader_fn2)
 
     #make the new bootlader image
-    cmd = ["dd"]
-    cmd.append("if=%s"%(ifwi_update_fn2))
-    cmd.append("bs=%d"%(blk_sz))
-    cmd.append("of=%s"%(out_f))
-    p = common.Run(cmd)
-    p.wait()
+    if OPTIONS.guest_target == False:
+        cmd = ["dd"]
+        cmd.append("if=%s"%(ifwi_update_fn2))
+        cmd.append("bs=%d"%(blk_sz))
+        cmd.append("of=%s"%(out_f))
+        p = common.Run(cmd)
+        p.wait()
     cmd = ["dd"]
     cmd.append("if=%s"%(osloader_fn2))
     cmd.append("bs=%d"%(blk_sz))
@@ -342,13 +378,19 @@ def main(argv):
             OPTIONS.variant = a
         elif o in ("-T", "--tos"):
             OPTIONS.tos_image = a
+        elif o in ("-G", "--guest-target"):
+            OPTIONS.guest_target = True
+            global osloader_blk_offset
+            global osloader_component_num
+            osloader_blk_offset = 16384
+            osloader_component_num = 2
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "I:A:K:V:T:",
-            extra_long_opts = ["ifwi-directory=", "avb-key=", "oem-key=", "variant=", "tos="],
+            extra_opts = "I:A:K:V:T:G",
+            extra_long_opts = ["ifwi-directory=", "avb-key=", "oem-key=", "variant=", "tos=", "guest-target"],
             extra_option_handler = option_handler)
 
     if len(args) != 2:
