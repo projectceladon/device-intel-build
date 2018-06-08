@@ -25,8 +25,7 @@ function get_external_var()
         echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
         return
     fi
-    (\cd $T; CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
-      command make --no-print-directory -f build/core/config.mk dumpvar-$1 | tail -1 | awk '{print $1}')
+    (\cd $T; build/soong/soong_ui.bash --dumpvar-mode $1 )
 }
 
 export DEVICENAME=$(get_external_var TARGET_DEVICE)
