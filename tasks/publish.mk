@@ -183,7 +183,7 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
 .PHONY: publish_ci
-ifneq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), true)
+ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), false)
 publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
