@@ -338,7 +338,7 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
     info_dict = common.OPTIONS.info_dict
     if extra_files == None:
         extra_files = []
-    platform_efi, platform_sflte, platform_abl = CheckIfSocEFI(unpack_dir, variant)
+    platform_efi, platform_sflte = CheckIfSocEFI(unpack_dir, variant)
 
     if variant and platform_efi:
         provdata_name = os.path.join(unpack_dir, "RADIO", "provdata_" + variant +".zip")
@@ -965,14 +965,18 @@ def CheckIfSocEFI(unpack_dir, variant):
         provdata.close()
         if (t2f["SOC_FIRMWARE_TYPE"] == "slb"):
            if (t2f["SECPACK_IN_SLB"] == "true"):
-               return False, True, False
+               return False, True
            else:
-               return False, False, False
+               return False, False
         elif (t2f["SOC_FIRMWARE_TYPE"] == "abl"):
-           return False, False, True
+           return False, False
+        elif (t2f["SOC_FIRMWARE_TYPE"] == "sbl"):
+           return False, False
+        elif (t2f["SOC_FIRMWARE_TYPE"] == "vsbl"):
+           return False, False
 
     provdata.close()
-    return True, False, False
+    return True, False
 
 def GenerateBootloaderSecbin(unpack_dir, variant):
     """ Generate bootloader with secpack for Non-EFI(example Sofialte); The partitions are
@@ -1021,7 +1025,7 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
     additional_data_hash = collections.OrderedDict()
     partition_to_target = get_partition_target_hash(unpack_dir)
 
-    platform_efi, platform_sflte, platform_abl = CheckIfSocEFI(unpack_dir, variant)
+    platform_efi, platform_sflte = CheckIfSocEFI(unpack_dir, variant)
 
     if not bootloader_list:
         return None

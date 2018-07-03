@@ -168,7 +168,7 @@ def main(argv):
     tfp = zipfile.ZipFile(args[0], "r")
     success = True
     OPTIONS.info_dict = common.LoadInfoDict(tfp)
-    platform_efi, platform_sflte, platform_abl = intel_common.CheckIfSocEFI(unpack_dir, variant=OPTIONS.variant)
+    platform_efi, platform_sflte = intel_common.CheckIfSocEFI(unpack_dir, variant=OPTIONS.variant)
 
     print "Extracting bootloader archive..."
     data = intel_common.GetBootloaderImageFromTFP(unpack_dir,
