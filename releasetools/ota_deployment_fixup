@@ -375,7 +375,7 @@ def main(argv):
     check_arg(OPTIONS.brand and OPTIONS.product and OPTIONS.device and OPTIONS.fish_name,
               "Missing one of -B, -P, -D, -f and cannot get this info from target-files")
 
-    platform_efi, sofia, platform_abl = intel_common.CheckIfSocEFI(tfp_dir, OPTIONS.variant)
+    platform_efi, sofia = intel_common.CheckIfSocEFI(tfp_dir, OPTIONS.variant)
     OPTIONS.info_dict = common.LoadInfoDict(tfp_zip)
     print "Processing OTA update contents.."
     _, temp_zip = tempfile.mkstemp(suffix=".zip")
