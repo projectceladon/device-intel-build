@@ -37,6 +37,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	  $(hide) $(fftf) --variant=$(DEV) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
   endif
 
+ifneq ($(TARGET_SKIP_OTA_PACKAGE), true)
   # Generate OTA fixup files
   INTEL_OTA_PACKAGES :=
   $(foreach var,$(OTA_VARIANTS), \
@@ -56,6 +57,8 @@ ifneq ($(FLASHFILE_VARIANTS),)
 		$(INTERNAL_OTA_PACKAGE_TARGET) $@
 
   otapackage: $(INTEL_OTA_PACKAGES)
+endif
+
 endif # Generate variant-specific files
 
 #Flag for unified flashfile when variants exist
