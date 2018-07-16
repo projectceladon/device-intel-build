@@ -51,7 +51,7 @@ $(LOCAL_BUILT_MODULE): PRIVATE_OBJCOPY_FLAGS := $(LOCAL_OBJCOPY_FLAGS)
 $(LOCAL_BUILT_MODULE): PRIVATE_EFI_KEY_PAIR := $(LOCAL_EFI_KEY_PAIR)
 $(LOCAL_BUILT_MODULE): PRIVATE_GENERATED_DB := $(intermediates)/db.key
 
-$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(LOCAL_EFI_KEY_PAIR).x509.pem $(SBSIGN)
+$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(LOCAL_EFI_KEY_PAIR).x509.pem
 	$(call transform-o-to-efi-executable,$(PRIVATE_GENERATED_DB),$(PRIVATE_EFI_KEY_PAIR).x509.pem)
 
 endif # skip_build_from_source

@@ -6,12 +6,6 @@ name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 
-ifneq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), true)
-UEFI_ADDITIONAL_TOOLS := $(MKDOSFS) $(MCOPY)
-else
-UEFI_ADDITIONAL_TOOLS :=
-endif
-
 ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
 odf := $(INTEL_PATH_BUILD)/releasetools/ota_deployment_fixup
