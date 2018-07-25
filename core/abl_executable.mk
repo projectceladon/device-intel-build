@@ -17,10 +17,11 @@ LOCAL_NO_DEFAULT_COMPILER_FLAGS := true
 LOCAL_CFLAGS += $(TARGET_IAFW_GLOBAL_CFLAGS)
 LOCAL_ASFLAGS += $(TARGET_IAFW_ASFLAGS)
 LOCAL_LDFLAGS := $(TARGET_IAFW_GLOBAL_LDFLAGS) -static \
-	-Wl,-T $(TARGET_ABL_LDS) $(LOCAL_LDFLAGS)
+	-T $(TARGET_ABL_LDS) $(LOCAL_LDFLAGS)
 # If kernel enforce superpages the .text section gets aligned at
 # offset 0x200000 which break multiboot compliance.
 LOCAL_LDFLAGS += -z max-page-size=0x1000
+LOCAL_ABL_LDFALGS := $(LOCAL_LDFLAGS)
 LOCAL_OBJCOPY_FLAGS := $(TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS) $(LOCAL_OBJCOPY_FLAGS)
 
 skip_build_from_source :=
@@ -46,7 +47,7 @@ all_objects += $(LIBPAYLOAD_CRT0)
 $(LOCAL_BUILT_MODULE): PRIVATE_OBJCOPY_FLAGS := $(LOCAL_OBJCOPY_FLAGS)
 
 $(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(ABLIMAGE) $(ABLSIGN) $(IASL)
-	$(call transform-o-to-abl-executable)
+	$(call transform-o-to-abl-executable,$(LOCAL_ABL_LDFALGS))
 
 endif # skip_build_from_source
 

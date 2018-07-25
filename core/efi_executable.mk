@@ -23,6 +23,7 @@ LOCAL_ASFLAGS += $(TARGET_IAFW_ASFLAGS)
 LOCAL_LDFLAGS := $(TARGET_IAFW_GLOBAL_LDFLAGS) -shared \
 	-T $(TARGET_EFI_LDS) $(LOCAL_LDFLAGS)
 LOCAL_OBJCOPY_FLAGS := $(TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS) $(LOCAL_OBJCOPY_FLAGS)
+LOCAL_EFI_LDFLAGS := $(LOCAL_LDFLAGS)
 
 skip_build_from_source :=
 ifdef LOCAL_PREBUILT_MODULE_FILE
@@ -52,7 +53,7 @@ $(LOCAL_BUILT_MODULE): PRIVATE_EFI_KEY_PAIR := $(LOCAL_EFI_KEY_PAIR)
 $(LOCAL_BUILT_MODULE): PRIVATE_GENERATED_DB := $(intermediates)/db.key
 
 $(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(LOCAL_EFI_KEY_PAIR).x509.pem
-	$(call transform-o-to-efi-executable,$(PRIVATE_GENERATED_DB),$(PRIVATE_EFI_KEY_PAIR).x509.pem)
+	$(call transform-o-to-efi-executable,$(PRIVATE_GENERATED_DB),$(PRIVATE_EFI_KEY_PAIR).x509.pem,$(LOCAL_EFI_LDFLAGS))
 
 endif # skip_build_from_source
 
