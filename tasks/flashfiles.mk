@@ -1,4 +1,7 @@
 name := $(TARGET_PRODUCT)
+ifneq ($(findstring acrn,$(TARGET_PRODUCT)),)
+name := $(TARGET_PRODUCT)-guest
+endif
 ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
