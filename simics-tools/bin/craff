@@ -1,0 +1,5 @@
+#!/bin/sh
+
+. `dirname "$0"`/../scripts/find-paths.sh
+
+"$BINDIR/craff" "$@"
