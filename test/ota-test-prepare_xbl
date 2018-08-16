@@ -1,0 +1,531 @@
+#!/bin/bash
+
+# Allow job control
+set -m
+
+# make sure our trap works
+set -o pipefail
+set -o errtrace
+set -o errexit
+
+function bail {
+    local CALLER_LINENO=$1
+    local EXIT_CODE=${2:-1}
+    echo "Failed near line $CALLER_LINENO with status $EXIT_CODE"
+    exit $EXIT_CODE
+}
+
+trap 'bail ${LINENO}' ERR
+
+# Get the exact value of a external variable.
+function get_external_var()
+{
+    local T=$ANDROID_BUILD_TOP
+    if [ ! "$T" ]; then
+        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+        return
+    fi
+    (\cd $T; build/soong/soong_ui.bash --dumpvar-mode $1 )
+}
+
+export DEVICENAME=$(get_external_var TARGET_DEVICE)
+echo "get TARGET_DEVICE: $DEVICENAME"
+
+export TESTKEYS=device/intel/build/testkeys
+export PRODKEYS=device/intel/build/testkeys/production-test
+export ANDROID_PW_FILE=$PRODKEYS/pwfile
+export BOARD_VARIANT=
+export PARALLEL=
+export NO_LOGS=
+export NO_BUILD_OTATOOLS=
+export TFP=
+export QUICK=
+export FORCE_BUILD_TFPS=
+export HAS_VARIANTS=
+export IS_AVB=
+export IS_AAAG=
+export IS_SBL=
+export IFWI_DIR=ifwi_abl
+export PRODUCT_OUT=out/target/product/${DEVICENAME}
+
+ELK_IN_IFWI=0
+TOS_IMAGE_PARTITION_SIZE=10485760
+while getopts "qgismt:V:jlof" opt; do
+    case $opt in
+        s)
+            set -x
+            ;;
+        g)
+            export IS_AAAG=YES
+            ;;
+        i)
+            export IS_SBL=YES
+            export IFWI_DIR=ifwi_sbl
+            ;;
+        q)
+            export QUICK=1
+            ;;
+        m)
+            export ELK_IN_IFWI=1
+            ;;
+        t)
+            export TFP=$OPTARG
+            ;;
+        V)
+            export BOARD_VARIANT=$OPTARG
+            ;;
+        j)
+            export PARALLEL=YES
+            ;;
+        l)
+            export NO_LOGS=YES
+            ;;
+        o)
+            export NO_BUILD_OTATOOLS=YES
+            ;;
+        f)
+            export FORCE_BUILD_TFPS=YES
+            ;;
+        \?)
+            echo "Usage:"
+            echo
+            echo "  ota-test-prepare_abl [-s ] -t <path to TFP zipfile> -V variant <build name>"
+            echo "    variant can be gr_mrb or gr_mrb_b1"
+            echo "    Use an existing TFP and create 1 set of deliverables for performing OTA + Flashing test cases"
+            echo "    The ota/ directory will contain a re-signed TFP, flash file package, and full-image OTA."
+            echo "    The build name identifies the build, using A or B is typical"
+            echo
+            echo "Valid options:"
+            echo "-m: Stitch ELK into the IFWI, by default stitch fastboot into the IFWI"
+            echo "-g: use for AaaG"
+            echo "-i: use for IOTG SBL, if not used by default setup is for ABL"
+            echo "-s: Show commands being run"
+            echo "-t <tfp>: Don't do own build; use supplied target-files to create a re-signed release"
+            echo "-V <variant>: Device variant"
+            echo "-j: Build output images in parallel (SSD recommended)"
+            echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
+            echo "-o: skip building otatools, assume they are there"
+            exit 1
+            ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
+NUM_CPUS=`grep -c ^processor /proc/cpuinfo`
+if [ -n "`grep -o '^flags\b.*: .*\bht\b' /proc/cpuinfo | tail -1`" ]; then
+    NUM_CPUS=$(($NUM_CPUS / 2))
+fi
+
+export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
+export OTA_TMP_DIR=ota/tmp/
+export MKTEMP="mktemp --tmpdir=ota/tmp/"
+
+variants_enable_string="BOARD_DEVICE_MAPPING :="
+function has_variants {
+    if [ -z "$TFP" ]; then
+        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
+                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+        HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
+    else
+        HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l || true)
+    fi
+}
+
+avb_enable_string="BOARD_AVB_ENABLE := true"
+function check_avb {
+        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
+                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+        IS_AVB=$(grep "$avb_enable_string" ${product_dir}/BoardConfig.mk | wc -l || true)
+}
+
+function is_avb_enabled {
+    if [[ $IS_AVB -ge 1 ]]; then
+            return 0 # 0 is true
+    fi
+    return 1 # 1 is false
+}
+
+# Args: <input TFP> <output TFP>
+function sign_tfp {
+    t1=`$MKTEMP tmp.tfp1.XXXXXXXX`
+    t2=`$MKTEMP tmp.derkey.XXXXXXXX`
+
+    generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
+
+    check_avb
+
+    if is_avb_enabled; then
+        unzip $1 RADIO/tos.img -d $OTA_TMP_DIR
+
+        #prebuilts/build-tools/linux-x86/bin/acp -p $OTA_TMP_DIR/RADIO/tos.img ${PRODUCT_OUT}/tos.img
+
+        device/intel/build/test/unsign_boot_img.py $OTA_TMP_DIR/RADIO/tos.img > ${PRODUCT_OUT}/tos.img
+
+        avbtool add_hash_footer --image ${PRODUCT_OUT}/tos.img --partition_size $TOS_IMAGE_PARTITION_SIZE --partition_name tos --algorithm SHA256_RSA4096 --key $PRODKEYS/avb_releasekey.pem
+
+        avbtool extract_public_key --key $PRODKEYS/avb_releasekey.pem --output $OTA_TMP_DIR/avb_pk.bin
+
+        prebuilts/build-tools/linux-x86/bin/acp $PRODKEYS/avb_releasekey.pem external/avb/test/data/testkey_rsa4096.pem
+    fi
+
+    if is_avb_enabled; then
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --default_key_mappings $PRODKEYS $1 $t1
+    else
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --replace_verity_public_key ${t2}.pub \
+                --replace_verity_private_key $PRODKEYS/verity \
+                --default_key_mappings $PRODKEYS $1 $t1
+    fi
+    rm -f ${t2}.pub $t2
+
+    if [ -n "$IS_AAAG" ]; then
+        if is_avb_enabled; then
+            ./device/intel/build/releasetools/sign_target_files_xbl \
+                    --verbose \
+                    --oem-key $TESTKEYS/slimboot \
+                    --avb-key $OTA_TMP_DIR/avb_pk.bin \
+                    --variant $BOARD_VARIANT \
+                    --tos ${PRODUCT_OUT}/tos.img \
+                    --guest-target \
+                    $t1 $2
+        else
+            ./device/intel/build/releasetools/sign_target_files_xbl \
+                    --verbose \
+                    --oem-key $TESTKEYS/slimboot \
+                    --variant $BOARD_VARIANT \
+                    --guest-target \
+                    $t1 $2
+        fi
+        rm $t1
+        return
+    fi
+
+    mkdir -p $BASEDIR/$IFWI_DIR
+    mkdir -p $BASEDIR/$IFWI_DIR/tmp
+
+    if [ -z "$IS_SBL" ]; then
+        vendor/intel/abl/abl_config_tool/abl_config_gen.sh -config ${product_dir}/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
+
+        cp vendor/intel/abl/abl_prebuilt/internal/bxtp_abl/abl.zip $BASEDIR/ifwi_abl/abl.zip
+    fi
+
+    openssl pkcs8 -inform DER -nocrypt -in $PRODKEYS/verity.pk8 -out $BASEDIR/$IFWI_DIR/verity.pem
+
+    case $BOARD_VARIANT in
+          "gr_mrb")
+              SILICON_STEP="A"
+              SILICON_QS="DBG"
+              ;;
+          "gr_mrb_b1")
+              SILICON_STEP="B"
+              SILICON_QS="PRQ"
+              ;;
+          *)  ;;
+    esac
+
+
+if [[ ${ELK_IN_IFWI} == 0 ]]; then
+
+    echo "...................................stitch fastboot into IFWI..............................."
+    if is_avb_enabled; then
+        ./device/intel/build/test/extract_fastboot.py \
+                --variant $BOARD_VARIANT  --avb-key $OTA_TMP_DIR/avb_pk.bin --oem-key $PRODKEYS/verity $1 $BASEDIR/$IFWI_DIR/fastboot
+    else
+        ./device/intel/build/test/extract_fastboot.py \
+                --variant $BOARD_VARIANT  --oem-key $PRODKEYS/verity $1 $BASEDIR/$IFWI_DIR/fastboot
+    fi
+    if [ -z "$IS_SBL" ]; then
+        ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
+                -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
+                -ifwikey $BASEDIR/ifwi_abl/verity.pem \
+                -openssl /usr/bin/openssl \
+                -s vendor/intel/abl/ifwi-apl \
+                -ablcfg $BASEDIR/ifwi_abl/bin/iasImage_config_data.bin \
+                -o $BASEDIR/ifwi_abl/ifwi.bin \
+                -elk $BASEDIR/ifwi_abl/fastboot \
+                -w $BASEDIR/ifwi_abl/tmp \
+                -si $SILICON_STEP \
+                -qs $SILICON_QS \
+                $BASEDIR/ifwi_abl/abl.zip
+     else
+        unzip $1 SYSTEM/build.prop -d $OTA_TMP_DIR
+        TGT_BUILD_TYPE=$(cat $OTA_TMP_DIR/SYSTEM/build.prop | grep "ro.build.type" | cut -d "=" -f2)
+        case $TGT_BUILD_TYPE in
+              "user")
+                  IFWI_TYPE="release"
+                  ;;
+              "userdebug")
+                  IFWI_TYPE="debug"
+                  ;;
+              "debug")
+                  IFWI_TYPE="debug"
+                  ;;
+              *)
+                  IFWI_TYPE="release"
+                  ;;
+        esac
+
+        cp hardware/intel/fw_capsules/gordon_peak/$IFWI_TYPE/ifwi/capsule.fv $BASEDIR/ifwi_sbl/ifwi_update.bin
+        cp hardware/intel/fw_capsules/gordon_peak/$IFWI_TYPE/ifwi/Stitch_Components.zip $BASEDIR/ifwi_sbl/sbl.zip
+        cp hardware/intel/fw_capsules/gordon_peak/$IFWI_TYPE/ifwi/ifwi_dnx.bin $BASEDIR/ifwi_sbl/ifwi_dnx.bin
+        rm -rf $BASEDIR/ifwi_sbl/bin/*
+        unzip $BASEDIR/ifwi_sbl/sbl.zip -d $BASEDIR/ifwi_sbl/bin
+
+        $(pwd)/hardware/intel/fw_capsules/gordon_peak/ifwi_stitch_tool/APL/ifwi-apl/IFWIStitch.py \
+                -oskernelkey $BASEDIR/ifwi_sbl/verity.pem \
+                -ifwikey $BASEDIR/ifwi_sbl/verity.pem \
+                -openssl /usr/bin/openssl \
+                -s hardware/intel/fw_capsules/gordon_peak/ifwi_stitch_tool/APL/ifwi-apl \
+                -ablcfgpdr $BASEDIR/ifwi_sbl/bin/Stitch_CFGDATA.bin \
+                -o $BASEDIR/ifwi_sbl/ifwi.bin \
+                -elk $BASEDIR/ifwi_sbl/fastboot \
+                -w $BASEDIR/ifwi_sbl/tmp \
+                -si $SILICON_STEP \
+                -fitcfg hardware/intel/fw_capsules/gordon_peak/ifwi_stitch_tool/APL/ifwi-apl/cse/apli/xml/bxt_spi_8mb_MRB_Sbl.xml \
+                -bgprofile 2 \
+                -pfmap -fu \
+                $BASEDIR/ifwi_sbl/sbl.zip
+     fi
+else
+    echo "...................................stitch ELK into IFWI...................................."
+    if [ -n "$IS_SBL" ]; then
+        echo "Stitch ELK into IFWI is not supported option for SBL platform"
+        return
+    fi
+    ./device/intel/build/test/unsign_ias_img.py vendor/intel/abl/abl_prebuilt/internal/bxtp_abl/elk \
+            > $BASEDIR/ifwi_abl/elk_unsigned
+    ias_image_signer $BASEDIR/ifwi_abl/elk_unsigned $PRODKEYS/verity.pk8  $PRODKEYS/verity.x509.pem \
+            $BASEDIR/ifwi_abl/elk
+    ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
+            -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
+            -ifwikey $BASEDIR/ifwi_abl/verity.pem \
+            -openssl /usr/bin/openssl \
+            -s vendor/intel/abl/ifwi-apl \
+            -ablcfg $BASEDIR/ifwi_abl/bin/iasImage_config_data.bin \
+            -o $BASEDIR/ifwi_abl/ifwi.bin \
+            -elk $BASEDIR/ifwi_abl/elk \
+            -w $BASEDIR/ifwi_abl/tmp \
+            -si $SILICON_STEP \
+            -qs $SILICON_QS \
+            $BASEDIR/ifwi_abl/abl.zip
+fi
+
+    if [ -z "$IS_SBL" ]; then
+        cp $BASEDIR/ifwi_abl/tmp/dnx_spi.bin $BASEDIR/ifwi_abl/ifwi_dnx.bin
+
+        dd if=$BASEDIR/ifwi_abl/ifwi.bin of=$BASEDIR/ifwi_abl/ifwi_skipped.bin bs=1M skip=1 count=6
+        ias_image_app --image-type=0x80300 $BASEDIR/ifwi_abl/ifwi_skipped.bin -o $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin
+        ias_image_signer $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin $PRODKEYS/verity.pk8 $PRODKEYS/verity.x509.pem \
+        $BASEDIR/ifwi_abl/ifwi_update.bin
+    fi
+
+    if is_avb_enabled; then
+        ./device/intel/build/releasetools/sign_target_files_xbl \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --avb-key $OTA_TMP_DIR/avb_pk.bin \
+                --variant $BOARD_VARIANT \
+                --ifwi-directory $BASEDIR/$IFWI_DIR \
+                --tos ${PRODUCT_OUT}/tos.img \
+                $t1 $2
+    else
+        ./device/intel/build/releasetools/sign_target_files_xbl \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --variant $BOARD_VARIANT \
+                --ifwi-directory $BASEDIR/$IFWI_DIR \
+                $t1 $2
+    fi
+    rm $t1
+}
+
+# Args: <input target files package> <output flashfiles>
+function build_provimg {
+    if [ -z "$BOARD_VARIANT" ]; then
+        ./device/intel/build/releasetools/flashfiles_from_target_files \
+                --verbose $1 $2
+    else
+        ./device/intel/build/releasetools/flashfiles_from_target_files \
+                --verbose --variant $BOARD_VARIANT $1 $2
+    fi
+}
+
+# Args: <tfp> <output zip> <optional package key>
+function build_ota {
+    if [ -n "$3" ]; then
+        EXTRA_ARGS="--package_key $3"
+    else
+        EXTRA_ARGS=
+    fi
+
+    [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
+
+    ./device/intel/build/releasetools/generate_otas --verbose \
+            $EXTRA_ARGS $1 -f $2
+}
+
+# Args: <source tfp> <target tfp> <output zip> <optional package key>
+function build_inc_ota {
+    if [ -n "$4" ]; then
+        EXTRA_ARGS="--package_key $4"
+    else
+        EXTRA_ARGS=
+    fi
+
+    [ -n "$BOARD_VARIANT" ] && EXTRA_ARGS="$EXTRA_ARGS --variant $BOARD_VARIANT"
+
+    ./device/intel/build/releasetools/generate_otas --verbose \
+            $EXTRA_ARGS -s $1 $2 -f $3
+}
+
+function rename_in_zip {
+    printf "@ $2\n@=$3\n" | zipnote -w $1
+}
+
+
+# Args: <logfile> <command> <args...>
+function background {
+    if [ -n "$PARALLEL" ]; then
+        log_to $@ &
+    else
+        log_to $@
+    fi
+}
+
+# Args: <logfile> <command> <args...>
+function log_to {
+    if [ -n "$NO_LOGS" ]; then
+        shift
+        $@
+    else
+        local LOGFILE=$BASEDIR/logs/$1
+        shift
+        $@ &> $LOGFILE
+    fi
+}
+
+# Args: <number of processes to wait for>
+function wait_complete {
+    if [ -n "$PARALLEL" ]; then
+        for i in `seq 1 $1`; do
+            wait -n
+        done
+    fi
+}
+
+if [ -z "$ANDROID_BUILD_TOP" ]; then
+    echo "Run lunch first!"
+    exit 1
+fi
+if [[ -n "$TFP" ]]; then
+    if [[ -z "$1" ]]; then
+        echo "No build name provided!"
+        exit 1
+    fi
+fi
+
+if [ -z "$BOARD_VARIANT" ]; then
+    has_variants
+    if [ $HAS_VARIANTS -ge 1 ]; then
+        echo "${TARGET_PRODUCT} builds require use of -V parameter"
+        exit 1
+    fi
+
+    BASEDIR=ota/$TARGET_PRODUCT/
+else
+    BASEDIR=ota/$TARGET_PRODUCT-$BOARD_VARIANT/
+fi
+
+pushd $ANDROID_BUILD_TOP &> /dev/null
+mkdir -p $BASEDIR
+rm -rf $BASEDIR/ota*.zip $BASEDIR/flashfiles*.zip $BASEDIR/*.unfixed
+rm -rf ota/tmp
+mkdir -p ota/tmp
+rm -rf $BASEDIR/logs
+mkdir -p $BASEDIR/logs
+
+if [ -z "$NO_BUILD_OTATOOLS" ]; then
+    echo "Building support tools"
+    log_to make-otatools.log make -j$CONCURRENCY_LEVEL otatools
+fi
+
+TS=`date +"%s"`
+
+if [[ -n "$TFP" ]]; then
+    log_to sign_tfp-${1}.log sign_tfp $TFP $BASEDIR/tfp-${1}.zip
+    background flashfiles-${1}.log build_provimg $BASEDIR/tfp-${1}.zip $BASEDIR/flashfiles-${1}.zip
+    background ota-${1}.log build_ota $BASEDIR/tfp-${1}.zip $BASEDIR/ota-${1}.zip $PRODKEYS/releasekey
+    wait_complete 2
+    echo "All done!"
+    exit
+fi
+
+if [[ -n $FORCE_BUILD_TFPS || ! -f $BASEDIR/tfp-A-testkey.zip ]]; then
+    build_release A
+    RESIGN_A=true
+fi
+
+if [[ -n $FORCE_BUILD_TFPS || ! -f $BASEDIR/tfp-B-testkey.zip ]]; then
+    build_release B
+    RESIGN_B=true
+fi
+
+if [[ "$QUICK" != "1" ]]; then
+    echo "Re-signing target-files-packages"
+    NUM_WAIT=0
+    if [[ -n "$RESIGN_A" || ! -f $BASEDIR/tfp-A.zip ]]; then
+        NUM_WAIT=$(($NUM_WAIT + 1))
+        background sign_tfp-A.log sign_tfp $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-A.zip
+    fi
+    if [[ -n "$RESIGN_B" || ! -f $BASEDIR/tfp-B.zip ]]; then
+        NUM_WAIT=$(($NUM_WAIT + 1))
+        background sign_tfp-B.log sign_tfp $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-B.zip
+    fi
+    wait_complete $NUM_WAIT
+fi
+
+echo "Building flashfiles..."
+NUM_WAIT=0
+if [[ "$QUICK" != "1" ]]; then
+    background flashfiles-A.log build_provimg $BASEDIR/tfp-A.zip $BASEDIR/flashfiles-A.zip
+    background flashfiles-B.log build_provimg $BASEDIR/tfp-B.zip $BASEDIR/flashfiles-B.zip
+    NUM_WAIT=$(($NUM_WAIT + 2))
+fi
+
+background flashfiles-A-testkey.log build_provimg $BASEDIR/tfp-A-testkey.zip $BASEDIR/flashfiles-A-testkey.zip
+background flashfiles-B-testkey.log build_provimg $BASEDIR/tfp-B-testkey.zip $BASEDIR/flashfiles-B-testkey.zip
+NUM_WAIT=$(($NUM_WAIT + 2))
+
+wait_complete $NUM_WAIT
+
+NUM_WAIT=0
+echo "Building OTA update packages..."
+if [[ "$QUICK" != "1" ]]; then
+    background ota-A.log build_ota $BASEDIR/tfp-A.zip $BASEDIR/ota-A.zip $PRODKEYS/releasekey
+    background ota-B.log build_ota $BASEDIR/tfp-B.zip $BASEDIR/ota-B.zip $PRODKEYS/releasekey
+    background ota-A-B.log build_inc_ota $BASEDIR/tfp-A.zip $BASEDIR/tfp-B.zip $BASEDIR/ota-A-B.zip $PRODKEYS/releasekey
+    background ota-B-A.log build_inc_ota $BASEDIR/tfp-B.zip $BASEDIR/tfp-A.zip $BASEDIR/ota-B-A.zip $PRODKEYS/releasekey
+    NUM_WAIT=$(($NUM_WAIT + 4))
+fi
+
+background ota-A-testkey.log build_ota $BASEDIR/tfp-A-testkey.zip $BASEDIR/ota-A-testkey.zip
+background ota-B-testkey.log build_ota $BASEDIR/tfp-B-testkey.zip $BASEDIR/ota-B-testkey.zip
+background ota-A-B-testkey.log build_inc_ota $BASEDIR/tfp-A-testkey.zip $BASEDIR/tfp-B-testkey.zip $BASEDIR/ota-A-B-testkey.zip
+background ota-B-A-testkey.log build_inc_ota $BASEDIR/tfp-B-testkey.zip $BASEDIR/tfp-A-testkey.zip $BASEDIR/ota-B-A-testkey.zip
+NUM_WAIT=$(($NUM_WAIT + 4))
+
+wait_complete $NUM_WAIT
+
+popd
+echo "OTA preparations complete!"
+

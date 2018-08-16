@@ -76,7 +76,7 @@ OPTIONS.guest_target = False
 GiB = (1 << 30)
 crc_len = 4
 blk_sz  = 1024
-# osloader_blk_offset will be set to 16384 in AaaG case
+# osloader_blk_offset will be set to 16384 in AaaG case and in SBL case
 osloader_blk_offset = 8000
 #bootloader.img block size
 bootloader_bs = 1024
@@ -398,6 +398,11 @@ def main(argv):
         sys.exit(1)
 
     output_zip = zipfile.ZipFile(args[1], "w")
+
+    if OPTIONS.ifwi_directory.find("sbl") > 0:
+        print "Using sbl"
+        global osloader_blk_offset
+        osloader_blk_offset = 16384
 
     print "Extracting the provdata.zip"
     prov_file = "provdata_"+OPTIONS.variant+".zip"
