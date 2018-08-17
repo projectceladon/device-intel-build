@@ -21,8 +21,8 @@ MKDOSFS := mkdosfs
 MKEXT2IMG := $(HOST_OUT_EXECUTABLES)/mkext2img
 DUMPEXT2IMG := $(HOST_OUT_EXECUTABLES)/dumpext2img
 MCOPY := mcopy
-SESL :=  $(HOST_OUT_EXECUTABLES)/sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
-CTESL :=  $(HOST_OUT_EXECUTABLES)/cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
+SESL := sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
+CTESL := cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 IASL := $(HOST_OUT_EXECUTABLES)/iasl
 
 # Generation
@@ -32,22 +32,18 @@ FB4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4abl_symbols.zip
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
+    $(GENERATE_VERITY_KEY) \
+    $(AVBTOOL)
+
+ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
+# NON UEFI platform
+INTEL_OTATOOLS += \
     $(ABLIMAGE) \
     $(ABLSIGN) \
     $(MKEXT2IMG) \
     $(DUMPEXT2IMG) \
-    $(GENERATE_VERITY_KEY) \
     $(FASTBOOT) \
-    $(IASL) \
-    $(AVBTOOL)
-
-ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),false)
-INTEL_OTATOOLS += \
-    $(SBSIGN) \
-    $(MKDOSFS) \
-    $(MCOPY) \
-    $(SESL) \
-    $(CTESL)
+    $(IASL)
 endif
 
 ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
