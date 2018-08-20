@@ -209,7 +209,8 @@ def getBuildProp(path, prop):
 def getFromZip(zip_path, filename):
     with zipfile.ZipFile(zip_path, "r") as zf:
         data = zf.open(filename).read()
-    return common.File(filename, data)
+        info = zf.getinfo(filename)
+    return (common.File(filename, data), (info.external_attr >> 16L) & 0xFFFF)
 
 def getProvdataVariants(unpack_dir):
     variants = []
@@ -246,7 +247,9 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
         return
     else:
         print "-- Adding", target_out
-    # Retrieve file from target file package based on source & target strings
+    # Default is no special permissions
+    perms = None
+    # retrieve file from target file package based on source & target strings
     if source == "fastboot":
         ifile = intel_common.GetFastbootImage(unpack_dir)
     elif source == "bootloader":
@@ -259,9 +262,9 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
     elif source == "provdatazip":
         suffix = "_" + variant if variant else ""
-        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix), os.path.basename(target))
+        (ifile, perms) = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix), os.path.basename(target))
     elif source == "bootloaderzip":
-        ifile = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
+        (ifile, perms) = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
     elif source.startswith("boot:"):
         _, iname = source.split(":")
         ifile = common.GetBootableImage(target, iname+".img", unpack_dir, iname.upper())
@@ -278,7 +281,7 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
         common.ZipWrite(dest_zip, tmpfile.name, target_out)
     else:
         ifile.name = target_out
-        ifile.AddToZip(dest_zip)
+        common.ZipWriteStr(dest_zip, ifile.name, ifile.data, perms=perms)
     flashfile_content.append(target_out)
 
 def process_image_fast(product_out, flashfiles_out, source, target, variant=None, target_out=None):
