@@ -1,8 +1,8 @@
 ifdef BOARD_USB_DISK_IMAGE
 
-# 0x1f8000 is multiple of sectors/track(32 or 63), avoid mtools check error.
+# 0x7e0000 is multiple of sectors/track(32 or 63), avoid mtools check error.
 $(BOARD_USB_DISK_IMAGE): fast_flashfiles $(MKDOSFS) $(MCOPY)
-	$(hide) rm -f $@ && $(MKDOSFS) -n UDISK -C $@ 0x1f8000
+	$(hide) rm -f $@ && $(MKDOSFS) -n UDISK -C $@ 0x7e0000
 	$(hide) $(MCOPY) -Q -i $@ $(FAST_FLASHFILES_DIR)/* ::
 
 flashfiles: $(BOARD_USB_DISK_IMAGE)
