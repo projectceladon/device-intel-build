@@ -193,10 +193,10 @@ $(hide) if [ -s $(dir $@)/acpi.tables ];then \
 	$(ABL_OS_KERNEL_KEY).pk8 \
 	$(ABL_OS_KERNEL_KEY).x509.pem \
 	$@
-$(hide) if [ "$(PRIVATE_MODULE)" == fb4abl-userdebug ]; then \
+$(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4abl-user ]; then \
 	zip -juy $(FB4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
 	zip -juy $(FB4ABL_SYMBOLS_ZIP) $@; \
-elif [ "$(PRIVATE_MODULE)" == kf4abl-userdebug ]; then \
+elif [ "$(PRIVATE_MODULE:debug=)" = kf4abl-user ]; then \
 	zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
 fi
 endef

@@ -81,7 +81,7 @@ endif
 
 # Publish kf4abl symbols files
 .PHONY: publish_kf4abl_symbols
-ifeq ($(TARGET_BUILD_VARIANT)|$(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),userdebug|true)
+ifeq ($(TARGET_BUILD_VARIANT:debug=)|$(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),user|true)
 publish_kf4abl_symbols: publish_mkdir_dest kf4abl-$(TARGET_BUILD_VARIANT) fb4abl-$(TARGET_BUILD_VARIANT)
 	$(hide)($(ACP) $(KF4ABL_SYMBOLS_ZIP) $(FB4ABL_SYMBOLS_ZIP) $(publish_dest))
 else
