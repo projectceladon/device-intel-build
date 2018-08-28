@@ -164,11 +164,10 @@ def main(argv):
         sys.exit(1)
 
     print "Extracting target files package..."
-    unpack_dir = common.UnzipTemp(args[0])
-    tfp = zipfile.ZipFile(args[0], "r")
+    unpack_dir, tfp = common.UnzipTemp(args[0])
     success = True
     OPTIONS.info_dict = common.LoadInfoDict(tfp)
-    platform_efi, platform_sflte = intel_common.CheckIfSocEFI(unpack_dir, variant=OPTIONS.variant)
+    platform_efi, platform_sflte, platform_abl = intel_common.CheckIfSocEFI(unpack_dir, variant=OPTIONS.variant)
 
     print "Extracting bootloader archive..."
     data = intel_common.GetBootloaderImageFromTFP(unpack_dir,
