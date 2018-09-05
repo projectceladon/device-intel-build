@@ -161,13 +161,14 @@ $(hide) $(IAFW_LD) $1 \
     -Map $(@:.abl=.map) --strip-all -o $(@:.abl=.elf)
 
 $(hide) if [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table ]; then \
-            cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
-        fi
+			cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
+		fi
 $(hide) if [ -e $(FIRST_STAGE_MOUNT_CFG_FILE) ]; then \
-            $(IASL) -p $(dir $@)/acpi_table/ssdt $(FIRST_STAGE_MOUNT_CFG_FILE); \
-        elif [ -e $(dir $@)/acpi_table/ssdt.aml ]; then \
-            rm $(dir $@)/acpi_table/ssdt.aml; \
-        fi
+			mkdir -p $(dir $@)/acpi_table; \
+			$(IASL) -p $(dir $@)/acpi_table/ssdt $(FIRST_STAGE_MOUNT_CFG_FILE); \
+		elif [ -e $(dir $@)/acpi_table/ssdt.aml ]; then \
+			rm $(dir $@)/acpi_table/ssdt.aml; \
+		fi
 
 $(hide) wait
 
