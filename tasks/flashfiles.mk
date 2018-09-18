@@ -45,6 +45,14 @@ ifneq ($(TARGET_SKIP_OTA_PACKAGE), true)
 	$(eval INTEL_OTA_PACKAGES += $(ota_zip)) \
 	$(call dist-for-goals,droidcore,$(ota_zip):$(notdir $(ota_zip))))
 
+ifeq ($(RELEASE_BUILD),true)
+  $(INTEL_OTA_PACKAGES): $(BUILT_TARGET_RELEASE_FILES_PACKAGE)
+	@echo "otaPackage release: $@"
+	build/tools/releasetools/ota_from_target_files \
+	-k device/intel/build/testkeys/cts-release-test/releasekey \
+	$(BUILT_TARGET_RELEASE_FILES_PACKAGE) $@
+
+else
   $(INTEL_OTA_PACKAGES): $(INTERNAL_OTA_PACKAGE_TARGET) $(BUILT_TARGET_FILES_PACKAGE) $(odf) $(DISTTOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(eval y = $(subst -, ,$(basename $(@F))))
@@ -52,7 +60,7 @@ ifneq ($(TARGET_SKIP_OTA_PACKAGE), true)
 	$(hide) export ANDROID_BUILD_TOP=$(PWD); $(odf) --verbose --buildnum=$(BUILDNUM) --variant=$(DEV) \
 		--target_files $(BUILT_TARGET_FILES_PACKAGE) \
 		$(INTERNAL_OTA_PACKAGE_TARGET) $@
-
+endif
   otapackage: $(INTEL_OTA_PACKAGES)
 endif
 
