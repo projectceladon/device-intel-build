@@ -46,12 +46,6 @@ INTEL_OTATOOLS += \
     $(IASL)
 endif
 
-ifeq ($(BOARD_FIRSTSTAGE_MOUNT_ENABLE),true)
-    FIRST_STAGE_MOUNT_CFG_FILE := $(TARGET_DEVICE_DIR)/ablvars/asl/first-stage-mount-cfg.asl
-else
-    FIRST_STAGE_MOUNT_CFG_FILE := null
-endif
-
 ifeq ($(BOARD_USE_ABL),true)
 INTEL_OTATOOLS += abl_toolchain
 endif
@@ -107,6 +101,7 @@ IAFW_TOOLCHAIN_GCC_ROOT := prebuilts/gcc/$(HOST_PREBUILT_TAG)/x86/x86_64-linux-a
 IAFW_TOOLCHAIN_CLANG_ROOT := $(LLVM_PREBUILTS_PATH)
 IAFW_TOOLS_GCC_PREFIX := $(IAFW_TOOLCHAIN_GCC_ROOT)/bin/x86_64-linux-android-
 IAFW_TOOLS_CLANG_PREFIX := $(IAFW_TOOLCHAIN_CLANG_ROOT)
+IAFW_STRIP := $(IAFW_TOOLS_GCC_PREFIX)strip$(HOST_EXECUTABLE_SUFFIX)
 IAFW_LD := $(IAFW_TOOLS_GCC_PREFIX)ld.bfd$(HOST_EXECUTABLE_SUFFIX)
 IAFW_CC := $(IAFW_TOOLS_CLANG_PREFIX)/clang
 IAFW_OBJCOPY := $(IAFW_TOOLS_GCC_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
@@ -158,16 +153,11 @@ $(hide) $(IAFW_LD) $1 \
     --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
     --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
-    -Map $(@:.abl=.map) --strip-all -o $(@:.abl=.elf)
+    -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
+$(hide)$(IAFW_STRIP) --strip-all $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
 
 $(hide) if [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table ]; then \
 			cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
-		fi
-$(hide) if [ -e $(FIRST_STAGE_MOUNT_CFG_FILE) ]; then \
-			mkdir -p $(dir $@)/acpi_table; \
-			$(IASL) -p $(dir $@)/acpi_table/ssdt $(FIRST_STAGE_MOUNT_CFG_FILE); \
-		elif [ -e $(dir $@)/acpi_table/ssdt.aml ]; then \
-			rm $(dir $@)/acpi_table/ssdt.aml; \
 		fi
 
 $(hide) wait
@@ -178,7 +168,7 @@ $(hide) if [ -e $(dir $@)/acpi.tables ]; then \
 $(hide) find $(dir $@)/acpi_table -type f | while read file; do \
 	detect_size=`od -j4 -N4 -An -t u4 $${file}`; \
 	[ -z "$${detect_size}" ] && detect_size=0; \
-	actual_size=`wc -c < $${file}`; \
+	actual_size=`stat -c '%s' $${file}`; \
 	if [ $${detect_size} -eq $${actual_size} ]; then \
 		echo ACPI table length match: $${file}; \
 		printf "Signature: %s, Length: $${actual_size}\n" `head -c 4 $${file}`; \

@@ -46,7 +46,7 @@ all_objects += $(LIBPAYLOAD_CRT0)
 
 $(LOCAL_BUILT_MODULE): PRIVATE_OBJCOPY_FLAGS := $(LOCAL_OBJCOPY_FLAGS)
 
-$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(ABLIMAGE) $(ABLSIGN) $(IASL)
+$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(ABLIMAGE) $(ABLSIGN)
 	$(call transform-o-to-abl-executable,$(LOCAL_ABL_LDFALGS))
 
 endif # skip_build_from_source
