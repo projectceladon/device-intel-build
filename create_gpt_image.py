@@ -507,6 +507,7 @@ class TableEntryInfos(object):
                                           '3d69d8477de4'),
                       'config': ('0fc63daf-8483-4772-8e79-'
                                          '3d69d8477de4'),
+                      'mfos':'4f33cfe4-a0c1-448b-aec4-40f10a0cef3f',
                       'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4'
                       }
             }
@@ -792,6 +793,7 @@ class GPTImage(object):
         'factory',
         'config',
         'tos',
+        'mfos',
         'teedata'
         ]
 
