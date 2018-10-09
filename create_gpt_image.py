@@ -950,8 +950,9 @@ class GPTImage(object):
             # computes the partition offset
             offset = int(tlb_part.begin) * self.block_size
 
-            # no binary file used to build the partition
-            if bin_path == 'none':
+            # no binary file used to build the partition or slot_b case
+            label = tlb_part.label[0:]
+            if bin_path == 'none' or label[len(label)-2:] == '_b':
                 line = '\0'
                 img_file.seek(offset)
                 img_file.write(line)
