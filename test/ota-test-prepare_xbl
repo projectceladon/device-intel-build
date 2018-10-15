@@ -192,7 +192,7 @@ function sign_tfp {
         if is_avb_enabled; then
             ./device/intel/build/releasetools/sign_target_files_xbl \
                     --verbose \
-                    --oem-key $TESTKEYS/slimboot \
+                    --oem-key $TESTKEYS/xbl_default \
                     --avb-key $OTA_TMP_DIR/avb_pk.bin \
                     --variant $BOARD_VARIANT \
                     --tos ${PRODUCT_OUT}/tos.img \
@@ -201,7 +201,7 @@ function sign_tfp {
         else
             ./device/intel/build/releasetools/sign_target_files_xbl \
                     --verbose \
-                    --oem-key $TESTKEYS/slimboot \
+                    --oem-key $TESTKEYS/xbl_default \
                     --variant $BOARD_VARIANT \
                     --guest-target \
                     $t1 $2
