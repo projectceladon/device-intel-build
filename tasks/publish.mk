@@ -39,20 +39,21 @@ publish_system_symbols: $(PUB_SYSTEM_SYMBOLS)
 # if kernel is not a prebuilt one
 # and kernel is built locally
 ifeq ($(TARGET_PREBUILT_KERNEL),)
+LOCAL_KERNEL_PATH := $(KERNEL_OUT)
 ifneq ($(LOCAL_KERNEL_PATH),)
 # Publish Kernel debug
 PUB_KERNEL_DBG := vmlinux.bz2 System.map.bz2
 PUB_KERNEL_DBG_PATH := $(publish_dest)/kernel
 PUB_KERNEL_DBG := $(addprefix $(PUB_KERNEL_DBG_PATH)/,$(PUB_KERNEL_DBG))
 
-$(PUB_KERNEL_DBG): $(LOCAL_KERNEL)
+$(PUB_KERNEL_DBG): $(PRODUCT_OUT)/kernel
 	@echo "Publish $(basename $(@F))"
 	$(hide) mkdir -p $(@D)
 	$(hide) bzip2 -c $(LOCAL_KERNEL_PATH)/$(basename $(@F)) > $@
 
 PUB_KERNEL_MODULES = $(PUB_KERNEL_DBG_PATH)/kernel_modules-$(TARGET_BUILD_VARIANT).tar.bz2
 
-$(PUB_KERNEL_MODULES): $(LOCAL_KERNEL_PATH)/copy_modules
+$(PUB_KERNEL_MODULES): $(PRODUCT_OUT)/kernel
 	@echo "Publish Kernel Modules"
 	$(hide) mkdir -p $(@D)
 	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
