@@ -6,17 +6,23 @@ ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
 ifeq ($(RELEASE_BUILD),true)
-sign_name := $(name)-target_files-$(FILE_NAME_TAG)
+flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
+target_name := $(name)-sign-targetfile-$(FILE_NAME_TAG)
 endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 ifeq ($(RELEASE_BUILD),true)
-BUILT_TARGET_RELEASE_FILES_PACKAGE := $(PRODUCT_OUT)/$(sign_name).zip
-$(BUILT_TARGET_RELEASE_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
+BUILT_RELEASE_FLASH_FILES_PACKAGE := $(PRODUCT_OUT)/$(flash_name).zip
+BUILT_RELEASE_TARGET_FILES_PACKAGE := $(PRODUCT_OUT)/$(target_name).zip
+$(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
 	@echo "Package release: $@"
 	build/tools/releasetools/sign_target_files_apks -o \
 	-d device/intel/build/testkeys/cts-release-test \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
+
+$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
+	$(hide) mkdir -p $(dir $@)
+	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
 endif
 ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
@@ -33,15 +39,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	    $(eval ff_zip := $(fn_prefix)-flashfiles-$(fn_suffix).zip) \
 	    $(eval INTEL_FACTORY_FLASHFILES_TARGET += $(ff_zip)) \
 	    $(call dist-for-goals,droidcore,$(ff_zip):$(notdir $(ff_zip))))
-	ifeq ($(RELEASE_BUILD),true)
-      $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_RELEASE_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
-	  $(hide) mkdir -p $(dir $@)
-	  $(eval y = $(subst -, ,$(basename $(@F))))
-	  $(eval DEV = $(word 3, $(y)))
-	  $(eval mvcfg_dev = $(MV_CONFIG_DEFAULT_TYPE.$(DEV)))
-	  $(if $(mvcfg_dev), $(eval mvcfg_default_arg = $(mvcfg_dev)),$(eval mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)))
-	  $(hide) $(fftf) --variant=$(DEV) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_RELEASE_FILES_PACKAGE) $@
-	  else
+
 	  $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	  $(hide) mkdir -p $(dir $@)
 	  $(eval y = $(subst -, ,$(basename $(@F))))
@@ -62,14 +60,6 @@ ifneq ($(TARGET_SKIP_OTA_PACKAGE), true)
 	$(eval INTEL_OTA_PACKAGES += $(ota_zip)) \
 	$(call dist-for-goals,droidcore,$(ota_zip):$(notdir $(ota_zip))))
 
-ifeq ($(RELEASE_BUILD),true)
-  $(INTEL_OTA_PACKAGES): $(BUILT_TARGET_RELEASE_FILES_PACKAGE)
-	@echo "otaPackage release: $@"
-	build/tools/releasetools/ota_from_target_files \
-	-k device/intel/build/testkeys/cts-release-test/releasekey \
-	$(BUILT_TARGET_RELEASE_FILES_PACKAGE) $@
-
-else
   $(INTEL_OTA_PACKAGES): $(INTERNAL_OTA_PACKAGE_TARGET) $(BUILT_TARGET_FILES_PACKAGE) $(odf) $(DISTTOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(eval y = $(subst -, ,$(basename $(@F))))
@@ -77,7 +67,7 @@ else
 	$(hide) export ANDROID_BUILD_TOP=$(PWD); $(odf) --verbose --buildnum=$(BUILDNUM) --variant=$(DEV) \
 		--target_files $(BUILT_TARGET_FILES_PACKAGE) \
 		$(INTERNAL_OTA_PACKAGE_TARGET) $@
-endif
+
   otapackage: $(INTEL_OTA_PACKAGES)
 endif
 
@@ -96,15 +86,10 @@ else
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)
 endif
 
-ifeq ($(RELEASE_BUILD),true)
-$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_RELEASE_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
-	$(hide) mkdir -p $(dir $@)
-	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_RELEASE_FILES_PACKAGE) $@
-else
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
-endif
+
 ifeq ($(PUBLISH_CMCC_IMG),true)
 CMCC_TARGET := $(PRODUCT_OUT)/$(subst -flashfiles-,-cmcc-,$(name)).zip
 CMCC_IMG_PATH := $(PRODUCT_OUT)/fls/fls/CMCC
@@ -208,8 +193,11 @@ endif # BOARD_HAS_NO_IFWI
 endif # USE_INTEL_FLASHFILES
 
 .PHONY: flashfiles
+ifeq ($(RELEASE_BUILD),true)
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE)
+else
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
-
+endif
 ifeq ($(USE_INTEL_FLASHFILES),false)
 publish_ifwi:
 	@echo "Warning: Unable to fulfill publish_ifwi makefile request"

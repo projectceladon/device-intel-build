@@ -217,7 +217,11 @@ publish_sdk_target: publish_mkdir_dest $(INTERNAL_SDK_TARGET)
 
 
 endif # !PUBLISH_SDK
-
+ifeq ($(RELEASE_BUILD),true)
+.PHONY: release-package
+release-package: $(BUILT_RELEASE_FLASH_FILES_PACKAGE)
+	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
+endif
 
 # We need to make sure our 'publish' target depends on the other targets so
 # that it will get done at the end.  Logic copied from build/core/distdir.mk
@@ -230,5 +234,9 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
+ifeq ($(RELEASE_BUILD),true)
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image release-package
+else
 publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image
+endif
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
