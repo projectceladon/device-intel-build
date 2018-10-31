@@ -51,6 +51,9 @@ Usage: sign_target_files_efiss <options> <input_target_files_zip> <output_file>
       Expects a key pair assuming private key ends in .pk8 and public key
       with .x509.pem
 
+  -A  (--avb-key) <path>
+      Replace the Android Verified Boot key with the key in path
+
   -L  (--kernelflinger) <path>
       Path inside ESP to kernelflinger binary. Defaults to the first-stage loader.
 
@@ -192,8 +195,18 @@ def get_section(data, name):
 
     raise common.ExternalError("Section not found")
 
+def replace_raw_keys(data, raw_key, password):
+    (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
 
-def replace_keys(data, oem_key_pair, password):
+    oem_key_file = open(raw_key, "rb")
+    oem_key_data = zero_pad(oem_key_file.read(), oemkeys_size)
+    oem_key_file.close()
+
+    data = (data[:oemkeys_offset] + oem_key_data +
+            data[oemkeys_offset + oemkeys_size:])
+    return data
+
+def replace_pem_keys(data, oem_key_pair, password):
     (oemkeys_offset, oemkeys_size) = get_section(data, ".oemkeys")
 
     oem_key_data_der_file = intel_common.pem_cert_to_der_cert(oem_key_pair +
@@ -204,7 +217,6 @@ def replace_keys(data, oem_key_pair, password):
     data = (data[:oemkeys_offset] + oem_key_data +
             data[oemkeys_offset + oemkeys_size:])
     return data
-
 
 def process_bootzip(input_bootzip, output_bootzip, passwords):
     for zi in input_bootzip.infolist():
@@ -223,7 +235,10 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
             password = None
             if OPTIONS.oem_key in passwords:
                 password = passwords[OPTIONS.oem_key]
-            data = replace_keys(data, OPTIONS.oem_key, password)
+            if OPTIONS.avb_key == None:
+                data = replace_pem_keys(data, OPTIONS.oem_key, password)
+            else:
+                data = replace_raw_keys(data, OPTIONS.avb_key, password)
 
         if path in OPTIONS.key_map:
             print "Re-signing", path
@@ -292,6 +307,9 @@ def main(argv):
             k,v = a.split("=")
             OPTIONS.key_map[k] = v
             OPTIONS.all_keys.add(v)
+        elif o in ("-A", "--avb-key"):
+            OPTIONS.avb_key = a
+            OPTIONS.all_keys.add(a)
         elif o in ("-R", "--replace"):
             k,v = a.split("=")
             OPTIONS.replace[k] = v
@@ -307,8 +325,8 @@ def main(argv):
         return True
 
     args = common.ParseOptions(argv, __doc__,
-            extra_opts = "k:R:F:O:K:L:",
-            extra_long_opts = ["key-mapping=",
+            extra_opts = "k:A:R:F:O:K:L:",
+            extra_long_opts = ["key-mapping=", "avb-key=",
                 "replace=", "first-stage=", "oem-key=", "kernelflinger="],
             extra_option_handler = option_handler)
 
