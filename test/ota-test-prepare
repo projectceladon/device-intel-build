@@ -28,7 +28,9 @@ export TFP=
 export QUICK=
 export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
+export PRODUCT_OUT=out/target/product/${DEVICENAME}
 
+TOS_IMAGE_PARTITION_SIZE=10485760
 while getopts "qst:V:jlof" opt; do
     case $opt in
         s)
@@ -106,6 +108,22 @@ function has_variants {
     fi
 }
 
+avb_enable_string="BOARD_AVB_ENABLE := true"
+function check_avb {
+        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
+                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+        IS_AVB=$(grep "$avb_enable_string" ${product_dir}/BoardConfig.mk | wc -l || true)
+}
+
+function is_avb_enabled {
+    if [[ $IS_AVB -ge 1 ]]; then
+            return 0 # 0 is true
+    fi
+    return 1 # 1 is false
+}
+
 # Args: <input TFP> <output TFP>
 function sign_tfp {
     t1=`$MKTEMP tmp.tfp1.XXXXXXXX`
@@ -113,19 +131,49 @@ function sign_tfp {
 
     generate_verity_key -convert $PRODKEYS/verity.x509.pem $t2
 
-    ./build/tools/releasetools/sign_target_files_apks  \
-            --verbose \
-            --replace_ota_keys \
-            --replace_verity_public_key ${t2}.pub \
-            --replace_verity_private_key $PRODKEYS/verity \
-            --default_key_mappings $PRODKEYS $1 $t1
-    rm -f ${t2}.pub $t2
+    check_avb
 
-    ./device/intel/build/releasetools/sign_target_files_efis \
-            --verbose \
-            --oem-key $PRODKEYS/verity \
-            --key-mapping loader.efi=$PRODKEYS/DB \
-            $t1 $2
+    if is_avb_enabled; then
+        unzip $1 RADIO/tos.img -d $OTA_TMP_DIR
+
+        device/intel/build/test/unsign_boot_img.py $OTA_TMP_DIR/RADIO/tos.img > ${PRODUCT_OUT}/tos.img
+
+        avbtool add_hash_footer --image ${PRODUCT_OUT}/tos.img --partition_size $TOS_IMAGE_PARTITION_SIZE --partition_name tos --algorithm SHA256_RSA4096 --key $PRODKEYS/avb_releasekey.pem
+
+        avbtool extract_public_key --key $PRODKEYS/avb_releasekey.pem --output $OTA_TMP_DIR/avb_pk.bin
+
+        prebuilts/build-tools/linux-x86/bin/acp $PRODKEYS/avb_releasekey.pem external/avb/test/data/testkey_rsa4096.pem
+    fi
+
+    if is_avb_enabled; then
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --default_key_mappings $PRODKEYS $1 $t1
+        rm -f ${t2}.pub $t2
+
+        ./device/intel/build/releasetools/sign_target_files_efis \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --avb-key $OTA_TMP_DIR/avb_pk.bin \
+                --key-mapping loader.efi=$PRODKEYS/DB \
+                $t1 $2
+    else
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --replace_verity_public_key ${t2}.pub \
+                --replace_verity_private_key $PRODKEYS/verity \
+                --default_key_mappings $PRODKEYS $1 $t1
+        rm -f ${t2}.pub $t2
+
+        ./device/intel/build/releasetools/sign_target_files_efis \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --key-mapping loader.efi=$PRODKEYS/DB \
+                $t1 $2
+    fi
+
     rm $t1
 }
 
