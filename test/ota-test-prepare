@@ -17,6 +17,20 @@ function bail {
 
 trap 'bail ${LINENO}' ERR
 
+# Get the exact value of a external variable.
+function get_external_var()
+{
+    local T=$ANDROID_BUILD_TOP
+    if [ ! "$T" ]; then
+        echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
+        return
+    fi
+    (\cd $T; build/soong/soong_ui.bash --dumpvar-mode $1 )
+}
+
+export DEVICENAME=$(get_external_var TARGET_DEVICE)
+echo "get TARGET_DEVICE: $DEVICENAME"
+
 export TESTKEYS=device/intel/build/testkeys
 export PRODKEYS=device/intel/build/testkeys/production-test
 export ANDROID_PW_FILE=$PRODKEYS/pwfile
