@@ -214,7 +214,7 @@ function sign_tfp {
     mkdir -p $BASEDIR/$IFWI_DIR/tmp
 
     if [ -z "$IS_SBL" ]; then
-        vendor/intel/abl/abl_config_tool/abl_config_gen.sh -config ${product_dir}/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
+        vendor/intel/abl/abl_build_tools/abl_config_gen_1and.sh -config ${product_dir}/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
 
         cp vendor/intel/abl/abl_prebuilt/internal/bxtp_abl/abl.zip $BASEDIR/ifwi_abl/abl.zip
     fi
