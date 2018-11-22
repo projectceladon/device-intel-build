@@ -146,34 +146,34 @@ function sign_tfp {
     fi
 
     if is_avb_enabled; then
-        ./build/tools/releasetools/sign_target_files_apks  \
-                --verbose \
-                --replace_ota_keys \
-                --default_key_mappings $PRODKEYS $1 $t1
-        rm -f ${t2}.pub $t2
-
         ./device/intel/build/releasetools/sign_target_files_efis \
                 --verbose \
                 --oem-key $PRODKEYS/verity \
                 --avb-key $OTA_TMP_DIR/avb_pk.bin \
                 --key-mapping loader.efi=$PRODKEYS/DB \
-                $t1 $2
+                $1 $t1
+
+        ./build/tools/releasetools/sign_target_files_apks  \
+                --verbose \
+                --replace_ota_keys \
+                --default_key_mappings $PRODKEYS $t1 $2
+
     else
+        ./device/intel/build/releasetools/sign_target_files_efis \
+                --verbose \
+                --oem-key $PRODKEYS/verity \
+                --key-mapping loader.efi=$PRODKEYS/DB \
+                $1 $t1
+
         ./build/tools/releasetools/sign_target_files_apks  \
                 --verbose \
                 --replace_ota_keys \
                 --replace_verity_public_key ${t2}.pub \
                 --replace_verity_private_key $PRODKEYS/verity \
-                --default_key_mappings $PRODKEYS $1 $t1
-        rm -f ${t2}.pub $t2
-
-        ./device/intel/build/releasetools/sign_target_files_efis \
-                --verbose \
-                --oem-key $PRODKEYS/verity \
-                --key-mapping loader.efi=$PRODKEYS/DB \
-                $t1 $2
+                --default_key_mappings $PRODKEYS $t1 $2
     fi
 
+    rm -f ${t2}.pub $t2
     rm $t1
 }
 
