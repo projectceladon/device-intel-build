@@ -17,7 +17,7 @@
 """
 Re-sign EFI bootloader binaries found in RADIO/bootloader.zip with production
 keys. Can also substitute the vendor key inside the uefi_shim, or substitute
-a new shim entirely.
+a new shim entirely. If needed the resigned loader is copied to vendor partition.
 
 Usage: sign_target_files_efiss <options> <input_target_files_zip> <output_file>
 
@@ -77,6 +77,8 @@ from pyasn1.codec.ber import decoder as ber_decoder
 from pyasn1_modules import rfc5208 as pkcs8
 
 import json
+
+unpack_dir = ""
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -291,6 +293,15 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
                 output_bootzip.writestr("EFI/BOOT/bootx64.efi", data)
                 if OPTIONS.target_product == "coho":
                     output_bootzip.writestr("shim.efi", data)
+            if os.path.exists(os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi")):
+                if OPTIONS.verbose:
+                    print "Copy resigned kernelflinger.efi to ", os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi")
+                f = open(os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi"), "w")
+                f.write(data)
+                f.close()
+            else:
+                if OPTIONS.verbose:
+                    print "Path does not exist ", os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi")
 
 
 
@@ -347,6 +358,7 @@ def main(argv):
     output_zip = zipfile.ZipFile(args[1], "w")
 
     print "Extracting bootloader.zip"
+    global unpack_dir
     unpack_dir = common.UnzipTemp(args[0])
     input_zip = zipfile.ZipFile(args[0], "r")
     input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
@@ -393,6 +405,8 @@ def main(argv):
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             common.ZipWrite(output_zip, output_bz_file, zi.filename)
+        elif zi.filename == "VENDOR/firmware/kernelflinger.efi":
+            common.ZipWrite(output_zip, os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi"), zi.filename)
         elif zi.filename == "RADIO/fastboot.img":
             common.ZipWriteStr(output_zip, zi, fastboot.data)
         elif zi.filename == "RADIO/tdos.img":
