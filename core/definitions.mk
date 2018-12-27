@@ -59,7 +59,7 @@ endif
 otatools: $(INTEL_OTATOOLS)
 
 # FIXME: may be unsafe to omit -no-sse
-TARGET_IAFW_GLOBAL_CFLAGS := -ggdb -O3 -fno-stack-protector \
+TARGET_IAFW_GLOBAL_CFLAGS := -ggdb -O3 -fstack-protector-strong \
 	-fno-strict-aliasing -fpic \
 	-fshort-wchar -mno-red-zone \
 	-mno-mmx -fno-builtin \
@@ -73,10 +73,12 @@ TARGET_IAFW_GLOBAL_CFLAGS := -ggdb -O3 -fno-stack-protector \
 	-Wno-unused-const-variable \
 	-Wno-constant-conversion \
 	-Wno-unused-function \
-	-Wno-tautological-pointer-compare
+	-Wno-tautological-pointer-compare \
+	-Wformat -Wformat-security \
+	-D_FORTIFY_SOURCE=2
 
 TARGET_IAFW_GLOBAL_LDFLAGS := -nostdlib --no-undefined \
-	--fatal-warnings -Bsymbolic -znocombreloc
+	--fatal-warnings -Bsymbolic -znocombreloc -znoexecstack -zrelro -znow
 
 ifneq ($(TARGET_UEFI_ARCH),)
     TARGET_IAFW_ARCH := $(TARGET_UEFI_ARCH)
