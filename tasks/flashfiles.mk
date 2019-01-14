@@ -129,6 +129,10 @@ else
 droid: $(INSTALLED_RADIOIMAGE_TARGET)
 endif #FAST_FLASHFILES
 
+ifeq ($(RELEASE_BUILD),true)
+$(call dist-for-goals,droidcore,$(BUILT_RELEASE_FLASH_FILES_PACKAGE))
+endif
+
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
 
 ifneq ($(BOARD_HAS_NO_IFWI),true)
