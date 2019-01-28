@@ -419,7 +419,7 @@ class TableEntryInfos(object):
         result = 'UUID partition entry {0}\n'.format(self.pos)
         result = '\t{0}type: {1}\n'.format(result, UUID(bytes_le=self.type))
         result = '\t{0}UUID: {1}\n'.format(result, UUID(bytes_le=self.uuid))
-        result = '\t{0}lfirst LBA: {1}\n'.format(result, self.lba_first)
+        result = '\t{0}first LBA: {1}\n'.format(result, self.lba_first)
         result = '\t{0}last LBA: {1}\n'.format(result, self.lba_last)
         result = '\t{0}attribute flags: 0x{1:08x}\n'.format(result, self.attr)
         result = '\t{0}name: {1}\n'.format(result,
@@ -654,12 +654,12 @@ class TLBInfos(list):
         # value
         try:
             start_lba_prev = cfg.getint('base', 'start_lba')
-            debug('The start_lab value read in the TLB partition file')
+            debug('The start_lba value read in the TLB partition file')
 
         except NoOptionError:
             # set start lba to offset 1M bytes, align with kernelflinger
             start_lba_prev = 1024 * 1024 / block_size
-            info('The start_lab value is undefined in the TLB partition file,'
+            info('The start_lba value is undefined in the TLB partition file,'
                  ' the default value is used: {0}'.format(start_lba_prev))
 
         # contructs the TLB info
