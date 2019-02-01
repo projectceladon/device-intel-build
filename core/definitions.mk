@@ -180,8 +180,8 @@ done
 $(hide) dd if=/dev/zero of=$(dir $@)/cmdline bs=512 count=1;
 $(hide) if [ -s $(dir $@)/acpi.tables ];then \
 	echo 8600b1ac | xxd -r -ps > $(dir $@)/acpi_tag; \
-	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi_tag $(dir $@)/acpi.tables; else \
-	$(ABLIMAGE) -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf); fi
+	$(ABLIMAGE) create -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi_tag $(dir $@)/acpi.tables; else \
+	$(ABLIMAGE) create -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf); fi
 	$(ABLSIGN) $(@:.abl=.ablunsigned) \
 	$(ABL_OS_KERNEL_KEY).pk8 \
 	$(ABL_OS_KERNEL_KEY).x509.pem \

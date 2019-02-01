@@ -324,7 +324,7 @@ fi
         cp $BASEDIR/ifwi_abl/tmp/dnx_spi.bin $BASEDIR/ifwi_abl/ifwi_dnx.bin
 
         dd if=$BASEDIR/ifwi_abl/ifwi.bin of=$BASEDIR/ifwi_abl/ifwi_skipped.bin bs=1M skip=1 count=6
-        ias_image_app --image-type=0x80300 $BASEDIR/ifwi_abl/ifwi_skipped.bin -o $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin
+        ias_image_app create -i 0x80300 $BASEDIR/ifwi_abl/ifwi_skipped.bin -o $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin
         ias_image_signer $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin $PRODKEYS/verity.pk8 $PRODKEYS/verity.x509.pem \
         $BASEDIR/ifwi_abl/ifwi_update.bin
     fi
