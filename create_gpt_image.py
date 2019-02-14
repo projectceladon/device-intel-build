@@ -507,7 +507,8 @@ class TableEntryInfos(object):
                                           '3d69d8477de4'),
                       'config': ('0fc63daf-8483-4772-8e79-'
                                          '3d69d8477de4'),
-                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4'
+                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'swap': '0fc63daf-8483-4772-8e79-3d69d8477de4'
                       }
             }
 
@@ -792,7 +793,8 @@ class GPTImage(object):
         'factory',
         'config',
         'tos',
-        'teedata'
+        'teedata',
+        'swap'
         ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
