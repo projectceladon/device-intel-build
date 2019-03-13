@@ -503,6 +503,7 @@ class TableEntryInfos(object):
                       'acpio_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'cache': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'userdata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'persistent': ('ebc597d0-2053-4b15-8b64-'
                                              'e0aac75f4db1'),
                       'factory': ('0fc63daf-8483-4772-8e79-'
@@ -510,7 +511,8 @@ class TableEntryInfos(object):
                       'config': ('0fc63daf-8483-4772-8e79-'
                                          '3d69d8477de4'),
                       'mfos':'4f33cfe4-a0c1-448b-aec4-40f10a0cef3f',
-                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4'
+                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'super': '0fc63daf-8483-4772-8e79-3d69d8477de4'
                       }
             }
 
@@ -793,12 +795,14 @@ class GPTImage(object):
         'acpio',
         'cache',
         'data',
+        'userdata',
         'persistent',
         'factory',
         'config',
         'tos',
         'mfos',
-        'teedata'
+        'teedata',
+        'super'
         ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
