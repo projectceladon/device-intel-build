@@ -792,7 +792,9 @@ class GPTImage(object):
         'factory',
         'config',
         'tos',
-        'teedata'
+        'teedata',
+        'esp',
+        'esp2'
         ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
