@@ -5,9 +5,26 @@ endif
 ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
+ifeq ($(RELEASE_BUILD),true)
+flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
+sign_name := $(name)-target_files-$(FILE_NAME_TAG)
+endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
+
+ifeq ($(RELEASE_BUILD),true)
+BUILT_RELEASE_FLASH_FILES_PACKAGE := $(PRODUCT_OUT)/$(flash_name).zip
+BUILT_RELEASE_TARGET_FILES_PACKAGE := $(PRODUCT_OUT)/$(sign_name).zip
+$(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
+	@echo "Package release: $@"
+	build/tools/releasetools/sign_target_files_apks -o \
+	-d device/intel/build/testkeys/cts-release-test \
+	$(BUILT_TARGET_FILES_PACKAGE) $@
+$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
+	$(hide) mkdir -p $(dir $@)
+	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
+endif
 
 ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
@@ -71,6 +88,7 @@ else
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)
 endif
 
+
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
@@ -114,6 +132,9 @@ else
 droid: $(INSTALLED_RADIOIMAGE_TARGET)
 endif #FAST_FLASHFILES
 
+ifeq ($(RELEASE_BUILD),true)
+$(call dist-for-goals,droidcore,$(BUILT_RELEASE_FLASH_FILES_PACKAGE))
+endif
 $(call dist-for-goals,droidcore,$(INTEL_FACTORY_FLASHFILES_TARGET))
 
 ifneq ($(BOARD_HAS_NO_IFWI),true)
