@@ -7,7 +7,7 @@ ifeq ($(TARGET_BUILD_TYPE),debug)
 endif
 ifeq ($(RELEASE_BUILD),true)
 flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
-sign_name := $(name)-target_files-$(FILE_NAME_TAG)
+sign_name := $(name)-sign-target_files-$(FILE_NAME_TAG)
 endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 
