@@ -95,7 +95,11 @@ endif
 FIRMWARE_SYMBOLS_FILE := $(TARGET_DEVICE)-symbols_firmware.zip
 FIRMWARE_SYMBOLS_PATH := $(wildcard $(INTEL_PATH_HARDWARE)/$(TARGET_BOARD_PLATFORM)-fls/$(PRODUCT_MODEL)/symbols/*.elf)
 
+ifeq ($(RELEASE_BUILD),true)
+publish_firmware_symbols: publish_mkdir_dest publish_flashfiles publish_signflashfiles
+else
 publish_firmware_symbols: publish_mkdir_dest publish_flashfiles
+endif
 ifneq ($(BUILD_OSAS),1) # prebuilt
 	@echo "------------Publish prebuilt firmware symbols from $(FIRMWARE_SYMBOLS_PATH) -----------"
 ifneq ($(FIRMWARE_SYMBOLS_PATH),)
@@ -111,6 +115,10 @@ endif
 PUBLISH_SDK := $(strip $(filter sdk sdk_x86,$(TARGET_PRODUCT)))
 
 ifndef PUBLISH_SDK
+
+.PHONY: publish_signflashfiles
+publish_signflashfiles: publish_mkdir_dest $(BUILT_RELEASE_FLASH_FILES_PACKAGE)
+	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
 
 .PHONY: publish_flashfiles
 ifdef INTEL_FACTORY_FLASHFILES_TARGET
