@@ -4,11 +4,11 @@ ifeq ($(BOARD_HAS_USB_DISK),true)
 
 ifeq ($(FLASHFILE_VARIANTS),)
 # 0x7e0000 is multiple of sectors/track(32 or 63), avoid mtools check error.
-usb_disk_images: fast_flashfiles | $(MKDOSFS) $(MCOPY)
+usb_disk_images: fast_flashfiles
 	$(hide) rm -f $(BOARD_USB_DISK_IMAGES) && $(MKDOSFS) -n UDISK -C $(BOARD_USB_DISK_IMAGES) 0x7e0000
 	$(hide) $(MCOPY) -Q -i $(BOARD_USB_DISK_IMAGES) $(FAST_FLASHFILES_DIR)/* ::
 else
-usb_disk_images: fast_flashfiles | $(MKDOSFS) $(MCOPY)
+usb_disk_images: fast_flashfiles
 	for variant in $(FLASHFILE_VARIANTS); do \
 		eval "usb_disk$${variant}_files=(`ls $(FAST_FLASHFILES_DIR)/*_$${variant}*`)"; \
 	done; \
