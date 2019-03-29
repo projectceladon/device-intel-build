@@ -181,7 +181,7 @@ publish_ota_flashfile:
 	@echo "Do not publish ota_flashfile"
 endif # PUBLISH_CONF
 
-PUBLISH_CI_FILES := $(DIST_DIR)/fastboot $(DIST_DIR)/adb
+PUBLISH_CI_FILES := out/dist/fastboot out/dist/adb
 .PHONY: publish_ci
 ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), false)
 publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
@@ -230,4 +230,4 @@ endif
 
 .PHONY: publish
 publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image
-	@$(ACP) $(DIST_DIR)/* $(publish_dest)
+	@$(ACP) out/dist/* $(publish_dest)
