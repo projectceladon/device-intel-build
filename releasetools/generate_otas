@@ -69,7 +69,7 @@ gbl.output_file = None
 
 def check_tfp(tfp):
     zip = zipfile.ZipFile(tfp)
-    product_line = "ro.product.name=%s\n" % gbl.target_product
+    product_line = "ro.product.system.name=%s\n" % gbl.target_product
     if not product_line in zip.open("SYSTEM/build.prop").readlines():
         raise Exception("package %s is not for product %s" % (tfp, gbl.target_product))
 

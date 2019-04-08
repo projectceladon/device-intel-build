@@ -372,7 +372,7 @@ def main(argv):
     except IOError, e:
        if e.errno == errno.ENOENT:
           raise KeyError(f)
-    OPTIONS.target_product = d["ro.product.name"]
+    OPTIONS.target_product = d["ro.product.system.name"]
 
     print "Processing private keys"
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)

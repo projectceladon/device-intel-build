@@ -348,7 +348,7 @@ def main(argv):
 
         system = os.path.join(product_out, "system")
         build_type = getBuildProp(system, "ro.build.type")
-        platform = getBuildProp(system, "ro.product.name")
+        platform = getBuildProp(system, "ro.product.system.name")
 
         flashfile = getIntermediates(product_out, "flashfiles", "flashfiles")
     else:
@@ -361,7 +361,7 @@ def main(argv):
 
         system = os.path.join(unpack_dir, "SYSTEM")
         build_type = getBuildProp(system, "ro.build.type")
-        platform = getBuildProp(system, "ro.product.name")
+        platform = getBuildProp(system, "ro.product.system.name")
 
         flashfile = os.path.join(unpack_dir, "RADIO", "flashfiles")
 
