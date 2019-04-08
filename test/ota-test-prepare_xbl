@@ -245,7 +245,10 @@ if [[ ${ELK_IN_IFWI} == 0 ]]; then
                 --variant $BOARD_VARIANT  --oem-key $PRODKEYS/verity $1 $BASEDIR/$IFWI_DIR/fastboot
     fi
     if [ -z "$IS_SBL" ]; then
+        unzip $1 VENDOR/default.prop -d $OTA_TMP_DIR
+        IFWI_VERSION=$(cat $OTA_TMP_DIR/VENDOR/default.prop | grep "ro.vendor.ifwi_version" | cut -d "=" -f2)
         ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
+                -ifwiversion $IFWI_VERSION \
                 -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
                 -ifwikey $BASEDIR/ifwi_abl/verity.pem \
                 -openssl /usr/bin/openssl \
