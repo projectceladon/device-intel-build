@@ -115,6 +115,7 @@ function has_variants {
         product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
                     ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
                     ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    ! \( -path "*/path_config.mk" -prune \) \
                     -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
     else
@@ -127,6 +128,7 @@ function check_avb {
         product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
                     ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
                     ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    ! \( -path "*/path_config.mk" -prune \) \
                     -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         IS_AVB=$(grep "$avb_enable_string" ${product_dir}/BoardConfig.mk | wc -l || true)
 }
