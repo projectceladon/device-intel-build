@@ -167,6 +167,7 @@ function sign_tfp {
                 --oem-key $PRODKEYS/verity \
                 --avb-key $OTA_TMP_DIR/avb_pk.bin \
                 --key-mapping loader.efi=$PRODKEYS/DB \
+                --key-mapping EFI/INTEL/KF4UEFI.EFI=$PRODKEYS/DB \
                 $1 $t1
 
         ./build/tools/releasetools/sign_target_files_apks  \
@@ -179,6 +180,7 @@ function sign_tfp {
                 --verbose \
                 --oem-key $PRODKEYS/verity \
                 --key-mapping loader.efi=$PRODKEYS/DB \
+                --key-mapping EFI/INTEL/KF4UEFI.EFI=$PRODKEYS/DB \
                 $1 $t1
 
         ./build/tools/releasetools/sign_target_files_apks  \
