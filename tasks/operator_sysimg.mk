@@ -1,4 +1,4 @@
-echo "start operator system image generation!": $(GEN_OPERATOR_SYSTEM_IMG)
+#echo "start operator system image generation!": $(GEN_OPERATOR_SYSTEM_IMG)
 ifeq ($(GEN_OPERATOR_SYSTEM_IMG),true)
 
 ANIMATION_ZIP_PATH := $(dir $(SPLASH_IMG_FILE_PATH))

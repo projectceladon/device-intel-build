@@ -25,12 +25,13 @@ publish_mkdir_dest:
 	$(call publish_make_dir, $(publish_dest))
 
 # Publish System symbols
-PUB_SYSTEM_SYMBOLS := $(publish_dest)/symbols.tar.gz
+PUB_SYSTEM_SYMBOLS := symbols.tar.gz
 
-$(PUB_SYSTEM_SYMBOLS): systemtarball
+.PHONY: $(PUB_SYSTEM_SYMBOLS)
+$(PUB_SYSTEM_SYMBOLS): $(systemtarball)
 	@echo "Publish system symbols"
-	$(hide) mkdir -p $(@D)
-	tar --checkpoint=1000 --checkpoint-action=dot -czf $@ $(PRODUCT_OUT)/symbols
+	$(hide) mkdir -p $(publish_dest)
+	tar --checkpoint=1000 --checkpoint-action=dot -czf $(publish_dest)/$@ $(PRODUCT_OUT)/symbols
 
 .PHONY: publish_system_symbols
 publish_system_symbols: $(PUB_SYSTEM_SYMBOLS)
@@ -43,19 +44,21 @@ ifneq ($(LOCAL_KERNEL_PATH),)
 # Publish Kernel debug
 PUB_KERNEL_DBG := vmlinux.bz2 System.map.bz2
 PUB_KERNEL_DBG_PATH := $(publish_dest)/kernel
-PUB_KERNEL_DBG := $(addprefix $(PUB_KERNEL_DBG_PATH)/,$(PUB_KERNEL_DBG))
+#PUB_KERNEL_DBG := $(addprefix $(PUB_KERNEL_DBG_PATH)/,$(PUB_KERNEL_DBG))
 
+.PHONY: $(PUB_KERNEL_DBG)
 $(PUB_KERNEL_DBG): $(LOCAL_KERNEL)
 	@echo "Publish $(basename $(@F))"
-	$(hide) mkdir -p $(@D)
-	$(hide) bzip2 -c $(LOCAL_KERNEL_PATH)/$(basename $(@F)) > $@
+	$(hide) mkdir -p $(PUB_KERNEL_DBG_PATH)
+	$(hide) bzip2 -c $(LOCAL_KERNEL_PATH)/$(basename $(@F)) > $(PUB_KERNEL_DBG_PATH)/$@
 
-PUB_KERNEL_MODULES = $(PUB_KERNEL_DBG_PATH)/kernel_modules-$(TARGET_BUILD_VARIANT).tar.bz2
+PUB_KERNEL_MODULES = kernel_modules-$(TARGET_BUILD_VARIANT).tar.bz2
 
+.PHONY: $(PUB_KERNEL_MODULES)
 $(PUB_KERNEL_MODULES): $(LOCAL_KERNEL_PATH)/copy_modules
 	@echo "Publish Kernel Modules"
-	$(hide) mkdir -p $(@D)
-	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
+	$(hide) mkdir -p $(PUB_KERNEL_DBG_PATH)
+	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $(PUB_KERNEL_DBG_PATH)/$@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
 
 publish_kernel_debug: $(PUB_KERNEL_DBG) $(PUB_KERNEL_MODULES)
 	@echo "Publish kernel debug: $(notdir $^)"
