@@ -86,9 +86,15 @@ else
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)
 endif
 
+ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
+$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS) $(INSTALLED_SUPERIMAGE_TARGET)
+	$(hide) mkdir -p $(dir $@)
+	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(INSTALLED_SUPERIMAGE_TARGET) $(BUILT_TARGET_FILES_PACKAGE) $@
+else
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
+endif
 
 ifeq ($(PUBLISH_CMCC_IMG),true)
 CMCC_TARGET := $(PRODUCT_OUT)/$(subst -flashfiles-,-cmcc-,$(name)).zip

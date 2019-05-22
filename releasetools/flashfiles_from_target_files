@@ -30,6 +30,9 @@ Usage: flashfiles_from_target_files [options] <input_target_files_zip> <output_f
   -M (--mv_config_default)
       Specify the default mv configuration to flash
       This option is mandatory for Sofia targets only
+
+  -S (--add_image)
+      Add additional img into unzip tmp folder of flash target zip.
 """
 
 import sys
@@ -64,6 +67,7 @@ OPTIONS.variants = None
 OPTIONS.unified_variants = False
 OPTIONS.fast = False
 OPTIONS.mv_config_default = None
+OPTIONS.add_image = None
 
 flashfile_content = []
 variant_files = ["bootloader", "btsdata.ini", "firmware.bin", "oem.img", "cse_spi.bin", "firmware-info.txt", "cfgpart.xml", "ifwi.bin", "ifwi_debug.bin"]
@@ -312,7 +316,7 @@ def process_image_fast(product_out, flashfiles_out, source, target, variant=None
         os.link(infile, outfile)
     elif source == "fls_images":
         intermediate = getIntermediates(product_out, "flashfiles", "provdata")
-        
+
         intel_common.build_fls_out(product_out, intermediate, target, outfile, variant=OPTIONS.variants)
     else:
         raise Exception("unknown source image type " + source)
@@ -329,13 +333,16 @@ def main(argv):
             OPTIONS.fast = True
         elif o in ("-M", "--mv_config_default"):
             OPTIONS.mv_config_default = a
+        elif o in ("-S", "--add_image"):
+            OPTIONS.add_image = a
+
         else:
             return False
         return True
 
     args = common.ParseOptions(argv, __doc__,
             extra_opts = "V:UfM:",
-            extra_long_opts = ["variant=","unified-variants","fast","mv_config_default="],
+            extra_long_opts = ["variant=","unified-variants","fast","mv_config_default=", "add_image="],
             extra_option_handler = option_handler)
     if len(args) < 2 or (OPTIONS.variants and OPTIONS.unified_variants):
         common.Usage(__doc__)
@@ -354,6 +361,9 @@ def main(argv):
     else:
         print "Unzipping target-files..."
         unpack_dir = common.UnzipTemp(args[0])
+        if OPTIONS.add_image:
+            input_super = os.path.join(unpack_dir, "IMAGES")
+            shutil.copy2(OPTIONS.add_image, input_super)
         input_zip = zipfile.ZipFile(args[0], "r")
         OPTIONS.info_dict = common.LoadInfoDict(input_zip)
         if OPTIONS.unified_variants:
