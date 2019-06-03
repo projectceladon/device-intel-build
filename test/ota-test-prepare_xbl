@@ -47,10 +47,11 @@ export IS_AAAG=
 export IS_SBL=
 export IFWI_DIR=ifwi_abl
 export PRODUCT_OUT=out/target/product/${DEVICENAME}
+export HAS_SUPER=
 
 ELK_IN_IFWI=0
 TOS_IMAGE_PARTITION_SIZE=10485760
-while getopts "qgismt:V:jlof" opt; do
+while getopts "qgismt:V:jlofd" opt; do
     case $opt in
         s)
             set -x
@@ -86,6 +87,9 @@ while getopts "qgismt:V:jlof" opt; do
         f)
             export FORCE_BUILD_TFPS=YES
             ;;
+        d)
+            export HAS_SUPER=YES
+            ;;
         \?)
             echo "Usage:"
             echo
@@ -105,6 +109,7 @@ while getopts "qgismt:V:jlof" opt; do
             echo "-j: Build output images in parallel (SSD recommended)"
             echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
             echo "-o: skip building otatools, assume they are there"
+            echo "-d: generate super.img"
             exit 1
             ;;
     esac
@@ -356,12 +361,18 @@ fi
 
 # Args: <input target files package> <output flashfiles>
 function build_provimg {
+    local add_image=
+    if [ -n "$HAS_SUPER" ]; then
+        local img=ota/tmp/super.img
+        ./build/make/tools/releasetools/build_super_image.py -v $1 $img
+        add_image="--add_image=$img"
+    fi
     if [ -z "$BOARD_VARIANT" ]; then
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose $1 $2
+                --verbose $add_image $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose --variant $BOARD_VARIANT $1 $2
+                --verbose --variant $BOARD_VARIANT $add_image $1 $2
     fi
 }
 

@@ -43,9 +43,10 @@ export QUICK=
 export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
 export PRODUCT_OUT=out/target/product/${DEVICENAME}
+export HAS_SUPER=
 
 TOS_IMAGE_PARTITION_SIZE=10485760
-while getopts "qst:V:jlof" opt; do
+while getopts "qst:V:jlofd" opt; do
     case $opt in
         s)
             set -x
@@ -71,6 +72,9 @@ while getopts "qst:V:jlof" opt; do
         f)
             export FORCE_BUILD_TFPS=YES
             ;;
+        d)
+            export HAS_SUPER=YES
+            ;;
         \?)
             echo "Usage:"
             echo
@@ -93,6 +97,7 @@ while getopts "qst:V:jlof" opt; do
             echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
             echo "-o: skip building otatools, assume they are there"
             echo "-f: force building target files packages even if they exist"
+            echo "-d: generate super.img"
             exit 1
             ;;
     esac
@@ -197,12 +202,18 @@ function sign_tfp {
 
 # Args: <input target files package> <output flashfiles>
 function build_provimg {
+    local add_image=
+    if [ -n "$HAS_SUPER" ]; then
+        local img=ota/tmp/super.img
+        ./build/make/tools/releasetools/build_super_image.py -v $1 $img
+        add_image="--add_image=$img"
+    fi
     if [ -z "$BOARD_VARIANT" ]; then
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose $1 $2
+                --verbose $add_image $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose --variant $BOARD_VARIANT $1 $2
+                --verbose --variant $BOARD_VARIANT $add_image $1 $2
     fi
 }
 
