@@ -51,7 +51,7 @@ export HAS_SUPER=
 
 ELK_IN_IFWI=0
 TOS_IMAGE_PARTITION_SIZE=10485760
-while getopts "qgismt:V:jlofd" opt; do
+while getopts "qgismt:V:jlof" opt; do
     case $opt in
         s)
             set -x
@@ -87,9 +87,6 @@ while getopts "qgismt:V:jlofd" opt; do
         f)
             export FORCE_BUILD_TFPS=YES
             ;;
-        d)
-            export HAS_SUPER=YES
-            ;;
         \?)
             echo "Usage:"
             echo
@@ -109,7 +106,6 @@ while getopts "qgismt:V:jlofd" opt; do
             echo "-j: Build output images in parallel (SSD recommended)"
             echo "-l: Don't save log files, just emit everything to stdout (don't use with -j)"
             echo "-o: skip building otatools, assume they are there"
-            echo "-d: generate super.img"
             exit 1
             ;;
     esac
@@ -125,15 +121,15 @@ fi
 export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
 export OTA_TMP_DIR=ota/tmp/
 export MKTEMP="mktemp --tmpdir=ota/tmp/"
-
-variants_enable_string="BOARD_DEVICE_MAPPING :="
-function has_variants {
-    if [ -z "$TFP" ]; then
-        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+export product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
                     ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
                     ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
                     ! \( -path "*/path_config.mk" -prune \) \
                     -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
+
+variants_enable_string="BOARD_DEVICE_MAPPING :="
+function has_variants {
+    if [ -z "$TFP" ]; then
         HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
     else
         HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l || true)
@@ -142,12 +138,12 @@ function has_variants {
 
 avb_enable_string="BOARD_AVB_ENABLE := true"
 function check_avb {
-        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
-                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
-                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
-                    ! \( -path "*/path_config.mk" -prune \) \
-                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         IS_AVB=$(grep "$avb_enable_string" ${product_dir}/BoardConfig.mk | wc -l || true)
+}
+
+dynamic_partition_enable_string="SUPER_IMG_IN_FLASHZIP := true"
+function check_dynamic_partition {
+        HAS_SUPER=$(grep "$dynamic_partition_enable_string" ${product_dir}/device.mk | wc -l || true)
 }
 
 function is_avb_enabled {
@@ -362,7 +358,8 @@ fi
 # Args: <input target files package> <output flashfiles>
 function build_provimg {
     local add_image=
-    if [ -n "$HAS_SUPER" ]; then
+    check_dynamic_partition
+    if [[ HAS_SUPER -ge 1 ]]; then
         local img=ota/tmp/super.img
         ./build/make/tools/releasetools/build_super_image.py -v $1 $img
         add_image="--add_image=$img"
