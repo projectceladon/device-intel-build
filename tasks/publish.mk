@@ -144,19 +144,6 @@ publish_liveimage:
 	@echo "Warning: Unable to fulfill publish_liveimage makefile request"
 endif
 
-.PHONY: publish_gptimage
-ifdef GPTIMAGE_BIN
-publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
-	@$(ACP) $(GPTIMAGE_BIN) $(publish_dest)
-ifdef CRAFFIMAGE_BIN
-	$(TOP)/$(INTEL_PATH_BUILD)/createcraffimage.py --image $(GPTIMAGE_BIN)
-	@$(ACP) $(CRAFFIMAGE_BIN) $(publish_dest)
-endif
-else
-publish_gptimage:
-	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
-endif
-
 .PHONY: publish_androidia_image
 ifdef ANDROID_IA_IMAGE
 publish_androidia_image: publish_mkdir_dest $(ANDROID_IA_IMAGE)
@@ -239,5 +226,5 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
