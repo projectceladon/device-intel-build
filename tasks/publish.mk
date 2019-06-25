@@ -140,16 +140,23 @@ endif
 
 .PHONY: publish_gptimage
 ifdef GPTIMAGE_BIN
+ifeq ($(COMPRESS_GPTIMAGE), true)
+publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
+	@echo compress $(GPTIMAGE_BIN) into $(GPTIMAGE_GZ)
+	@gzip -fk $(GPTIMAGE_BIN)
+	@$(ACP) $(GPTIMAGE_GZ) $(publish_dest)
+else # COMPRESS_GPTIMAGE is not true
 publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
 	@$(ACP) $(GPTIMAGE_BIN) $(publish_dest)
+endif # COMPRESS_GPTIMAGE
 ifdef CRAFFIMAGE_BIN
 	$(TOP)/$(INTEL_PATH_BUILD)/createcraffimage.py --image $(GPTIMAGE_BIN)
 	@$(ACP) $(CRAFFIMAGE_BIN) $(publish_dest)
 endif
-else
+else  # GPTIMAGE_BIN is not defined
 publish_gptimage:
 	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
-endif
+endif # GPTIMAGE_BIN
 
 .PHONY: publish_androidia_image
 ifdef ANDROID_IA_IMAGE
