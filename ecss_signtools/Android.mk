@@ -4,6 +4,7 @@ HOST_ECSS_OUT := $(HOST_OUT)/ecss
 HOST_ECSS_OUT_EXECUTABLES := $(HOST_ECSS_OUT)/bin
 HOST_ECSS_OUT_JAVA_LIBRARIES := $(HOST_ECSS_OUT)/framework
 
+.PHONY: host-ecss-tools
 host-ecss-tools: \
 		$(HOST_ECSS_OUT_EXECUTABLES)/verity_signer \
 		$(HOST_ECSS_OUT_EXECUTABLES)/boot_signer \
