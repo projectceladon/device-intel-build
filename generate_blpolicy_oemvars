@@ -131,6 +131,28 @@ def escaped_value(value):
     return result
 
 
+    # sign-efi-sig-list of efitool wraps signed data with extra 19 bytes
+    # while BIOS expects unwraped signed data. if sigdata is wrapped,
+    # unwrap it
+def modify_auth_file(auth_file):
+    afile = open(auth_file, 'rb+')
+    afile.seek(46)
+    extra = afile.read(9)
+    if extra == (b'\x2A\x86\x48\x86\xF7\x0D\x01\x07\x02'):
+        afile.seek(16)
+        dwLength = afile.read(4)
+        dwLengthInt = struct.unpack('i', dwLength)[0] - 19
+        afile.seek(16)
+        afile.write(struct.pack('i', dwLengthInt))
+        afile.seek(59)
+        signdata = afile.read()
+        afile.seek(40)
+        afile.write(signdata)
+        afile.seek(-19, 2)
+        afile.truncate()
+    afile.close()
+
+
 def get_auth_data(timestamp, sign_pair, password, guid_str, name, payload):
     payload_fname = tempfilename("payload-" + name + "-", payload)
     pemkey_fname = pk8_to_pem(sign_pair + private_key_suffix, password)
@@ -143,6 +165,7 @@ def get_auth_data(timestamp, sign_pair, password, guid_str, name, payload):
                "-g", guid_str, "-k", pemkey_fname,
                name, payload_fname, auth_fname], None)
     assert ret == 0, "sign-efi-sig-list failed"
+    modify_auth_file(auth_fname)
     auth_file = open(auth_fname, 'rb')
     data = auth_file.read()
     auth_file.close()
