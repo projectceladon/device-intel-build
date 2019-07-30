@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+"""
+Given a ota-files zipfile, connect to the device over Fastboot and verify that
+the installed system exactly matches that build.
+
+unzip -e ota.zip -d test01
+cd test01/verify
+chmod 755 fastboot
+chmod 755 verify_from_ota
+adb reboot fastboot //put DUT in fastboot mode
+./fastboot devices    //Check DUT connected with PC sucessfully
+./verify_from_ota //OR python ./verify_from_ota
+
+
+Succefully output:
+Running...
+Checking hashes from OTA package...
+OTA reported /bootloader/loader.efi 3fcf6cff4b77baac99472e112a05cad6de9cd0d0
+OTA reported /bootloader/EFI/BOOT/bootx64.efi 3fcf6cff4b77baac99472e112a05cad6de9cd0d0
+OTA reported /bootloader/manifest.txt c3dbdc50ec44b12a66d71ae89b4d0b83e92c48a1
+OTA reported /bootloader/capsules/current.fv 3840700198d5ee662f3e3293e6784dd66f038645
+OTA reported /boot 8312a755a077bedd92b037099d56e76792029ed3
+OTA reported /recovery b7e30eb71c9daeed374467503ab3e6a8614275ea
+OTA reported /system 3093d5aa36ba38ef4086011cadbb9a209e414489
+Running 'fastboot oem get-hashes '...
+DUT reported /boot 8312a755a077bedd92b037099d56e76792029ed3
+/boot OK
+DUT reported /recovery b7e30eb71c9daeed374467503ab3e6a8614275ea
+/recovery OK
+DUT reported /bootloader/EFI/BOOT/bootx64.efi 3fcf6cff4b77baac99472e112a05cad6de9cd0d0
+/bootloader/EFI/BOOT/bootx64.efi OK
+DUT reported /bootloader/manifest.txt c3dbdc50ec44b12a66d71ae89b4d0b83e92c48a1
+/bootloader/manifest.txt OK
+DUT reported /bootloader/capsules/current.fv 3840700198d5ee662f3e3293e6784dd66f038645
+/bootloader/capsules/current.fv OK
+DUT reported /bootloader/loader.efi 3fcf6cff4b77baac99472e112a05cad6de9cd0d0
+/bootloader/loader.efi OK
+DUT reported /system 3093d5aa36ba38ef4086011cadbb9a209e414489
+/system OK
+All tests completed successfully
+
+"""
+
+import sys
+import os
+import subprocess
+import re
+
+
+_FASTBOOT = "./fastboot"
+
+_TARGET_LINE_PREFIX = "(bootloader) target: "
+_HASH_LINE_PREFIX = "(bootloader) hash: "
+_IFWI_PREFIX = "(bootloader) version: "
+
+def process_hashdata(data):
+    hashes = {}
+    lines = data.split("\n")
+    index = 0
+    for i in range(len(lines)):
+        line = lines[i]
+        if not line.startswith(_TARGET_LINE_PREFIX):
+            continue
+
+        target = line[len(_TARGET_LINE_PREFIX):]
+        i = i + 1
+        line = lines[i]
+        if line.startswith(_IFWI_PREFIX):
+            hashdata = line[len(_IFWI_PREFIX):]
+            print "OTA reported", target, hashdata
+            hashes[target] = hashdata
+        else:
+            if not line.startswith(_HASH_LINE_PREFIX):
+                raise Exception("unexpected Fastboot output")
+
+            hashdata = line[len(_HASH_LINE_PREFIX):]
+            print "OTA reported", target, hashdata
+            hashes[target] = hashdata
+    return hashes
+
+def process_check_fastbootdata(data, hashtgt):
+    rt = True
+    lines = data.split("\n")
+    index = 0
+
+    for i in range(len(lines)):
+        line = lines[i]
+        if not line.startswith(_TARGET_LINE_PREFIX):
+            continue
+
+        target = re.sub("_a$|_b$", "", line[len(_TARGET_LINE_PREFIX):])
+        i = i + 1
+        line = lines[i]
+        if not line.startswith(_HASH_LINE_PREFIX):
+            raise Exception("unexpected Fastboot output")
+
+        hashdata = line[len(_HASH_LINE_PREFIX):]
+        print "DUT reported", target, hashdata
+        if hashdata != hashtgt[target]:
+            print "OTA reported", target, hashtgt[target], "Failed"
+            rt = False
+            continue
+        else:
+            print target, "OK"
+            continue
+    return rt
+
+def main(argv):
+    print "Running..."
+    hashdicttgt = {}
+    #get hashdata in build
+    print "Checking hashes from OTA package..."
+    hashdata = open("hashesfromtgt.txt", "r").read()
+    hashdicttgt = process_hashdata(hashdata)
+
+    print "Running 'fastboot oem get-hashes" + " " + "'..."
+    fastboot_data = subprocess.check_output([_FASTBOOT, "oem", "get-hashes"], stderr=subprocess.STDOUT)
+    success = process_check_fastbootdata(fastboot_data,hashdicttgt)
+
+    if success:
+        print "All tests completed successfully"
+    else:
+        print "OTA Tests FAILED!"
+        sys.exit(1)
+
+if __name__ == '__main__':
+    try:
+        main(sys.argv[0:])
+    finally:
+        sys.exit(1)

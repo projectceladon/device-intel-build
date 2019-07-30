@@ -133,7 +133,7 @@ def process_fastboot(in_f, out_f):
 
     #combine the individual component files back into the ias image
     unsigned_fastboot_fn = os.path.join(fp, "fastboot_unsigned.bin")
-    cmd = ["ias_image_app"]
+    cmd = ["ias_image_app", "create"]
     cmd.extend(["-i", ias_image_type_str])
     cmd.extend(["-o", unsigned_fastboot_fn])
     for i in range(fastboot_component_num):
@@ -226,7 +226,7 @@ def main(argv):
     except IOError, e:
        if e.errno == errno.ENOENT:
           raise KeyError(f)
-    OPTIONS.target_product = d["ro.product.name"]
+    OPTIONS.target_product = d["ro.product.system.name"]
 
     print "Processing private keys"
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)

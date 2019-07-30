@@ -42,11 +42,12 @@ WITHOUT_LIBCOMPILER_RT := true
 include $(BUILD_SYSTEM)/binary.mk
 WITHOUT_LIBCOMPILER_RT :=
 
-all_objects += $(LIBPAYLOAD_CRT0)
+LIBPAYLOAD_CRT0_LIB := $(call intermediates-dir-for,STATIC_LIBRARIES,$(LIBPAYLOAD_CRT0))/$(LIBPAYLOAD_CRT0).a
+all_objects += $(LIBPAYLOAD_CRT0_LIB)
 
 $(LOCAL_BUILT_MODULE): PRIVATE_OBJCOPY_FLAGS := $(LOCAL_OBJCOPY_FLAGS)
 
-$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(ABLIMAGE) $(ABLSIGN) $(IASL)
+$(LOCAL_BUILT_MODULE): $(all_objects) $(all_libraries) $(ABLIMAGE) $(ABLSIGN)
 	$(call transform-o-to-abl-executable,$(LOCAL_ABL_LDFALGS))
 
 endif # skip_build_from_source

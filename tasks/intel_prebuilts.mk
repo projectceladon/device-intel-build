@@ -22,7 +22,7 @@ generate_intel_prebuilts: $(intel_prebuilts_top_makefile)
 		find $(TARGET_OUT_prebuilts) -name Android.mk -print -exec cat {} \;)
 
 
-PUB_INTEL_PREBUILTS := pub/$(TARGET_PRODUCT)/prebuilts.zip
+PUB_INTEL_PREBUILTS := prebuilts.zip
 
 EXTERNAL_CUSTOMER ?= "g"
 
@@ -31,10 +31,12 @@ INTEL_PREBUILTS_LIST := $(filter-out project,$(INTEL_PREBUILTS_LIST))
 INTEL_PREBUILTS_LIST := $(addprefix prebuilts/intel/, $(subst /PRIVATE/,/prebuilts/$(REF_PRODUCT_NAME)/,$(INTEL_PREBUILTS_LIST)))
 INTEL_PREBUILTS_LIST += prebuilts/intel/Android.mk
 
+.PHONY: $(PUB_INTEL_PREBUILTS)
 $(PUB_INTEL_PREBUILTS): generate_intel_prebuilts
 	@echo "Publish prebuilts for external release"
-	$(hide) rm -f $@
-	$(hide) cd $(PRODUCT_OUT) && zip -r $(abspath $@) $(INTEL_PREBUILTS_LIST)
+	$(hide) rm -f $(abspath pub/$(TARGET_PRODUCT)/$@)
+	$(hide) mkdir -p $(abspath pub/$(TARGET_PRODUCT))
+	$(hide) cd $(PRODUCT_OUT) && zip -r $(abspath pub/$(TARGET_PRODUCT)/$@) $(INTEL_PREBUILTS_LIST)
 
 # publish external if buildbot set EXTERNAL_BINARIES env variable
 # and only for userdebug

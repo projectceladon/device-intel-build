@@ -32,7 +32,7 @@ from uuid import UUID, uuid4
 from binascii import crc32
 from re import compile as re_compile
 from collections import namedtuple
-from ConfigParser import SafeConfigParser, ParsingError, NoOptionError
+from ConfigParser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
 from math import floor, log
 
 
@@ -419,7 +419,7 @@ class TableEntryInfos(object):
         result = 'UUID partition entry {0}\n'.format(self.pos)
         result = '\t{0}type: {1}\n'.format(result, UUID(bytes_le=self.type))
         result = '\t{0}UUID: {1}\n'.format(result, UUID(bytes_le=self.uuid))
-        result = '\t{0}lfirst LBA: {1}\n'.format(result, self.lba_first)
+        result = '\t{0}first LBA: {1}\n'.format(result, self.lba_first)
         result = '\t{0}last LBA: {1}\n'.format(result, self.lba_last)
         result = '\t{0}attribute flags: 0x{1:08x}\n'.format(result, self.attr)
         result = '\t{0}name: {1}\n'.format(result,
@@ -457,6 +457,7 @@ class TableEntryInfos(object):
             'recovery': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'misc': '0fc63daf-8483-4772-8e79-3d69d8477de4',
             'metadata': '5808C8AA-7E8F-42E0-85D2-E1E90434CFB3',
+            'reserved': '8DA63339-0007-60C0-C436-083AC8230908',
             'linux': {
                       'xen_dom0' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'xen_misc' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
@@ -479,6 +480,8 @@ class TableEntryInfos(object):
                       'system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'system_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'system_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'esp': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'esp2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bootloader_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'bootloader_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
@@ -501,13 +504,17 @@ class TableEntryInfos(object):
                       'acpio_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'cache': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'userdata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'persistent': ('ebc597d0-2053-4b15-8b64-'
                                              'e0aac75f4db1'),
                       'factory': ('0fc63daf-8483-4772-8e79-'
                                           '3d69d8477de4'),
                       'config': ('0fc63daf-8483-4772-8e79-'
                                          '3d69d8477de4'),
-                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4'
+                      'mfos':'4f33cfe4-a0c1-448b-aec4-40f10a0cef3f',
+                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'super': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'reserved': '0fc63daf-8483-4772-8e79-3d69d8477de4'
                       }
             }
 
@@ -624,14 +631,101 @@ class TLBInfos(list):
             except NoOptionError:
                 self.slotab = 0
 
-            partitions = cfg.get('base', 'partitions').split()
+            start_part = cfg.get('base', 'partitions').split()
+
+            try:
+                slot_group_bsp = cfg.get('base.slot_group_bsp', 'partitions').split()
+            except NoSectionError:
+                slot_group_bsp = []
+
+            try:
+                slot_group_aosp = cfg.get('base.slot_group_aosp', 'partitions').split()
+            except NoSectionError:
+                slot_group_aosp = []
+
+            try:
+                end_part = cfg.get('base.end', 'partitions').split()
+            except NoSectionError:
+                end_part = []
 
             for l in data.split('\n'):
                 words = l.split()
                 if len(words) > 2:
                     if words[0] == 'partitions' and words[1] == '+=':
-                        partitions += words[2:]
-        return partitions
+                        start_part += words[2:]
+
+        return start_part, slot_group_bsp, slot_group_aosp, end_part
+
+    def _contruct_tlb_info(self, start_lba, cfg, block_size, parts):
+        for part in parts:
+            partname = 'partition.{0}'.format(part)
+            ptype = cfg.get(partname, 'type')
+            label = cfg.get(partname, 'label')
+
+            nb_slots = 1
+            if self.slotab == 2:
+                try:
+                    if cfg.get(partname, 'has_slot') == 'true':
+                        nb_slots = 2
+                except NoOptionError:
+                    nb_slots = 1
+
+            for slot_id in range(nb_slots):
+                try:
+                    begin = cfg.get(partname, 'start_lba')
+                    begin = int(begin.split(',')[slot_id])
+                except NoOptionError:
+                    begin = start_lba
+
+                try:
+                    readlen = cfg.get(partname, 'len')
+                    readlen = int(readlen.split(',')[slot_id])
+                except IndexError:
+                    readlen = cfg.getint(partname, 'len')
+
+                if readlen > 0:
+                    size = (readlen * 1024 * 1024) / block_size
+                    start_lba = begin + size
+                else:
+                    size = readlen
+
+                uuid = str(uuid4())
+                if nb_slots == 1:
+                    self.append(TLB_INFO(begin, size, ptype, uuid, label))
+                    break
+                self.append(TLB_INFO(begin, size, ptype, uuid,
+                            label + '_%c' % (ord('a') + slot_id)))
+        return start_lba
+
+    def _contruct_tlb_grp_info(self, start_lba, cfg, block_size, parts):
+        for grp_id in range(self.slotab):
+            for part in parts:
+                partname = 'partition.{0}'.format(part)
+                ptype = cfg.get(partname, 'type')
+                uuid = str(uuid4())
+                label = cfg.get(partname, 'label')
+
+                try:
+                    readlen = cfg.get(partname, 'len')
+                    readlen = int(readlen.split(',')[grp_id])
+                except IndexError:
+                    readlen = cfg.getint(partname, 'len')
+
+                try:
+                    begin = cfg.get(partname, 'start_lba')
+                    begin = int(begin.split(',')[grp_id])
+                except NoOptionError:
+                    begin = start_lba
+
+                if readlen > 0:
+                    size = (readlen * 1024 * 1024) / block_size
+                    start_lba = begin + size
+                else:
+                    size = readlen
+
+                self.append(TLB_INFO(begin, size, ptype, uuid,
+                            label + '_%c' % (ord('a') + grp_id)))
+        return start_lba
 
     def _read_ini(self, block_size):
         """
@@ -647,51 +741,28 @@ class TLBInfos(list):
             exit(-1)
 
         # gpt.ini is not a "standard" ini file because keys are not uniques
-        partitionList = self._preparse_partitions(cfg)
+        start_part, slot_group_bsp, slot_group_aosp, end_part = self._preparse_partitions(cfg)
 
         # sets the start lba value which the read value or uses the default
         # value
         try:
             start_lba_prev = cfg.getint('base', 'start_lba')
-            debug('The start_lab value read in the TLB partition file')
+            debug('The start_lba value read in the TLB partition file')
 
         except NoOptionError:
             # set start lba to offset 1M bytes, align with kernelflinger
             start_lba_prev = 1024 * 1024 / block_size
-            info('The start_lab value is undefined in the TLB partition file,'
+            info('The start_lba value is undefined in the TLB partition file,'
                  ' the default value is used: {0}'.format(start_lba_prev))
 
         # contructs the TLB info
-        for part in partitionList:
-            begin = start_lba_prev
-            partname = 'partition.{0}'.format(part)
-            readlen = cfg.getint(partname, 'len')
-            nb_slots = 0
-
-            if readlen > 0:
-                size = (readlen * 1024 * 1024) / block_size
-                start_lba_prev = begin + size
-            else:
-                size = readlen
-
-            ptype = cfg.get(partname, 'type')
-            uuid = str(uuid4())
-            label = cfg.get(partname, 'label')
-
-            if self.slotab == 2:
-                try:
-                    if cfg.get(partname, 'has_slot') == 'true' :
-                        nb_slots = 2
-                except NoOptionError:
-                    nb_slots = 0
-
-            if nb_slots == 0:
-                self.append(TLB_INFO(begin, size, ptype, uuid, label))
-            else:
-                self.append(TLB_INFO(begin, size, ptype, uuid, label+'_a'))
-                uuid_b = str(uuid4())
-                self.append(TLB_INFO(begin+size, size, ptype, uuid_b, label+'_b'))
-
+        start_lba = self._contruct_tlb_info(start_lba_prev, cfg, block_size,
+                                            start_part)
+        start_lba = self._contruct_tlb_grp_info(start_lba, cfg, block_size,
+                                                slot_group_bsp)
+        start_lba = self._contruct_tlb_grp_info(start_lba, cfg, block_size,
+                                                slot_group_aosp)
+        self._contruct_tlb_info(start_lba, cfg, block_size, end_part)
 
     def read(self, block_size):
         """
@@ -773,6 +844,8 @@ class GPTImage(object):
         'uos_rootfs',
         'vbmeta',
         'multiboot',
+        'esp',
+        'esp2',
         'bootloader',
         'bootloader2',
         'bldr_utils',
@@ -788,11 +861,15 @@ class GPTImage(object):
         'acpio',
         'cache',
         'data',
+        'userdata',
         'persistent',
         'factory',
         'config',
         'tos',
-        'teedata'
+        'mfos',
+        'teedata',
+        'super',
+        'reserved'
         ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
@@ -948,8 +1025,9 @@ class GPTImage(object):
             # computes the partition offset
             offset = int(tlb_part.begin) * self.block_size
 
-            # no binary file used to build the partition
-            if bin_path == 'none':
+            # no binary file used to build the partition or slot_b case
+            label = tlb_part.label[0:]
+            if bin_path == 'none' or label[len(label)-2:] == '_b':
                 line = '\0'
                 img_file.seek(offset)
                 img_file.write(line)

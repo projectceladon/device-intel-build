@@ -47,6 +47,7 @@ export IS_AAAG=
 export IS_SBL=
 export IFWI_DIR=ifwi_abl
 export PRODUCT_OUT=out/target/product/${DEVICENAME}
+export HAS_SUPER=
 
 ELK_IN_IFWI=0
 TOS_IMAGE_PARTITION_SIZE=10485760
@@ -120,14 +121,15 @@ fi
 export CONCURRENCY_LEVEL=$(($NUM_CPUS * 2 + 1))
 export OTA_TMP_DIR=ota/tmp/
 export MKTEMP="mktemp --tmpdir=ota/tmp/"
+export product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
+                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
+                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
+                    ! \( -path "*/path_config.mk" -prune \) \
+                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
 
 variants_enable_string="BOARD_DEVICE_MAPPING :="
 function has_variants {
     if [ -z "$TFP" ]; then
-        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
-                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
-                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
-                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         HAS_VARIANTS=$(grep "$variants_enable_string" ${product_dir}/AndroidBoard.mk | wc -l || true)
     else
         HAS_VARIANTS=$(unzip -l ${TFP} | grep device_mapping.py | wc -l || true)
@@ -136,11 +138,12 @@ function has_variants {
 
 avb_enable_string="BOARD_AVB_ENABLE := true"
 function check_avb {
-        product_dir=$(dirname $(find ${ANDROID_BUILD_TOP}/device/intel -name *.mk \
-                    ! \( -path "*/build/*" -prune \) ! \( -path "*/common/*" -prune \) \
-                    ! \( -path "*/mixins/*" -prune \) ! \( -path "*/sepolicy/*" -prune \) \
-                    -exec grep -l "PRODUCT_NAME := ${TARGET_PRODUCT}$" {} \;))
         IS_AVB=$(grep "$avb_enable_string" ${product_dir}/BoardConfig.mk | wc -l || true)
+}
+
+dynamic_partition_enable_string="SUPER_IMG_IN_FLASHZIP := true"
+function check_dynamic_partition {
+        HAS_SUPER=$(grep "$dynamic_partition_enable_string" ${product_dir}/device.mk | wc -l || true)
 }
 
 function is_avb_enabled {
@@ -192,7 +195,7 @@ function sign_tfp {
         if is_avb_enabled; then
             ./device/intel/build/releasetools/sign_target_files_xbl \
                     --verbose \
-                    --oem-key $TESTKEYS/slimboot \
+                    --oem-key $TESTKEYS/xbl_default \
                     --avb-key $OTA_TMP_DIR/avb_pk.bin \
                     --variant $BOARD_VARIANT \
                     --tos ${PRODUCT_OUT}/tos.img \
@@ -201,7 +204,7 @@ function sign_tfp {
         else
             ./device/intel/build/releasetools/sign_target_files_xbl \
                     --verbose \
-                    --oem-key $TESTKEYS/slimboot \
+                    --oem-key $TESTKEYS/xbl_default \
                     --variant $BOARD_VARIANT \
                     --guest-target \
                     $t1 $2
@@ -214,7 +217,7 @@ function sign_tfp {
     mkdir -p $BASEDIR/$IFWI_DIR/tmp
 
     if [ -z "$IS_SBL" ]; then
-        vendor/intel/abl/abl_config_tool/abl_config_gen.sh -config ${product_dir}/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
+        vendor/intel/abl/abl_build_tools/abl_config_gen_1and.sh -config ${product_dir}/abl/$BOARD_VARIANT -output_dir $BASEDIR/ifwi_abl
 
         cp vendor/intel/abl/abl_prebuilt/internal/bxtp_abl/abl.zip $BASEDIR/ifwi_abl/abl.zip
     fi
@@ -245,7 +248,10 @@ if [[ ${ELK_IN_IFWI} == 0 ]]; then
                 --variant $BOARD_VARIANT  --oem-key $PRODKEYS/verity $1 $BASEDIR/$IFWI_DIR/fastboot
     fi
     if [ -z "$IS_SBL" ]; then
+        unzip $1 VENDOR/default.prop -d $OTA_TMP_DIR
+        IFWI_VERSION=$(cat $OTA_TMP_DIR/VENDOR/default.prop | grep "ro.vendor.ifwi_version" | cut -d "=" -f2)
         ./vendor/intel/abl/ifwi-apl/IFWIStitch.py \
+                -ifwiversion $IFWI_VERSION \
                 -oskernelkey $BASEDIR/ifwi_abl/verity.pem \
                 -ifwikey $BASEDIR/ifwi_abl/verity.pem \
                 -openssl /usr/bin/openssl \
@@ -324,7 +330,7 @@ fi
         cp $BASEDIR/ifwi_abl/tmp/dnx_spi.bin $BASEDIR/ifwi_abl/ifwi_dnx.bin
 
         dd if=$BASEDIR/ifwi_abl/ifwi.bin of=$BASEDIR/ifwi_abl/ifwi_skipped.bin bs=1M skip=1 count=6
-        ias_image_app --image-type=0x80300 $BASEDIR/ifwi_abl/ifwi_skipped.bin -o $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin
+        ias_image_app create -i 0x80300 $BASEDIR/ifwi_abl/ifwi_skipped.bin -o $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin
         ias_image_signer $BASEDIR/ifwi_abl/ifwi_update_unsigned.bin $PRODKEYS/verity.pk8 $PRODKEYS/verity.x509.pem \
         $BASEDIR/ifwi_abl/ifwi_update.bin
     fi
@@ -351,12 +357,19 @@ fi
 
 # Args: <input target files package> <output flashfiles>
 function build_provimg {
+    local add_image=
+    check_dynamic_partition
+    if [[ HAS_SUPER -ge 1 ]]; then
+        local img=ota/tmp/super.img
+        ./build/make/tools/releasetools/build_super_image.py -v $1 $img
+        add_image="--add_image=$img"
+    fi
     if [ -z "$BOARD_VARIANT" ]; then
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose $1 $2
+                --verbose $add_image $1 $2
     else
         ./device/intel/build/releasetools/flashfiles_from_target_files \
-                --verbose --variant $BOARD_VARIANT $1 $2
+                --verbose --variant $BOARD_VARIANT $add_image $1 $2
     fi
 }
 

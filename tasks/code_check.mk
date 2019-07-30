@@ -4,6 +4,7 @@
 flashfiles: warn_vendor_modules warn_local_module_tags
 publish_ci: warn_vendor_modules warn_local_module_tags
 
+.PHONY: warn_vendor_modules warn_local_module_tags
 # for each module in $(DELINQUANT_VENDOR_MODULES) if LOCAL_MODULE_INSTALLED exists, warn
 warn_vendor_modules:
 	@for i in $(DELINQUANT_VENDOR_MODULES); \
