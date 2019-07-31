@@ -48,6 +48,7 @@ import json
 # fastboot - build a Fastboot boot image
 # boot:xxxx - build an AOSP boot image xxxx (either "boot" or "recovery")
 # provdatazip: Pull a named file out of RADIO/flashfiles.zip
+# provdatazipdir: Pull a named directory out of RADIO/flashfiles.zip
 # images - pull a named file out of tfp IMAGES/
 # bootloader - Build a bootloader image
 # bootloaderzip - Pull a named file out of RADIO/bootloader.zip
@@ -238,6 +239,14 @@ def getIntermediates(product_out, component, subdir):
     return os.path.join(product_out, "obj", "PACKAGING",
                         component + "_intermediates", subdir)
 
+def addDirectoryToZip(zip_path, foldername, dest_zip, target_out):
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        requiredFiles = list(filter(lambda x: x.startswith(foldername) and not x.endswith('/'), zf.namelist()))
+        for filename in requiredFiles:
+            data = zf.open(filename).read()
+            tmpfile = common.File(filename, data).WriteToTemp()
+            common.ZipWrite(dest_zip, tmpfile.name, filename)
+
 def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out=None):
     if target_out is None:
         target_out = target
@@ -260,9 +269,16 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
     elif source == "fls_images":
         intel_common.build_fls(unpack_dir, target, variant=variant)
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "IMAGES", target))
-    elif source == "provdatazip":
+    elif source == "provdatazip":        
         suffix = "_" + variant if variant else ""
         (ifile, perms) = getFromZip(os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix), os.path.basename(target))
+    elif source == "provdatazipdir":        
+        suffix = "_" + variant if variant else ""
+        srczip = os.path.join(unpack_dir, "RADIO", "provdata%s.zip" % suffix)
+        filename = os.path.basename(target)
+        print "-- Adding directory", filename
+        ifile = None
+        addDirectoryToZip(srczip, filename, dest_zip, target_out)
     elif source == "bootloaderzip":
         (ifile, perms) = getFromZip(os.path.join(unpack_dir, "RADIO", "bootloader.zip"), target)
     elif source.startswith("boot:"):
@@ -276,12 +292,13 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
     # documentation the File.AddToZip() interface is not suitable for
     # file larger than 2GiB and common.ZipWrite() must be used
     # instead.
-    if ifile.size >= (1 << 31):
-        tmpfile = ifile.WriteToTemp()
-        common.ZipWrite(dest_zip, tmpfile.name, target_out)
-    else:
-        ifile.name = target_out
-        common.ZipWriteStr(dest_zip, ifile.name, ifile.data, perms=perms)
+    if ifile:
+        if ifile.size >= (1 << 31):
+            tmpfile = ifile.WriteToTemp()
+            common.ZipWrite(dest_zip, tmpfile.name, target_out)
+        else:
+            ifile.name = target_out
+            common.ZipWriteStr(dest_zip, ifile.name, ifile.data, perms=perms)
     flashfile_content.append(target_out)
 
 def process_image_fast(product_out, flashfiles_out, source, target, variant=None, target_out=None):
@@ -301,12 +318,13 @@ def process_image_fast(product_out, flashfiles_out, source, target, variant=None
         intel_common.GetBootloaderImageFromOut(product_out, bdir, outfile)
     elif source == "images" or source == "radio" or source.startswith("boot:") or source == "fastboot":
         os.link(os.path.join(product_out, target), outfile)
-    elif source == "provdatazip":
+    elif source == "provdatazip" or source == "provdatazipdir":
         suffix = "_" + variant if variant else ""
         infile = os.path.join(getIntermediates(product_out, "flashfiles", "root%s" % suffix), os.path.basename(target))
         if not os.path.isfile(infile):
-            infile = os.path.join(getIntermediates(product_out, "flashfiles", "provdata%s" % suffix), os.path.basename(target))
-        os.link(infile, outfile)
+            os.symlink(infile, outfile)                
+        else:
+            os.link(infile, outfile)
     elif source == "bootloaderzip":
         infile = os.path.join(getIntermediates(product_out, "bootloader_zip", "root"), target)
         os.link(infile, outfile)
