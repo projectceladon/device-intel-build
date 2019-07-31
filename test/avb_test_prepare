@@ -279,7 +279,7 @@ function generate_corrupted_boot_images {
     $AVB_TOOL add_hash_footer --image $TMP_DIR/oem_signed_$IMG.img --partition_size $boot_parsize --partition_name boot $AVB_ALGORITHM_ARGS --key $AVB_OEM_KEY.pem
     echo "Corrupting a copy of $IMG image signed with oem key."
     cp $TMP_DIR/oem_signed_$IMG.img $TMP_DIR/oem_signed_corrupted_$IMG.img
-    sed -i 's/loglevel=./loglevel=7/' $TMP_DIR/oem_signed_corrupted_$IMG.img
+    sed -i 's/loglevel=./loglevel=9/' $TMP_DIR/oem_signed_corrupted_$IMG.img
     echo "Corrupting the signature of a copy of $IMG image signed with oem key."
     cp $TMP_DIR/oem_signed_$IMG.img $TMP_DIR/oem_signed_corrupted_signature_$IMG.img
     # replaces 8 bytes in the signature

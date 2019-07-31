@@ -15,8 +15,9 @@
 # limitations under the License.
 
 """
-Re-sign EFI bootloader binaries found in RADIO/bootloader.zip with production
-keys. Can also substitute the vendor key inside the uefi_shim, or substitute
+Re-sign EFI bootloader binaries found in RADIO/bootloader.zip or in RADIO/esp.zip
+with production keys.
+Can also substitute the vendor key inside the uefi_shim, or substitute
 a new shim entirely. If needed the resigned loader is copied to vendor partition.
 
 Usage: sign_target_files_efiss <options> <input_target_files_zip> <output_file>
@@ -79,6 +80,7 @@ from pyasn1_modules import rfc5208 as pkcs8
 import json
 
 unpack_dir = ""
+loader_name = "kernelflinger.efi"
 
 if sys.hexversion < 0x02040000:
     print >> sys.stderr, "Python 2.4 or newer is required."
@@ -232,7 +234,9 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
         if path.startswith("EFI/BOOT/boot") or path == "shim.efi":
             continue
 
-        if OPTIONS.oem_key and path == OPTIONS.kernelflinger:
+        if OPTIONS.oem_key and \
+              ((path == OPTIONS.kernelflinger and os.path.basename(input_bootzip.filename) != "esp.zip") or \
+              os.path.basename(path) == "KF4UEFI.EFI"):
             print "Replacing keys inside", path
             password = None
             if OPTIONS.oem_key in passwords:
@@ -293,15 +297,15 @@ def process_bootzip(input_bootzip, output_bootzip, passwords):
                 output_bootzip.writestr("EFI/BOOT/bootx64.efi", data)
                 if OPTIONS.target_product == "coho":
                     output_bootzip.writestr("shim.efi", data)
-            if os.path.exists(os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi")):
+            if os.path.exists(os.path.join(unpack_dir, "VENDOR", "firmware", loader_name)):
                 if OPTIONS.verbose:
-                    print "Copy resigned kernelflinger.efi to ", os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi")
-                f = open(os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi"), "w")
+                    print "Copy resigned loader to ", os.path.join(unpack_dir, "VENDOR", "firmware", loader_name)
+                f = open(os.path.join(unpack_dir, "VENDOR", "firmware", loader_name), "w")
                 f.write(data)
                 f.close()
             else:
                 if OPTIONS.verbose:
-                    print "Path does not exist ", os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi")
+                    print "Path does not exist ", os.path.join(unpack_dir, "VENDOR", "firmware", loader_name)
 
 
 
@@ -357,12 +361,22 @@ def main(argv):
 
     output_zip = zipfile.ZipFile(args[1], "w")
 
-    print "Extracting bootloader.zip"
     global unpack_dir
     unpack_dir = common.UnzipTemp(args[0])
     input_zip = zipfile.ZipFile(args[0], "r")
-    input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
-                "RADIO", "bootloader.zip"), "r")
+    try:
+        print "Extracting esp.zip"
+        input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
+                    "RADIO", "esp.zip"), "r")
+    except:
+        print "fail with esp.zip, try with bootloader.zip"
+        input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
+                    "RADIO", "bootloader.zip"), "r")
+    else:
+        global loader_name
+        loader_name = "kfld.efi"
+
+    print "loader_name is", loader_name
 
     print "Parsing build.prop for target_product"
     d = {}
@@ -372,7 +386,7 @@ def main(argv):
     except IOError, e:
        if e.errno == errno.ENOENT:
           raise KeyError(f)
-    OPTIONS.target_product = d["ro.product.name"]
+    OPTIONS.target_product = d["ro.product.system.name"]
 
     print "Processing private keys"
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
@@ -381,6 +395,15 @@ def main(argv):
     output_bootzip, output_bz_file = get_output_bootzip()
 
     process_bootzip(input_bootzip, output_bootzip, passwords)
+
+    if loader_name == "kfld.efi":
+        loader_name = "bootloader.efi"
+        print "Extracting bootloader.zip"
+        input_bootzip.close()
+        input_bootzip = zipfile.ZipFile(os.path.join(unpack_dir,
+                    "RADIO", "bootloader.zip"), "r")
+        process_bootzip(input_bootzip, output_bootzip, passwords)
+
     output_bootzip.close()
 
     print "Creating UserFastboot image if necessary"
@@ -405,8 +428,12 @@ def main(argv):
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             common.ZipWrite(output_zip, output_bz_file, zi.filename)
+        if zi.filename == "RADIO/esp.zip":
+            common.ZipWrite(output_zip, output_bz_file, zi.filename)
         elif zi.filename == "VENDOR/firmware/kernelflinger.efi":
             common.ZipWrite(output_zip, os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi"), zi.filename)
+        elif zi.filename == "VENDOR/firmware/kfld.efi":
+            common.ZipWrite(output_zip, os.path.join(unpack_dir, "VENDOR", "firmware", "kfld.efi"), zi.filename)
         elif zi.filename == "RADIO/fastboot.img":
             common.ZipWriteStr(output_zip, zi, fastboot.data)
         elif zi.filename == "RADIO/tdos.img":

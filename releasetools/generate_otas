@@ -69,7 +69,7 @@ gbl.output_file = None
 
 def check_tfp(tfp):
     zip = zipfile.ZipFile(tfp)
-    product_line = "ro.product.name=%s\n" % gbl.target_product
+    product_line = "ro.product.system.name=%s\n" % gbl.target_product
     if not product_line in zip.open("SYSTEM/build.prop").readlines():
         raise Exception("package %s is not for product %s" % (tfp, gbl.target_product))
 
@@ -206,7 +206,8 @@ def main(argv):
 
     ### Get variants informations ###
     variants_enable_string = "BOARD_DEVICE_MAPPING :="
-    omitstring = '! -path */build/* -prune ! -path */common/* -prune ! -path */mixins/* -prune ! -path */sepolicy/* -prune'
+    omitstring = ('! -path */build/* -prune ! -path */common/* -prune ! -path */mixins/* -prune '
+                  '! -path */sepolicy/* -prune ! -path */path_config.mk -prune')
     cmd = "find %s/device -type f -name *.mk %s -exec grep -l" % (gbl.android_top, omitstring)
     cmd = cmd.split(" ")
     cmd.append("PRODUCT_NAME := %s$" % gbl.target_product)

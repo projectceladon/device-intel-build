@@ -43,7 +43,8 @@ WITHOUT_LIBCOMPILER_RT := true
 include $(BUILD_SYSTEM)/binary.mk
 WITHOUT_LIBCOMPILER_RT :=
 
-all_objects += $(intermediates)/db.key $(GNU_EFI_CRT0)
+GNU_EFI_CRT0_LIB := $(call intermediates-dir-for,STATIC_LIBRARIES,$(GNU_EFI_CRT0))/$(GNU_EFI_CRT0).a
+all_objects += $(intermediates)/db.key $(GNU_EFI_CRT0_LIB)
 
 $(intermediates)/db.key: $(LOCAL_EFI_KEY_PAIR).pk8 $(OPENSSL)
 	$(transform-der-key-to-pem-key)

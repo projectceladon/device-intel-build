@@ -65,8 +65,7 @@ $(INSTALLED_2NDBOOTLOADER_TARGET): $(BOARD_ABL_VARS)
 				rm -f $(BOARD_ABL_VARS); \
 			fi
 
-.PHONY: $(BOARD_ABL_VARS)
-$(BOARD_ABL_VARS):
+$(BOARD_ABL_VARS): $(BOARD_ABL_ACPI_FILE_PATHS)
 	$(hide) if [ -n "$(BOARD_ABL_ACPI_SRCS)" ];then \
 				cat $(BOARD_ABL_ACPI_FILE_PATHS) > $(PRODUCT_OUT)/acpi.tables; \
 				$(INTEL_PATH_VENDOR)/abl/abl_build_tools/ias_image_app -o $@ -i 0x30000 -v $(PRODUCT_OUT)/acpi.tables; \

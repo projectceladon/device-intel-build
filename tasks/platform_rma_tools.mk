@@ -26,8 +26,9 @@ $(PLATFORM_RMA_TOOLS_ZIP): action-authorization openssl $(RMA_TO_COPY)
 	$(hide) cd $(HOST_OUT) && zip -r $(PLATFORM_RMA_TOOLS).zip $(PLATFORM_RMA_TOOLS)
 
 else
+RMA_TO_COPY := $(HOST_OUT)/bin/action-authorization$(EXECUTABLE_SUFFIX) $(HOST_OUT)/bin/sign-efi-sig-list$(EXECUTABLE_SUFFIX) $(HOST_OUT)/bin/openssl$(EXECUTABLE_SUFFIX) $(INTEL_PATH_VENDOR)/external/openssl/apps/openssl.cnf
 
-$(PLATFORM_RMA_TOOLS_ZIP): action-authorization sign-efi-sig-list openssl
+$(PLATFORM_RMA_TOOLS_ZIP): $(RMA_TO_COPY)
 	$(hide) rm -rf $(PLATFORM_RMA_TOOLS_DIR)
 	$(hide) mkdir -p $(PLATFORM_RMA_TOOLS_DIR)
 	$(hide) $(ACP) -fp $(INTEL_PATH_BUILD)/generate_blpolicy_oemvars $(PLATFORM_RMA_TOOLS_DIR)/generate_blpolicy_oemvars.py
@@ -58,6 +59,8 @@ $(PLATFORM_RMA_TOOLS_CROSS_ZIP):
 	$(info "cross compilation is not available on this target")
 	touch $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 endif
+
+.PHONY: platform_rma_tools host_cross_platform_rma_tools
 platform_rma_tools: $(PLATFORM_RMA_TOOLS_ZIP)
 
 host_cross_platform_rma_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)

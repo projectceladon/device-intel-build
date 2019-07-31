@@ -62,7 +62,7 @@ import hashlib
 import subprocess
 import getopt
 
-verbose = False
+verbose = True
 # same than define by AOSP scripts.
 private_key_suffix = ".pk8"
 certificate_suffix = ".x509.pem"

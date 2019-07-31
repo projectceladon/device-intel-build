@@ -8,7 +8,7 @@ FACTORY_SCRIPTS_RADIO := $(if $(BOARD_RADIOIMAGE), --radio $(BOARD_RADIOIMAGE))
 
 $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 		$(INTEL_PATH_BUILD)/generate_factory_images \
-		$(PRODUCT_OUT)/bootloader \
+		$(PRODUCT_OUT)/bootloader.img \
 		$(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		$(BOARD_RADIOIMAGE) \
 		$(DISTTOOLS) $(SELINUX_DEPENDS) \
@@ -17,7 +17,7 @@ $(FACTORY_SCRIPTS_PACKAGE_TARGET): \
 	# Generate Package
 	$(hide) ./$(INTEL_PATH_BUILD)/generate_factory_images \
 		--product $(TARGET_PRODUCT) --release $(BUILD_ID) \
-		--bootloader $(PRODUCT_OUT)/bootloader \
+		--bootloader $(PRODUCT_OUT)/bootloader.img \
 		--update-archive $(INTERNAL_UPDATE_PACKAGE_TARGET) \
 		$(FACTORY_SCRIPTS_RADIO) \
 		--sleeptime 45 \
