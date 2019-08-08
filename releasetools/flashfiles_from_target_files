@@ -455,6 +455,16 @@ def main(argv):
             for fn, data in configs:
                 ifile = common.File(fn, data)
                 ifile.AddToZip(dest_zip)
+                
+            # Add EFI shell to flashfiles zip
+            efiShellBinaryPath = os.path.join("device","linaro","bootloader","edk2","ShellBinPkg","UefiShell","X64","Shell.efi")
+            archivedEfiFilePath = "EFI/BOOT/BOOTX64.EFI"
+            if os.path.isfile(efiShellBinaryPath):
+                print "Adding EFI shell to flashfiles..."
+                dest_zip.write(efiShellBinaryPath, archivedEfiFilePath)
+            else:
+                print "EFI shell binary not found, skipping..."
+                
     print "All done."
 
 if __name__ == '__main__':
