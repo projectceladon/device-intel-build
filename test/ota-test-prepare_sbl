@@ -1,4 +1,0 @@
-#!/bin/bash
-
-SCRIPT_PATH=`dirname $0`
-$SCRIPT_PATH/ota-test-prepare_xbl -i "$@"
