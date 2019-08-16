@@ -20,7 +20,7 @@ DUMPEXT2IMG := $(HOST_OUT_EXECUTABLES)/dumpext2img
 MCOPY := mcopy
 SESL := sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 CTESL := cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
-IASL := $(HOST_OUT_EXECUTABLES)/iasl
+IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
