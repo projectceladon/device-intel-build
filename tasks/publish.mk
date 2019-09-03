@@ -239,10 +239,17 @@ PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
 .PHONY: publish_grubinstaller
+ifeq ($(ENABLE_GRUB_INSTALLER),true)
+ifneq ($(TARGET_BUILD_VARIANT),user)
 publish_grubinstaller: publish_mkdir_dest $(PROJECT_CELADON-EFI)
 	echo compress $(PROJECT_CELADON-EFI) into $(PROJECT_CELADON-EFI).gz
 	gzip -f $(PROJECT_CELADON-EFI)
 	@$(ACP) $(PROJECT_CELADON-EFI).gz $(publish_dest)
+else
+publish_grubinstaller:
+	echo "Do not publish grub installer in user mode"
+endif
+endif # ENABLE_GRUB_INSTALLER
 
 .PHONY: publish
 publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
