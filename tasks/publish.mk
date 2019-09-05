@@ -194,7 +194,7 @@ endif # PUBLISH_CONF
 PUBLISH_CI_FILES := out/dist/fastboot out/dist/adb
 .PHONY: publish_ci
 ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), false)
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -207,7 +207,7 @@ publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 	@$(hide) mkdir -p $(publish_tool_destw)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_CROSS_ZIP) $(publish_tool_destw)
 else
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
