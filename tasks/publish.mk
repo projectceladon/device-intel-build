@@ -193,6 +193,12 @@ endif # PUBLISH_CONF
 
 PUBLISH_CI_FILES := out/dist/fastboot out/dist/adb
 .PHONY: publish_ci
+ifeq ($(ANDROID_AS_GUEST), true)
+publish_ci: aic
+	@echo Publish AIC docker images...
+	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+else # ANDROID_AS_GUEST
 ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), false)
 publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
@@ -212,6 +218,7 @@ publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_gru
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
 endif
+endif # ANDROID_AS_GUEST
 
 else # !PUBLISH_SDK
 # Unfortunately INTERNAL_SDK_TARGET is always defined, so its existence does
@@ -245,5 +252,12 @@ publish_grubinstaller: publish_mkdir_dest $(PROJECT_CELADON-EFI)
 	@$(ACP) $(PROJECT_CELADON-EFI).gz $(publish_dest)
 
 .PHONY: publish
+ifeq ($(ANDROID_AS_GUEST), true)
+publish: aic
+    @echo Publish AIC docker images...
+    $(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+    $(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+else # ANDROID_AS_GUEST
 publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
 	@$(ACP) out/dist/* $(publish_dest)
+endif # ANDROID_AS_GUEST
