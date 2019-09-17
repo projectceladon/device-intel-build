@@ -428,7 +428,7 @@ def main(argv):
     for zi in input_zip.infolist():
         if zi.filename == "RADIO/bootloader.zip":
             common.ZipWrite(output_zip, output_bz_file, zi.filename)
-        if zi.filename == "RADIO/esp.zip":
+        elif zi.filename == "RADIO/esp.zip":
             common.ZipWrite(output_zip, output_bz_file, zi.filename)
         elif zi.filename == "VENDOR/firmware/kernelflinger.efi":
             common.ZipWrite(output_zip, os.path.join(unpack_dir, "VENDOR", "firmware", "kernelflinger.efi"), zi.filename)
