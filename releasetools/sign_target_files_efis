@@ -359,7 +359,7 @@ def main(argv):
         common.Usage(__doc__)
         sys.exit(1)
 
-    output_zip = zipfile.ZipFile(args[1], "w")
+    output_zip = zipfile.ZipFile(args[1], "w", allowZip64=True)
 
     global unpack_dir
     unpack_dir = common.UnzipTemp(args[0])
