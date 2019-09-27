@@ -44,6 +44,7 @@ export FORCE_BUILD_TFPS=
 export HAS_VARIANTS=
 export PRODUCT_OUT=out/target/product/${DEVICENAME}
 export HAS_SUPER=
+export OPENSSL_CONF=${OPENSSL_CONF:-/etc/ssl/openssl.cnf}
 
 TOS_IMAGE_PARTITION_SIZE=10485760
 while getopts "qst:V:jlof" opt; do
