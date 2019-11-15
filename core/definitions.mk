@@ -75,7 +75,8 @@ TARGET_IAFW_GLOBAL_CFLAGS := -ggdb -O3 -fstack-protector-strong \
 	-Wno-unused-function \
 	-Wno-tautological-pointer-compare \
 	-Wformat -Wformat-security \
-	-D_FORTIFY_SOURCE=2
+	-D_FORTIFY_SOURCE=2 \
+	-Wa,--noexecstack
 
 TARGET_IAFW_GLOBAL_LDFLAGS := -nostdlib --no-undefined \
 	--fatal-warnings -Bsymbolic -znocombreloc -znoexecstack -zrelro -znow
