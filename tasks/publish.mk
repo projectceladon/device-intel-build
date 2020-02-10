@@ -199,6 +199,8 @@ publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifw
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
 	@$(hide) mkdir -p $(publish_tool_destl)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_ZIP) $(publish_tool_destl)
+	$(hide) cp -f $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(publish_dest)
+	$(hide) cp $(PRODUCT_OUT)/cic.deb $(publish_dest)
 
 
 .PHONY: publish_windows_tools
@@ -210,6 +212,8 @@ publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_ifw
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
+	$(hide) cp -f $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(publish_dest)
+	$(hide) cp $(PRODUCT_OUT)/cic.deb $(publish_dest)
 endif
 
 else # !PUBLISH_SDK
@@ -238,6 +242,13 @@ ifeq (,$(PUBLISH_GOALS))
 PUBLISH_GOALS := $(DEFAULT_GOAL)
 endif
 
+.PHONY: publish_cic
+publish_cic: aic
+	$(hide) cp -f $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(publish_dest)
+	$(hide) cp $(PRODUCT_OUT)/cic.deb $(publish_dest)
+
 .PHONY: publish
 publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image
 	@$(ACP) $(DIST_DIR)/* $(publish_dest)
+	$(hide) cp -f $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(publish_dest)
+	$(hide) cp $(PRODUCT_OUT)/cic.deb $(publish_dest)
