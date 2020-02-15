@@ -432,7 +432,7 @@ def main(argv):
             with open(os.path.join(fastff_dir,fn), 'w') as file:
                 file.write(data)
     else:
-        with zipfile.ZipFile(args[1], "w", zipfile.ZIP_DEFLATED) as dest_zip:
+        with zipfile.ZipFile(args[1], "w", allowZip64=True) as dest_zip:
             # If mega flashfile is enabled, create multi-variant version of PFT instructions
             if OPTIONS.unified_variants or OPTIONS.variants :
                 print "Adding variant specific configurations to ip..."
