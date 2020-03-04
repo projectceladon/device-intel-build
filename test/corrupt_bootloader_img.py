@@ -20,7 +20,7 @@ from sys import exit, stderr
 from argparse import ArgumentParser
 
 if sys.hexversion < 0x02070000:
-    print >> sys.stderr, "Python 2.7 or newer is required."
+    print("Python 2.7 or newer is required.", file=sys.stderr)
     sys.exit(1)
 
 sign_filename = "bootloader_corrupted_signature"
@@ -52,10 +52,10 @@ def corrupt_signature_section(out_f):
         u = s.unpack(fh.read(struct.calcsize(s.format)))
         data_len = u[3]
         data_off = u[4]
-        print('get fh data_len = %d  data_off = %x' % (data_len, data_off))
+        print(('get fh data_len = %d  data_off = %x' % (data_len, data_off)))
         unsigned_len = data_off + data_len + crc_len
         sign_off = ((unsigned_len + sign_len - 1) // sign_len) * sign_len
-        print('unsigned_len = %d  sign_off = %x' % (unsigned_len, sign_off))
+        print(('unsigned_len = %d  sign_off = %x' % (unsigned_len, sign_off)))
         fh.seek(osloader_offset + sign_off, 0)
         random_str = open('/dev/random').read(ran_sz)
         # print("get random string = %s" % random_str)
@@ -67,26 +67,26 @@ def main():
     parser.add_argument('filename', type=str, help='filename, e.g. bootloader_gr_mrb_b1')
     args = parser.parse_args()
 
-    print "entering corrupt process"
+    print("entering corrupt process")
     in_f = args.filename
     bootloader_path = os.path.dirname(os.path.abspath(args.filename))
     # corrupt data section
     out_f = os.path.join(bootloader_path, data_filename)
     shutil.copy2(in_f, out_f)
     corrupt_data_section(out_f)
-    print "bootloader corrupt data section done!"
+    print("bootloader corrupt data section done!")
     # corrupt signature section
     out_f = os.path.join(bootloader_path, sign_filename)
     shutil.copy2(in_f, out_f)
     corrupt_signature_section(out_f)
-    print "bootloader corrupt sign section done!"
+    print("bootloader corrupt sign section done!")
 
 if __name__ == '__main__':
     try:
         main()
-    except Exception, e:
-        print
-        print "   ERROR: %s" % (e,)
-        print
+    except Exception as e:
+        print()
+        print("   ERROR: %s" % (e,))
+        print()
         sys.exit(1)
 

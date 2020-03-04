@@ -136,12 +136,12 @@ def main():
     attributes.setComponentByName("target", "test")
     attributes.setComponentByName("length", 1024)
     data = der_encoder.encode(attributes)
-    print "attributes " + binascii.hexlify(data)
+    print("attributes " + binascii.hexlify(data))
 
     ident = x509.AlgorithmIdentifier()
     ident.setComponentByName("algorithm", sha256WithRSAEncryptionOID)
     data = der_encoder.encode(ident)
-    print "ident " + binascii.hexlify(data)
+    print("ident " + binascii.hexlify(data))
 
     sig = AndroidVerifiedBootSignature()
     sig.setComponentByName('formatVersion', 1)
@@ -149,7 +149,7 @@ def main():
     sig.setComponentByName('attributes', attributes)
     sig.setComponentByName('signature', univ.OctetString('abcdef0123456789'))
     data = der_encoder.encode(sig)
-    print "sig " + binascii.hexlify(data)
+    print("sig " + binascii.hexlify(data))
 
     material = pkcs1.RSAPublicKey()
     material.setComponentByName('modulus', 'abc123')

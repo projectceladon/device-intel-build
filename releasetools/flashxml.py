@@ -7,7 +7,7 @@ from optparse import OptionParser
 import xml.etree.ElementTree as etree
 from xml.dom import minidom
 import tempfile
-import StringIO
+import io
 
 # main Class to generate xml file from json configuration file
 class FlashFileXml:
@@ -36,7 +36,8 @@ class FlashFileXml:
 
         self.flist.append(filename)
 
-    def add_command(self, command, description, (timeout, retry, mandatory)):
+    def add_command(self, command, description, timeout_retry_mandatory):
+        (timeout, retry, mandatory) = timeout_retry_mandatory
         mandatory = {True: "1", False: "0"}[mandatory]
         cmd = etree.SubElement(self.xml, 'command')
         self.add_sub(cmd, 'string', command)
@@ -69,7 +70,7 @@ class FlashFileXml:
 
     def finish(self):
         tree = etree.ElementTree(self.xml)
-        tf = StringIO.StringIO()
+        tf = io.StringIO()
         tree.write(tf, xml_declaration=True, encoding="utf-8")
         data = tf.getvalue()
         tf.close()
@@ -84,7 +85,7 @@ class FlashFileJson:
 
         self.configurations = config
         out_cfg = copy.deepcopy(config)
-        for cfg_name, cfg in out_cfg.items():
+        for cfg_name, cfg in list(out_cfg.items()):
             cfg.pop('commands')
             if 'subgroup' in cfg:
                 cfg.pop('subgroup')
@@ -103,7 +104,7 @@ class FlashFileJson:
     def add_command(self, new, cmd):
 
         new['restrict'] = []
-        for cfg_name, cfg in self.configurations.items():
+        for cfg_name, cfg in list(self.configurations.items()):
             if cfg['commands'] != self.cmd_grp:
                 continue
             if not filter_command(cmd, None, None, cfg.get('subgroup', 'default')):
@@ -213,7 +214,7 @@ def parse_config(conf, variant, platform):
     files = []
 
     for c in conf['config']:
-        print "Generating", c['filename']
+        print("Generating", c['filename'])
 
         # Special case for json, because it can have multiple configurations
         if c['filename'][-5:] == '.json':
@@ -223,7 +224,7 @@ def parse_config(conf, variant, platform):
             if 'groups' in conf:
                 f.add_groups(conf['groups'])
             results.append((c['filename'], f.finish()))
-            files = [[src, file] for file, src in f.files().items()]
+            files = [[src, file] for file, src in list(f.files().items())]
             continue
 
         if c['filename'][-4:] == '.xml':

@@ -4,6 +4,7 @@ import sys
 import json
 import iniparser
 
+from sys import version_info
 
 # main Class to generate json file from ini configuration file
 class FlashFileJson:
@@ -110,7 +111,7 @@ class FlashFileJson:
 
     def add_global_cmd_option(self, cmd):
         if cmd['tool'] in self.gloption:
-            cmd = dict(self.gloption[cmd['tool']].items() + cmd.items())
+            cmd = dict(list(self.gloption[cmd['tool']].items()) + list(cmd.items()))
         return cmd
 
     def add_global_cmd_precondition(self, cmd, cmd_set):
@@ -175,9 +176,9 @@ class FlashFileJson:
 
     def clean_config_parameters(self):
         for config in self.flash['configurations']:
-            if self.flash['configurations'][config].has_key('parameters'):
-                for param in self.flash['configurations'][config]['parameters'].keys():
-                    if not self.flash['parameters'].has_key(param):
+            if 'parameters' in self.flash['configurations'][config]:
+                for param in list(self.flash['configurations'][config]['parameters'].keys()):
+                    if param not in self.flash['parameters']:
                         del self.flash['configurations'][config]['parameters'][param]
 
     def parse(self):
@@ -219,8 +220,12 @@ class FlashFileJson:
 
     def merge_jsons(self, j1, j2):
         for key in set(j1.keys()) & set(j2.keys()):
-            if type(j2[key]) == unicode:
-                j2[key] = j2[key].encode('utf-8')
+            if version_info < (3, 0, 1):
+                if type(j2[key]) == unicode:
+                    j2[key] = j2[key].encode('utf-8')
+            else:
+                if type(j2[key]) == str:
+                    j2[key] = j2[key].encode('utf-8')
             if type(j1[key]) != type(j2[key]):
                 raise TypeError("Can't merge keys %s of different type (%s,%s)"%(key,type(j1[key]),type(j2[key])))
             if type(j1[key]) == list:
@@ -308,8 +313,8 @@ def parse_config(ips, variant, platform):
             elif filename.endswith('.cmd'):
                 f = FlashFileCmd(section, ip, variant)
             else:
-                print "Warning, don't know how to generate", filename
-                print "Please fix flashfiles.ini for this target"
+                print("Warning, don't know how to generate", filename)
+                print("Please fix flashfiles.ini for this target")
                 continue
 
             f.parse()
@@ -323,7 +328,7 @@ def parse_config(ips, variant, platform):
             files.extend(f.files())
 
     results_list = []
-    for k,v in results.iteritems():
+    for k,v in results.items():
         results_list.append((k,v))
     flist = [f.rsplit(':', 1) for f in set(files)]
     return results_list, flist
@@ -331,8 +336,8 @@ def parse_config(ips, variant, platform):
 
 def main():
     if len(sys.argv) != 4:
-        print 'Usage : ', sys.argv[0], 'pft.ini target variant'
-        print '    write json to stdout'
+        print('Usage : ', sys.argv[0], 'pft.ini target variant')
+        print('    write json to stdout')
         sys.exit(1)
 
     file = sys.argv[1]
@@ -345,9 +350,9 @@ def main():
 
     results, files = parse_config([ip], variant, target)
     for fname, content in results:
-        print fname
-        print content
-    print files
+        print(fname)
+        print(content)
+    print(files)
 
 if __name__ == "__main__":
     main()

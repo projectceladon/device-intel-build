@@ -87,7 +87,7 @@ class IniParser:
         return copy
 
     def options(self, section):
-        return self.sec[section].keys()
+        return list(self.sec[section].keys())
 
     def has_option(self, section, option):
         if section not in self.sec:
