@@ -75,7 +75,7 @@ class ReplaceKey(RunCmd, HandleFile):
             if sectionName != name:
                 continue
             return (sectionOffset, sectionSize)
-        print "Cannot find oemkey"
+        print("Cannot find oemkey")
         exit()
 
     def PemCertToDer(self, pem_cert_path):
@@ -89,7 +89,7 @@ class ReplaceKey(RunCmd, HandleFile):
 
     def ZeroPad(self, data, size):
         if len(data) > size:
-            print "Binary is already larger than pad size"
+            print("Binary is already larger than pad size")
             exit()
         return data + (b'\x00' * (size - len(data)))
 
@@ -100,17 +100,17 @@ class UpdateEsp(RunCmd, HandleFile):
         self.key2pem = "NULL"
         # check parameter
         if not os.path.exists(dir):
-            print "Esp partition folder does not exist"
+            print("Esp partition folder does not exist")
             exit()
         if not os.path.exists(efiFile):
-            print "Efi file does not exist"
+            print("Efi file does not exist")
             exit()
         if not os.path.exists(tos):
-            print "Tos.img does not exist"
+            print("Tos.img does not exist")
             exit()
         for key in keyPairs:
             if not os.path.exists(key):
-                print "The ",key,"does not exist"
+                print("The ",key,"does not exist")
                 exit() 
 
         self.dir = dir
@@ -151,17 +151,17 @@ class UpdateEsp(RunCmd, HandleFile):
         self.Run(["openssl", "pkcs8", "-inform", "DER", "-outform", "PEM", "-nocrypt", "-in", key, "-out", pem], None)
 
     def SignFiles(self):
-        print "SignFiles: "
+        print("SignFiles: ")
         for file in self.signFiles:
             self.Run(["sbsign", "--key", self.key1pem, "--cert", self.key1cert, "--output", self.dir+file+".signed", self.dir+file], None)
             os.remove(self.dir+file)
             self.MoveFile(self.dir+file+".signed", self.dir+file)
-            print "         ", file
+            print("         ", file)
 
     def CreateVbmeta(self):
         iasInputFiles = []
         fileno = 0
-        print "HashSumFiles:"
+        print("HashSumFiles:")
         for hashFile in self.hashSumFiles:
             data = self.Read(self.dir+hashFile)
             hashVal = hashlib.sha256(data) 
@@ -170,9 +170,9 @@ class UpdateEsp(RunCmd, HandleFile):
             iasInputFiles.append(str(fileno)+".path")
             iasInputFiles.append(str(fileno)+".sha256")
             fileno += 1
-            print "             ", hashFile 
+            print("             ", hashFile)
         self.Run(["iasimage", "create", "-i", "0x40300", "-d", self.key2pem ] + iasInputFiles+ ["-o", self.dir+"EFI/BOOT/vbmeta.ias", "--page-align=2"], None)
-        print "Create vbmeta.ias successful"
+        print("Create vbmeta.ias successful")
         for f in iasInputFiles:
             os.remove(f) 
     
@@ -195,7 +195,7 @@ class UpdateEsp(RunCmd, HandleFile):
             loaderInfo = loadFile.readline()
         loadFile.close()
         if "default" not in loaderInfo:
-            print "Missing default os.conf in loader.conf"
+            print("Missing default os.conf in loader.conf")
 
         for file in entryFilesList:
             (name, suffix) = os.path.splitext(file)
@@ -214,16 +214,16 @@ class UpdateEsp(RunCmd, HandleFile):
 
 def main(esp, efi, tos, keyList):
     if not os.path.exists(esp):
-        print "Esp partition folder does not exist"
+        print("Esp partition folder does not exist")
         exit()
     out = "efi_new_key/"
     if os.path.exists(out):
-        print "The efi_new_key dir already exists, please delete it"
+        print("The efi_new_key dir already exists, please delete it")
         exit()
     shutil.copytree(esp, out)
     rep = ReplaceKey(efi, keyList[3])
     UpdateEsp(out, rep.repKeyEfi, tos, keyList)
-    print "The updated Efi partition is stored in efi_new_key dir"
+    print("The updated Efi partition is stored in efi_new_key dir")
 
 def Note():
     print ("\

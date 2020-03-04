@@ -45,7 +45,7 @@ import struct
 import json
 
 if sys.hexversion < 0x02040000:
-    print >> sys.stderr, "Python 2.4 or newer is required."
+    print("Python 2.4 or newer is required.", file=sys.stderr)
     sys.exit(1)
 
 # Android Release Tools
@@ -82,7 +82,7 @@ def get_section(data, name):
         section_name = data[str_section_offset + section_name_idx:str_section_offset + section_name_idx + len(name)]
         if section_name != name:
             continue
-        print "Found", section_name, "at offset", hex(section_offset)
+        print("Found", section_name, "at offset", hex(section_offset))
         return (section_offset, section_size)
 
     raise common.ExternalError("Section not found")
@@ -125,7 +125,7 @@ def process_fastboot(in_f, out_f):
         fc = open(fn, "wb")
         data = fh.read(comp_len)
         if i == 1:
-            print "Replacing .oemkeys inside abl binary"
+            print("Replacing .oemkeys inside abl binary")
             password = None
             data = replace_raw_keys(data, OPTIONS.avb_key, password)
         fc.write(data)
@@ -211,24 +211,24 @@ def main(argv):
 
     output_fastboot_fn = args[1]
 
-    print "Extracting the provdata.zip"
+    print("Extracting the provdata.zip")
     prov_file = "provdata_"+OPTIONS.variant+".zip"
     unpack_dir = common.UnzipTemp(args[0])
     input_zip = zipfile.ZipFile(args[0], "r")
     input_provzip = zipfile.ZipFile(os.path.join(unpack_dir,
                 "RADIO", prov_file), "r")
 
-    print "Parsing build.prop for target_product"
+    print("Parsing build.prop for target_product")
     d = {}
     try:
         with open(os.path.join(unpack_dir, "SYSTEM", "build.prop")) as f:
             d = common.LoadDictionaryFromLines(f.read().split("\n"))
-    except IOError, e:
+    except IOError as e:
        if e.errno == errno.ENOENT:
           raise KeyError(f)
     OPTIONS.target_product = d["ro.product.system.name"]
 
-    print "Processing private keys"
+    print("Processing private keys")
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
     passwords = common.GetKeyPasswords(OPTIONS.all_keys)
 
@@ -236,15 +236,15 @@ def main(argv):
     process_provzip(input_provzip, output_fastboot_fn)
 
     common.ZipClose(input_zip)
-    print "Extract done."
+    print("Extract done.")
 
 if __name__ == '__main__':
     try:
         main(sys.argv[1:])
-    except common.ExternalError, e:
-        print
-        print "   ERROR: %s" % (e,)
-        print
+    except common.ExternalError as e:
+        print()
+        print("   ERROR: %s" % (e,))
+        print()
         sys.exit(1)
     finally:
         common.Cleanup()

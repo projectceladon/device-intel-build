@@ -22,7 +22,7 @@ def getsize(filename):
     return st.st_size
 
 def usage():
-    print "usage: {0} <file> <offset> <len>".format(sys.argv[0])
+    print("usage: {0} <file> <offset> <len>".format(sys.argv[0]))
 
 def parse_fec_verity_data(b_file,b_offset,b_len):
     """
@@ -59,9 +59,9 @@ if __name__ == "__main__":
     if len(sys.argv) == 4:
         res = parse_fec_verity_data(sys.argv[1], sys.argv[2],sys.argv[3])
         if res[0]:
-            print "1 {0} {1} {2} {3}".format(*res[1:])
+            print("1 {0} {1} {2} {3}".format(*res[1:]))
         else:
-            print "0 {0} {1} {2} {3}".format(*res[1:])
+            print("0 {0} {1} {2} {3}".format(*res[1:]))
     else:
         usage()
         exit(-1)
