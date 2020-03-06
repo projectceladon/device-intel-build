@@ -88,7 +88,7 @@ def get_RSA_from_key_blob(data):
     try:
         return Crypto.PublicKey.RSA.importKey(data)
     except (ValueError, TypeError, IndexError):
-        print '** Error: key data not recognized'
+        print('** Error: key data not recognized')
         exit(1)
 
 def get_RSA_from_PEM(data):
@@ -98,7 +98,7 @@ def get_RSA_from_PEM(data):
     elif data.startswith('-----BEGIN PRIVATE KEY-----') or data.startswith('-----BEGIN PUBLIC KEY-----'):
         return get_RSA_from_key_blob(data)
     else:
-        print '** Data is not a PEM object'
+        print('** Data is not a PEM object')
         return None
 
 def hex_string(byte_str):
@@ -111,50 +111,50 @@ def try_verify_all_combinations(what_str, verbose, key, data, sig):
     sig_reverse = sig[::-1]
 
     if verbose:
-        print "{} details".format(what_str)
-        print "  {} ".format(what_str), hex_string(sig)
+        print("{} details".format(what_str))
+        print("  {} ".format(what_str), hex_string(sig))
 
         try:
             insides = key.encrypt(sig, 0)
-            print "  {} decrypted ".format(what_str), hex_string(insides[0])
+            print("  {} decrypted ".format(what_str), hex_string(insides[0]))
         except:
-            print "  {} does not decrypt".format(what_str)
+            print("  {} does not decrypt".format(what_str))
 
         try:
             insides = key.encrypt(sig_reverse, 0)
-            print "  {} reversed decrypted ".format(what_str), hex_string(insides[0])
+            print("  {} reversed decrypted ".format(what_str), hex_string(insides[0]))
         except:
-            print "  {} reversed does not decrypt".format(what_str)
+            print("  {} reversed does not decrypt".format(what_str))
 
-        print "  std SHA256 ", digest256.hexdigest()
-        print "  goofy SHA256 ", goofy_digest256.hexdigest()
+        print("  std SHA256 ", digest256.hexdigest())
+        print("  goofy SHA256 ", goofy_digest256.hexdigest())
 
     verified = False
     try:
         if Crypto.Signature.PKCS1_v1_5.new(key).verify(digest256, sig):
             verified = True
-            print "==> verified {} std SHA256".format(what_str)
+            print("==> verified {} std SHA256".format(what_str))
     except:
         pass
 
     try:
         if not verified and Crypto.Signature.PKCS1_v1_5.new(key).verify(digest256, sig_reverse):
             verified = True
-            print "==> verified {} reversed std SHA256".format(what_str)
+            print("==> verified {} reversed std SHA256".format(what_str))
     except:
         pass
 
     try:
         if not verified and Crypto.Signature.PKCS1_v1_5.new(key).verify(goofy_digest256, sig):
             verified = True
-            print "==> verified {} goofy SHA256".format(what_str)
+            print("==> verified {} goofy SHA256".format(what_str))
     except:
         pass
 
     try:
         if not verified and Crypto.Signature.PKCS1_v1_5.new(key).verify(goofy_digest256, sig_reverse):
             verified = True
-            print "==> verified {} reversed goofy SHA256".format(what_str)
+            print("==> verified {} reversed goofy SHA256".format(what_str))
     except:
         pass
 
@@ -186,7 +186,7 @@ def main(argv):
     with open(args.secpack) as secpack_file:
         secpack = secpack_file.read()
         if len(secpack) < MIN_SECPACK_LEN:
-            print "** SECPACK is too short"
+            print("** SECPACK is too short")
             exit(1)
 
     key_parts = struct.unpack_from(SECPACK_PACK_FMT, secpack, 0)
@@ -207,22 +207,22 @@ def main(argv):
         payload_hash = Crypto.Hash.SHA256.new(payload)
         goofy_payload_hash = GoofyHash(payload_hash)
         if args.verbose:
-            print "secpack payload hash ", hex_string(digest)
-            print "payload std hash ", payload_hash.hexdigest()
-            print "payload goofy hash ", goofy_payload_hash.hexdigest()
+            print("secpack payload hash ", hex_string(digest))
+            print("payload std hash ", payload_hash.hexdigest())
+            print("payload goofy hash ", goofy_payload_hash.hexdigest())
 
         verified = False
         if payload_hash.digest() == digest:
             verified = True
-            print "==> payload std SHA256 hash matches secpack"
+            print("==> payload std SHA256 hash matches secpack")
         else:
             if goofy_payload_hash.digest() == digest:
                 verified = True
-                print "==> payload goofy SHA256 hash matches secpack"
+                print("==> payload goofy SHA256 hash matches secpack")
 
     if args.psi and args.payload is not None:
         if args.gold_key is None:
-            print "*** must give --gold-key to verify PSI"
+            print("*** must give --gold-key to verify PSI")
             exit(1)
 
         with open(args.gold_key, "rb") as key_file:

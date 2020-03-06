@@ -69,11 +69,11 @@ class _FLS:
         if not self._preserve_tmp:
             shutil.rmtree(self._tmp_dir)
         else:
-            print "Leaving temp dir {} behind".format(self._tmp_dir)
+            print("Leaving temp dir {} behind".format(self._tmp_dir))
 
     def __run_and_wait(self, args, **kwargs):
         if self._verbose:
-            print "  running: ", " ".join(args)
+            print("  running: ", " ".join(args))
         subprocess.check_call(args, **kwargs)
 
     def _unpack(self):
@@ -195,7 +195,7 @@ class _SECPACK:
 
     def __del__(self):
         if self._dirty:
-            print "** Warning: dirty _SECPACK deleted without save"
+            print("** Warning: dirty _SECPACK deleted without save")
 
     def __repack(self):
         self._content = struct.pack(_SECPACK.SECPACK_PACK_FMT, *tuple(self._parts))
@@ -351,6 +351,6 @@ class GoofyHash(Crypto.Hash.hashalgo.HashAlgo):
 
 def xor16(content):
     data = [0, 0]
-    for i in xrange(0, len(content)):
+    for i in range(0, len(content)):
         data[i % 2] ^= ord(content[i])
     return (data[1] << 8) + data[0]

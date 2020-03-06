@@ -38,7 +38,7 @@ options = argparse.Namespace(verbose =False)
 
 def run_and_wait(args, **kwargs):
     if options.verbose:
-        print "  running: ", " ".join(args)
+        print("  running: ", " ".join(args))
     subprocess.check_call(args, **kwargs)
 
 
@@ -108,10 +108,10 @@ def main(argv):
     parser.parse_args(argv, namespace=options)
 
     if not options.psi and not options.secpack:
-        print "*** Error: must specify at least one of --psi and --secpack"
+        print("*** Error: must specify at least one of --psi and --secpack")
         exit(-1)
     if options.psi and not options.psi_signed_len:
-        print "*** Error: must specify --psi-signed-len with --psi"
+        print("*** Error: must specify --psi-signed-len with --psi")
         exit(-1)
 
     the_fls = fls.new(options.src, options.bswap_secpack_hash, options.verbose, options.debug_preserve_tmp)
@@ -119,7 +119,7 @@ def main(argv):
     if options.psi:
         gold_key_path = options.psi
         if not os.path.isfile(gold_key_path):
-            print "*** Error: {} (GOLD_KEY) does not exist.".format(options.psi)
+            print("*** Error: {} (GOLD_KEY) does not exist.".format(options.psi))
             exit(-1)
 
         the_psi = the_fls.psi(int(options.psi_signed_len, 0))
@@ -132,7 +132,7 @@ def main(argv):
     if options.secpack:
         master_key_path = options.secpack
         if not os.path.isfile(master_key_path):
-            print "*** Error: {} (MASTER_KEY) does not exist.".format(options.secpack)
+            print("*** Error: {} (MASTER_KEY) does not exist.".format(options.secpack))
             exit(-1)
 
         the_secpack = the_fls.secpack()

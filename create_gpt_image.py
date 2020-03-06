@@ -32,7 +32,10 @@ from uuid import UUID, uuid4
 from binascii import crc32
 from re import compile as re_compile
 from collections import namedtuple
-from ConfigParser import SafeConfigParser, ParsingError, NoOptionError
+if version_info < (3, 0, 1):
+    from ConfigParser import SafeConfigParser, ParsingError, NoOptionError
+else:
+    from configparser import SafeConfigParser, ParsingError, NoOptionError
 from math import floor, log
 
 
@@ -343,7 +346,7 @@ class PartTableInfos(list):
         self.raw = img_file.read(length * entry_size)
 
         # reads each entry of partition table
-        for i in xrange(length):
+        for i in range(length):
             entry = TableEntryInfos(i, entry_size)
             entry.read(self.raw)
             self.append(entry)

@@ -34,7 +34,7 @@ import Crypto.Util
 SF_PUBKEY_PACK_FMT = '<III256s256s'
 sf_pubkey_struct = struct.Struct(SF_PUBKEY_PACK_FMT)
 PublicKeyStruct = collections.namedtuple('PublicKeyStruct', 'key_type key_length exponent modulus montgom')
-SF_VALID_PUBLIC_EXPONENTS = [0x010001L, 3L]
+SF_VALID_PUBLIC_EXPONENTS = [0x010001, 3]
 
 SF_KEYTYPE_PRODUCTION   = 0
 SF_KEYTYPE_DEVELOPMENT  = 1
@@ -86,7 +86,7 @@ def key_struct_to_RSA(key_parts):
                             (Crypto.Util.number.bytes_to_long(key_parts.modulus[::-1]),
                              key_parts.exponent))
         except ValueError:
-            print '** Error: public key data invalid!'
+            print('** Error: public key data invalid!')
             exit(1)
 
     else:
@@ -101,11 +101,11 @@ def key_struct_to_RSA(key_parts):
             except ValueError:
                 pass
         if key is None:
-            print '** Error: None of the valid public exponents create a valid key'
+            print('** Error: None of the valid public exponents create a valid key')
             exit(1)
 
     if key.e < 0x010001:
-        print '** Warning: public key has weak exponent!'
+        print('** Warning: public key has weak exponent!')
 
     return key
 
@@ -153,7 +153,7 @@ def get_RSA_from_key_blob(data):
     try:
         return Crypto.PublicKey.RSA.importKey(data)
     except (ValueError, TypeError, IndexError):
-        print '** Error: key data not recognized'
+        print('** Error: key data not recognized')
         exit(1)
 
 def get_RSA_from_PEM(data):
@@ -163,12 +163,12 @@ def get_RSA_from_PEM(data):
     elif data.startswith('-----BEGIN PRIVATE KEY-----') or data.startswith('-----BEGIN PUBLIC KEY-----'):
         return get_RSA_from_key_blob(data)
     else:
-        print '** Data is not a PEM object'
+        print('** Data is not a PEM object')
         return None
 
 def get_sofia_public_key(key, sf_key_type):
     # compute the montgomery factor
-    R = (1L << (key.size() + 1))
+    R = (1 << (key.size() + 1))
     montgomery_factor = (R ** 2) % key.n
 
     if sf_key_type is None:
@@ -205,7 +205,7 @@ def convert_std2sf(args):
     elif (data_type == DATATYPE_DER_CERT_PUBLIC):
         key = get_RSA_from_x509(src_data)
     else:
-        print "** Error: don't know how to parse input data"
+        print("** Error: don't know how to parse input data")
         exit(1)
 
     # export Xpub.key
@@ -220,10 +220,10 @@ def convert_sf2std(args):
 
     # try to guess the type based on binary length
     if len(src_data) == sf_privkey_struct.size:
-        print 'source is private key'
+        print('source is private key')
         key_parts = PrivateKeyStruct._make(sf_privkey_struct.unpack(src_data))
         if key_parts.key_marker != SF_PRIVKEY_KEY_MARKER:
-            print '**** Private key magic number is wrong!'
+            print('**** Private key magic number is wrong!')
             exit(2)
 
         # try each valid public exponent until we find one that works
@@ -234,9 +234,9 @@ def convert_sf2std(args):
         sig_scheme = Crypto.Signature.PKCS1_v1_5.new(key)
         signature = sig_scheme.sign(digest)
         if sig_scheme.verify(digest, signature):
-            print 'key signs and verifies'
+            print('key signs and verifies')
         else:
-            print 'key does not work!'
+            print('key does not work!')
 
         # export PK8 blob
         with open(args.dest + ".pk8", "wb") as privkey_file:
@@ -247,7 +247,7 @@ def convert_sf2std(args):
             pubkey_file.write(key.publickey().exportKey(format='PEM', pkcs=1))
 
     elif len(src_data) == sf_pubkey_struct.size:
-        print 'source is public key'
+        print('source is public key')
         key_parts = PublicKeyStruct._make(sf_pubkey_struct.parse(src_data))
 
         key = key_struct_to_RSA(key_parts)
@@ -256,7 +256,7 @@ def convert_sf2std(args):
             pubkey_file.write(key.exportKey(format='PEM', pkcs=1))
 
     else:
-        print "source doesn't seem to be a key"
+        print("source doesn't seem to be a key")
         exit(1)
 
 def main(argv):
