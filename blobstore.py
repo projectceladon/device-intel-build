@@ -92,6 +92,8 @@ import sys
 import os
 import struct
 
+from sys import version_info
+
 BLOB_KEY_LENGTH = 64
 MAGIC = "BLOBSTOR"
 VERSION = 1
@@ -119,7 +121,10 @@ def hash_blob_key(key, btype, sz):
 class MetaBlock:
 
     def __init__(self, key, btype, mb_offset, data_offset, data_size):
-        self.key = unicode(key).encode('utf-8')
+        if version_info < (3, 0, 1):
+            self.key = unicode(key).encode('utf-8')
+        else:
+            self.key = str(key).encode('utf-8')
         self.btype = btype
         self.next_offset = 0
         self.data_offset = data_offset
@@ -184,7 +189,7 @@ class BlobStore:
         # Also determine the total size of all the blobs. The blobs need to
         # be serialized in the same order they are in datalist.
         total_dsize = 0
-        for k, path in self.items.iteritems():
+        for k, path in self.items.items():
             key, btype = k
             hashval = hash_blob_key(key, btype, hash_sz)
             dsize = os.stat(path).st_size
@@ -222,7 +227,7 @@ class BlobStore:
         # Write the hash table: create an empty array, populate nonzero entries,
         # serialize it
         hlist = [0 for i in range(hash_sz)]
-        for index, buckets in mbs.iteritems():
+        for index, buckets in mbs.items():
             hlist[index] = buckets[0].mb_offset
 
         for offset in hlist:

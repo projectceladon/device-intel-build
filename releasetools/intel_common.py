@@ -30,7 +30,7 @@ import json
 import zipfile
 import re
 import random
-from cStringIO import StringIO
+from io import StringIO
 
 sys.path.append("build/tools/releasetools")
 import common
@@ -42,7 +42,7 @@ def load_device_mapping(path):
         mod = imp.load_module("device_mapping", open(path, "U"), path,
                               (".py", "U", imp.PY_SOURCE))
     except ImportError:
-        print "Device mapping not found"
+        print("Device mapping not found")
         return None
 
     return mod.dmap
@@ -165,12 +165,12 @@ def ComputeBinOrImgPatches(source_tfp_dir, target_tfp_dir, filename=None, varian
     output_files = None
 
     if filename is None:
-        print "Error input, no filename "
+        print("Error input, no filename ")
         return [None, None, None]
 
     source_loader_filepath = os.path.join(source_tfp_dir, "RADIO", filename)
     if not os.path.exists(source_loader_filepath):
-        print "Source:Can't find ", source_loader_filepath
+        print("Source:Can't find ", source_loader_filepath)
         return [None, None, None]
     source_loader_file = open(source_loader_filepath)
     source_loader_data = source_loader_file.read()
@@ -178,7 +178,7 @@ def ComputeBinOrImgPatches(source_tfp_dir, target_tfp_dir, filename=None, varian
 
     target_loader_filepath = os.path.join(target_tfp_dir, "RADIO", filename)
     if not os.path.exists(target_loader_filepath):
-        print "Target Can't find ", target_loader_filepath
+        print("Target Can't find ", target_loader_filepath)
         return [None, None, None]
     target_loader_file = open(target_loader_filepath)
     target_loader_data = target_loader_file.read()
@@ -194,7 +194,7 @@ def ComputeBinOrImgPatches(source_tfp_dir, target_tfp_dir, filename=None, varian
     # If the patch size is almost as big as the actual file
     # the image will be included in the OTA verbatim.
     if d is None or len(d) > tf.size * 0.95:
-        print filename, "update will be included verbatim"
+        print(filename, "update will be included verbatim")
         verbatim = True
     else:
         patch_list = (tf,sf)
@@ -230,7 +230,7 @@ def ComputeFWUpdatePatches(source_tfp_dir, target_tfp_dir, variant=None,
     # If the patch size is almost as big as the actual file
     # the fwu_image will be included in the OTA verbatim.
     if d is None or len(d) > tf.size * 0.95:
-        print "Firmware update image will be included verbatim"
+        print("Firmware update image will be included verbatim")
         verbatim = True
     else:
         patch_list = (tf,sf)
@@ -351,14 +351,14 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
             extra_files.append((cap_path, "capsules/current.fv"))
             extra_files.append((cap_path, "BIOSUPDATE.fv"))
         else:
-            print "No capsule.fv found in provdata_" + variant + ".zip"
+            print("No capsule.fv found in provdata_" + variant + ".zip")
         base_bootloader = os.path.join(provdata, "BOOTLOADER")
         if os.path.exists(base_bootloader):
             for root, dirs, files in os.walk(base_bootloader):
                 for name in files:
                     fullpath = os.path.join(root, name)
                     relpath = os.path.relpath(fullpath, base_bootloader)
-                    print "Adding extra bootloader file", relpath
+                    print("Adding extra bootloader file", relpath)
                     extra_files.append((fullpath, relpath))
 
     if not platform_efi:
@@ -422,12 +422,12 @@ def GetBootloaderImageFromOut(product_out, intermediate_dir, filename, autosize=
 
     fastboot = os.path.join(product_out, "fastboot.img")
     if os.path.exists(fastboot):
-        print "add fastboot.img to bootloader"
+        print("add fastboot.img to bootloader")
         extra_files.append((fastboot, "fastboot.img"))
 
     tdos = os.path.join(product_out, "tdos.img")
     if os.path.exists(tdos):
-        print "add tdos.img to bootloader"
+        print("add tdos.img to bootloader")
         extra_files.append((tdos, "tdos.img"))
 
     info_dir = os.path.join(intermediate_dir, "../")
@@ -486,7 +486,7 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, block_size
     try:
         p = common.Run(cmd)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd)))
         raise exc
     p.wait()
     assert p.returncode == 0, "mkdosfs failed"
@@ -502,15 +502,15 @@ def GetTdosImage(unpack_dir, info_dict=None):
 
     prebuilt_path = os.path.join(unpack_dir, "RADIO", "tdos.img")
     if (os.path.exists(prebuilt_path)):
-        print "using prebuilt tdos.img"
+        print("using prebuilt tdos.img")
         return common.File.FromLocalFile("tdos.img", prebuilt_path)
 
     ramdisk_path = os.path.join(unpack_dir, "RADIO", "ramdisk-tdos.img")
     if not os.path.exists(ramdisk_path):
-        print "no TDOS ramdisk found"
+        print("no TDOS ramdisk found")
         return None
 
-    print "building TDOS image from target_files..."
+    print("building TDOS image from target_files...")
     ramdisk_img = tempfile.NamedTemporaryFile()
     img = tempfile.NamedTemporaryFile()
 
@@ -539,7 +539,7 @@ def GetTdosImage(unpack_dir, info_dict=None):
     try:
         p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd)))
         raise exc
     p.communicate()
     assert p.returncode == 0, "mkbootimg of fastboot image failed"
@@ -554,7 +554,7 @@ def GetTdosImage(unpack_dir, info_dict=None):
             try:
                 p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             except Exception as exc:
-                    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+                    print("Error: Unable to execute command: {}".format(' '.join(cmd)))
                     raise exc
             p.communicate()
             assert p.returncode == 0, "boot signing of tdos image failed"
@@ -577,15 +577,15 @@ def GetFastbootImage(unpack_dir, info_dict=None):
 
     prebuilt_path = os.path.join(unpack_dir, "RADIO", "fastboot.img")
     if (os.path.exists(prebuilt_path)):
-        print "using prebuilt fastboot.img"
+        print("using prebuilt fastboot.img")
         return common.File.FromLocalFile("fastboot.img", prebuilt_path)
 
     ramdisk_path = os.path.join(unpack_dir, "RADIO", "ufb-ramdisk.zip")
     if not os.path.exists(ramdisk_path):
-        print "no user fastboot image found, assuming efi fastboot"
+        print("no user fastboot image found, assuming efi fastboot")
         return None
 
-    print "building Fastboot image from target_files..."
+    print("building Fastboot image from target_files...")
     ramdisk_img = tempfile.NamedTemporaryFile()
     img = tempfile.NamedTemporaryFile()
 
@@ -596,7 +596,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     try:
         p1 = common.Run(cmd1, stdout=subprocess.PIPE)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd1))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd1)))
         shutil.rmtree(ramdisk_tmp)
         raise exc
 
@@ -605,7 +605,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         p2 = common.Run(
             cmd2, stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd2))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd2)))
         shutil.rmtree(ramdisk_tmp)
         raise exc
 
@@ -640,7 +640,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     try:
         p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd)))
         raise exc
     p.communicate()
     assert p.returncode == 0, "mkbootimg of fastboot image failed"
@@ -655,7 +655,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
             try:
                 p = common.Run(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
             except Exception as exc:
-                    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+                    print("Error: Unable to execute command: {}".format(' '.join(cmd)))
                     raise exc
             p.communicate()
             assert p.returncode == 0, "boot signing of fastboot image failed"
@@ -675,7 +675,7 @@ def PutFatFile(fat_img, in_path, out_path):
     try:
         p = common.Run(cmd)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd)))
         raise exc
     p.wait()
     assert p.returncode == 0, "couldn't insert %s into FAT image" % (in_path,)
@@ -736,7 +736,7 @@ def run_cmd(cmd):
     try:
         p = common.Run(cmd)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd)))
         raise exc
     p.communicate()
     assert p.returncode == 0, "Command failed: {}".format(' '.join(cmd))
@@ -999,11 +999,11 @@ def GenerateBootloaderSecbin(unpack_dir, variant):
                          "-b 1 -p 0"]
     cmd.append(os.path.join(unpack_dir, loader_scublockfile))
     cmd.append(os.path.join(unpack_dir, loader_mapdatafile))
-    print "execute 3.command: {}".format(' '.join(cmd))
+    print("execute 3.command: {}".format(' '.join(cmd)))
     try:
         p = common.Run(cmd)
     except Exception as exc:
-        print "Error: Unable to execute command: {}".format(' '.join(cmd))
+        print("Error: Unable to execute command: {}".format(' '.join(cmd)))
         raise exc
     p.communicate()
     assert p.returncode == 0, "binary_merge failed"
@@ -1040,7 +1040,7 @@ def GetBootloaderImagesfromFls(unpack_dir, variant=None):
         try:
             p = common.Run(cmd)
         except Exception as exc:
-            print "Error: Unable to execute command: {}".format(' '.join(cmd))
+            print("Error: Unable to execute command: {}".format(' '.join(cmd)))
             raise exc
         p.communicate()
         assert p.returncode == 0, "FlsTool failed to extract LoadMap.bin"

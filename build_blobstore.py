@@ -126,7 +126,7 @@ def main(argv):
 
     args_dict = vars(args)
     # put all --<blobstore type>-path args in a dict: { <blob type>: <path> }
-    bs_basedirs = dict((x, args_dict[y]) for x,y in ((t, t + "_path") for t in btypes.keys()) if (y in args_dict and args_dict[y]))
+    bs_basedirs = dict((x, args_dict[y]) for x,y in ((t, t + "_path") for t in list(btypes.keys())) if (y in args_dict and args_dict[y]))
 
     in_file = open(args.config, 'r')
     configData = json.load(in_file)
@@ -146,7 +146,7 @@ def main(argv):
     else:
         dmap = None
 
-    configTypes = len(metadata["types"].keys())
+    configTypes = len(list(metadata["types"].keys()))
 
     blobs = {}
     if dmap:
@@ -155,7 +155,7 @@ def main(argv):
         # is a code name that can't be derived at runtime, it gets added to
         # the build fingerprint later by init's autodetect.c using a hardcoded
         # value
-        for k in dmap.keys():
+        for k in list(dmap.keys()):
             if k.startswith("__"):
                 continue
 
@@ -168,7 +168,7 @@ def main(argv):
                 device = device[:-(len(args.fishname) + 1)]
 
             device_id = "%s/%s/%s" % (brand, product, device)
-            for t, def_fn in metadata["types"].iteritems():
+            for t, def_fn in metadata["types"].items():
                 # Use the path specified via cmd-line, otherwise
                 # use the one set in the configuration file
                 if t in bs_basedirs:
@@ -191,7 +191,7 @@ def main(argv):
         # respective loaders. We assume here that these ids can
         # be used in a UNIX path
         for device_id in configData["devices"]:
-            for t, def_fn in metadata["types"].iteritems():
+            for t, def_fn in metadata["types"].items():
                 # Use the path specified via cmd-line, otherwise
                 # use the one set in the configuration file
                 if t in bs_basedirs:
@@ -216,12 +216,12 @@ def main(argv):
     if not args.output:
         for v in set(blobs.values()):
             if os.path.exists(v):
-                print v,
+                print(v, end=' ')
         sys.exit(0)
 
     #populate datastore
     db = blobstore.BlobStore(args.output)
-    for k, v in blobs.iteritems():
+    for k, v in blobs.items():
         device_id, blobtype = k
         if not os.path.exists(v):
             sys.stderr.write(v + " doesn't exist, skipping\n");

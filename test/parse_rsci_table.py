@@ -70,7 +70,7 @@ translate_dict = {'wake_source': ["WAKE_NOT_APPLICABLE",
 
 def translate(field, value):
     ret = "NO_TRANSLATION_AVAILABLE"
-    if (field in translate_dict.keys()):
+    if (field in list(translate_dict.keys())):
         if (value < len(translate_dict[field])):
             ret = translate_dict[field][value]
         else:
@@ -79,7 +79,7 @@ def translate(field, value):
 
 
 def usage():
-    print "usage: {0} <RSCI_TABLE>".format(sys.argv[0])
+    print("usage: {0} <RSCI_TABLE>".format(sys.argv[0]))
 
 
 def verify_checksum(f):
@@ -90,29 +90,29 @@ def verify_checksum(f):
 
 
 def print_header(header):
-    print "RSCI HEADER"
-    print "\tsignature        : {}".format(''.join(header[0:4]))
-    print "\tlength           : {}".format(header[4])
-    print "\trevision         : {}".format(header[5])
-    print "\toemid            : {}".format(''.join(header[7:13]))
-    print "\toem_table_id     : {}".format(''.join(header[13:21]))
-    print "\toem_revision     : {}".format(header[21])
-    print "\tcreator_id       : {}".format(''.join(header[22:26]))
-    print "\tcreator_revision : 0x{0:x}".format(header[26])
+    print("RSCI HEADER")
+    print("\tsignature        : {}".format(''.join(header[0:4])))
+    print("\tlength           : {}".format(header[4]))
+    print("\trevision         : {}".format(header[5]))
+    print("\toemid            : {}".format(''.join(header[7:13])))
+    print("\toem_table_id     : {}".format(''.join(header[13:21])))
+    print("\toem_revision     : {}".format(header[21]))
+    print("\tcreator_id       : {}".format(''.join(header[22:26])))
+    print("\tcreator_revision : 0x{0:x}".format(header[26]))
 
 
 def print_fields(fields, revision):
-    print "RSCI FIELDS"
-    print "\twake_source      : {0} ({1})".format(fields[0], translate('wake_source', fields[0]))
+    print("RSCI FIELDS")
+    print("\twake_source      : {0} ({1})".format(fields[0], translate('wake_source', fields[0])))
     if (revision == 2):
-        print "\treset_source     : {0} ({1})".format(fields[1], translate('reset_source_v2', fields[1]))
+        print("\treset_source     : {0} ({1})".format(fields[1], translate('reset_source_v2', fields[1])))
     else:
-        print "\treset_source     : {0} ({1})".format(fields[1], translate('reset_source_v1', fields[1]))
-    print "\treset_type       : {0} ({1})".format(fields[2], translate('reset_type', fields[2]))
-    print "\tshutdown_source  : {0} ({1})".format(fields[3], translate('shutdown_source', fields[3]))
-    print "\tindicator        : {0}".format(fields[4])
+        print("\treset_source     : {0} ({1})".format(fields[1], translate('reset_source_v1', fields[1])))
+    print("\treset_type       : {0} ({1})".format(fields[2], translate('reset_type', fields[2])))
+    print("\tshutdown_source  : {0} ({1})".format(fields[3], translate('shutdown_source', fields[3])))
+    print("\tindicator        : {0}".format(fields[4]))
     if (revision == 2):
-        print "\treset extra info : 0x{0:x}".format(fields[5])
+        print("\treset extra info : 0x{0:x}".format(fields[5]))
 
 
 def print_table(header, fields, revision):
@@ -129,7 +129,7 @@ def dump_binary_table(f):
     elif (revision == 2):
         fields = rsci_fields_v2.unpack(fd.read(rsci_fields_v2.size))
     else:
-        print "Error: Unknown revision {}".format(revision)
+        print("Error: Unknown revision {}".format(revision))
         fd.close()
         exit(-1)
     print_table(header, fields, revision)
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         if (verify_checksum(sys.argv[1]) == 0):
             dump_binary_table(sys.argv[1])
         else:
-            print "Error: Table is corrupted!"
+            print("Error: Table is corrupted!")
             exit(-1)
     else:
         usage()

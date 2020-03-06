@@ -44,7 +44,8 @@ class FlashFileJson:
         self.flash['configurations'].update(new)
 
 
-    def add_command(self, tool, args, description, restrict, (timeout, retry, mandatory)):
+    def add_command(self, tool, args, description, restrict, timeout_retry_mandatory):
+        (timeout, retry, mandatory) = timeout_retry_mandatory
         new = {'tool': tool,
                'args': args,
                'description': description,
@@ -144,16 +145,16 @@ def parse_config(conf, variant, platform, mv_config_default, prop_path):
         if c['filename'][-5:] == '.json':
             f = FlashFileJson(c, mv_config_default)
         elif c['filename'][-4:] == '.xml':
-            print "warning: xml format not supported. Skipping."
+            print("warning: xml format not supported. Skipping.")
             continue
         elif c['filename'][-4:] == '.cmd':
-            print "warning: cmd format not supported. Skipping."
+            print("warning: cmd format not supported. Skipping.")
             continue
         elif c['filename'][-3:] == '.sh':
-            print "warning: sh format not supported. Skipping."
+            print("warning: sh format not supported. Skipping.")
             continue
         else:
-            print "warning: unknown format. Skipping."
+            print("warning: unknown format. Skipping.")
             continue
 
         commands = conf['commands']
@@ -167,7 +168,7 @@ def parse_config(conf, variant, platform, mv_config_default, prop_path):
         f.parse_command(commands)
 
         results.append((c['filename'], f.finish()))
-        files = [[src, file] for file, src in f.files().items()]
+        files = [[src, file] for file, src in list(f.files().items())]
 
     return results, files
 

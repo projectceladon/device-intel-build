@@ -21,7 +21,7 @@ def Run(args, **kwargs):
     """Create and return a subprocess.Popen object, printing the command
     line on the terminal if -v was specified."""
     if OPTIONS.verbose:
-        print "  running: ", " ".join(args)
+        print("  running: ", " ".join(args))
     return subprocess.Popen(args, **kwargs)
 
 
@@ -102,7 +102,7 @@ def DoSign(candidate_filename, privkey_filename,
         if privkey_password is not None:
             privkey_password += '\n'
         (sig, err) = p2.communicate(privkey_password)
-        print err
+        print(err)
         assert p2.returncode == 0, ("openssl pkeyutl of %s failed" %
                                     (candidate_filename,))
 
@@ -129,8 +129,8 @@ def DoSign(candidate_filename, privkey_filename,
                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (out, err) = p1.communicate()
         if OPTIONS.verbose:
-            print out
-            print err
+            print(out)
+            print(err)
         assert p1.returncode == 0, ("%s signing of %s failed" %
                                     (signfile_path, candidate_filename))
 
@@ -148,7 +148,7 @@ def DoSign(candidate_filename, privkey_filename,
         sig = content.getComponentByName('signerInfos')[0].getComponentByName('encryptedDigest').asOctets()
 
     else:
-        print "Sign type:", sign_type
+        print("Sign type:", sign_type)
         assert False, "%s does not contain a recognized key." % privkey_filename
 
     return sig
@@ -178,8 +178,8 @@ def DoVerify(candidate_filename, signature_filename,
     assert p1.returncode == 0, ("openssl dgst of %s failed" %
                                 (candidate_filename,))
     if OPTIONS.verbose:
-        print out
-        print err
+        print(out)
+        print(err)
 
     # openssl pkeyutl has a bug that always returns 1 regardless of verify
     # success or failure, so check the output against the know success string
