@@ -36,7 +36,10 @@ from uuid import UUID, uuid4
 from binascii import crc32
 from re import compile as re_compile
 from collections import namedtuple
-from ConfigParser import SafeConfigParser, ParsingError, NoOptionError
+if version_info < (3, 0, 1):
+    from ConfigParser import SafeConfigParser, ParsingError, NoOptionError
+else:
+    from configparser import SafeConfigParser, ParsingError, NoOptionError
 from math import floor, log
 
 def usage():
@@ -82,8 +85,8 @@ def get_the_file_name(filenames):
    if "." in filenames:
       filename = filenames.split(".")
       file_name.append(filename)
-   print file_name[0][0]
-   print file_name[0][1]
+   print(file_name[0][0])
+   print(file_name[0][1])
    return file_name[0][0]
 
 def craffimg(img_path):
@@ -92,16 +95,16 @@ def craffimg(img_path):
     """
     scriptpath = cur_file_dir()
     tool = scriptpath + '/simics-tools/bin/craff'
-    print img_path
+    print(img_path)
     name = os.path.basename(img_path)
     onlyname = get_the_file_name(name)
-    print onlyname
+    print(onlyname)
     toolpath = tool + ' -o ' + onlyname + '.craff ' + img_path
     filepath = find_path_file(img_path)
     os.popen(toolpath).read()
     craffname = onlyname + '.craff'
     crafffilepath = filepath + '/' + craffname
-    print crafffilepath
+    print(crafffilepath)
     if os.path.isfile(crafffilepath):
          os.remove(crafffilepath)
     shutil.move(craffname,filepath)

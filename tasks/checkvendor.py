@@ -67,11 +67,11 @@ def get_sections(f, out):
 
 
 def print_vendor(message):
-    print "[NOT IN VENDOR] " + message
+    print("[NOT IN VENDOR] " + message)
 
 
 def warning_message(err_num, f, message, section):
-    print separative_line
+    print(separative_line)
     print_vendor(str(err_num)+'/ '+f+' : '+message)
 
 
@@ -92,7 +92,7 @@ def search_string(light, tup, f, nb_err, out):
                             warning_message(nb_err, f, warning_message1, s)
                             print_vendor("instead of "+local_module_path+" to have module in vendor in :")
                             for l in s:
-                                print l
+                                print(l)
                     else:
                         if local_module_path not in ''.join(s):
                             nb_err = nb_err+1
@@ -101,7 +101,7 @@ def search_string(light, tup, f, nb_err, out):
                             else:
                                 warning_message(nb_err, f, warning_message2, s)
                                 for l in s:
-                                    print l
+                                    print(l)
                 else:
                     if re.search(r"LOCAL_MODULE_PATH.*TARGET_OUT(?!_VENDOR).*", ''.join(s)) is not None:
                         nb_err = nb_err+1
@@ -111,7 +111,7 @@ def search_string(light, tup, f, nb_err, out):
                             warning_message(nb_err, f, warning_message2, s)
                             print_vendor("Remove TARGET_OUT to let Android build system detect path using LOCAL_PROPRIETARY_MODULE:=true or use TARGET_OUT_VENDOR :")
                             for l in s:
-                                print l
+                                print(l)
 
     return nb_err, out
 
@@ -174,15 +174,15 @@ def main():
 
         if not options.light:
             if nb_err is not 0:
-                print separative_line
+                print(separative_line)
                 print_vendor(informative_message)
-                print separative_line
+                print(separative_line)
         else:
-            print "\n"
-            print informative_message_light
+            print("\n")
+            print(informative_message_light)
 
     except IOError:
-        print 'No *.mk found in this folder'
+        print('No *.mk found in this folder')
     return 0
 
 if __name__ == "__main__":
