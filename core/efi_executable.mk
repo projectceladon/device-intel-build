@@ -45,7 +45,7 @@ WITHOUT_LIBCOMPILER_RT :=
 
 all_objects += $(intermediates)/db.key $(GNU_EFI_CRT0)
 
-$(intermediates)/db.key: $(LOCAL_EFI_KEY_PAIR).pk8 $(OPENSSL)
+$(intermediates)/db.key: $(LOCAL_EFI_KEY_PAIR).pk8
 	$(transform-der-key-to-pem-key)
 
 $(LOCAL_BUILT_MODULE): PRIVATE_OBJCOPY_FLAGS := $(LOCAL_OBJCOPY_FLAGS)
