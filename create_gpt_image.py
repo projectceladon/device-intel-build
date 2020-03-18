@@ -26,7 +26,7 @@ from logging import (debug, info, error, DEBUG, INFO, getLogger,
                      basicConfig)
 from argparse import ArgumentParser
 from os import remove, stat
-from os.path import isfile, normcase, normpath, realpath
+from os.path import isfile, normcase, normpath, realpath, abspath, dirname
 from struct import unpack, pack
 from uuid import UUID, uuid4
 from binascii import crc32
@@ -1037,6 +1037,10 @@ class GPTImage(object):
                 bin_size = 0
                 continue
 
+            basedir = dirname(abspath(bin_path))
+            if not is_safe_path(basedir, bin_path):
+                sys.stdout.write('Not allowed!\n')
+
             # checks if partition size is greather or equal to the binary file
             bin_size_in_bytes = stat(bin_path).st_size
             part_size_in_bytes = tlb_part.size * self.block_size
@@ -1113,6 +1117,9 @@ class GPTImage(object):
             info('GPT/UEFI Image {0} created successfully !!!'
                  .format(self.path))
 
+
+def is_safe_path(basedir, path):
+    return abspath(path).startswith(basedir)
 
 def usage():
     """

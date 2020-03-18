@@ -22,7 +22,7 @@ def Run(args, **kwargs):
     line on the terminal if -v was specified."""
     if OPTIONS.verbose:
         print("  running: ", " ".join(args))
-    return subprocess.Popen(args, **kwargs)
+    return subprocess.Popen(args, **kwargs, shell=False)
 
 
 SIGNER_TYPE_UNKNOWN = 0
