@@ -58,6 +58,6 @@ $(PLATFORM_RMA_TOOLS_CROSS_ZIP):
 	$(info "cross compilation is not available on this target")
 	touch $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 endif
-platform_rma_tools: $(PLATFORM_RMA_TOOLS_ZIP)
+platform_rma_tools:
 
-host_cross_platform_rma_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
+host_cross_platform_rma_tools:
