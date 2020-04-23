@@ -36,6 +36,18 @@ $(PUB_SYSTEM_SYMBOLS): $(systemtarball)
 .PHONY: publish_system_symbols
 publish_system_symbols: $(PUB_SYSTEM_SYMBOLS)
 
+# Publish Scripts needed for QEMU
+PUB_QEMU_SCRIPTS := qemu_scripts.tar.gz
+
+.PHONY: $(PUB_QEMU_SCRIPTS)
+$(PUB_QEMU_SCRIPTS): $(scriptstarball)
+	@echo "Publish scripts"
+	$(hide) mkdir -p $(publish_dest)
+	tar --checkpoint=1000 --checkpoint-action=dot -czf $(publish_dest)/$@ $(PRODUCT_OUT)/scripts
+
+.PHONY: publish_qemu_scripts
+publish_qemu_scripts: $(PUB_QEMU_SCRIPTS)
+
 .PHONY: publish_kernel_debug
 # if kernel is not a prebuilt one
 # and kernel is built locally
@@ -200,7 +212,7 @@ publish_ci: aic
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
 ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT), false)
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
+publish_ci: publish_liveimage publish_qemu_scripts  publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP) $(PLATFORM_RMA_TOOLS_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -213,7 +225,7 @@ publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 	@$(hide) mkdir -p $(publish_tool_destw)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_CROSS_ZIP) $(publish_tool_destw)
 else
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish_ci: publish_liveimage publish_qemu_scripts publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -265,6 +277,6 @@ publish: aic
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_qemu_scripts  publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
 	@$(ACP) out/dist/* $(publish_dest)
 endif # ANDROID_AS_GUEST
