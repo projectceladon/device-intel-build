@@ -218,17 +218,7 @@ publish_ci: publish_liveimage publish_qemu_scripts  publish_ota_flashfile publis
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
 	@$(hide) mkdir -p $(publish_tool_destl)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_ZIP) $(publish_tool_destl)
-	@echo "Publishing Release files started"
-	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/caas-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
-	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf caas_release.tar.gz scripts patches caas-flashfiles-*.zip
-	$(hide) cp -r $(TOP)/caas_release.tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
-	$(hide) rm -rf $(TOP)/caas_release.tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/patches
-	@echo "Release files are published"
+
 
 .PHONY: publish_windows_tools
 publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
@@ -239,18 +229,6 @@ publish_ci: publish_liveimage publish_qemu_scripts publish_ota_flashfile publish
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
-	@echo "Publish releasefiles"
-	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/caas-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
-	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf caas_release.tar.gz scripts patches caas-flashfiles-*.zip
-	$(hide) cp -r $(TOP)/caas_release.tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
-	$(hide) rm -rf $(TOP)/caas_release.tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/patches
-	@echo "Release files are published"
-
 endif
 endif # ANDROID_AS_GUEST
 
@@ -260,6 +238,7 @@ else # !PUBLISH_SDK
 
 .PHONY: publish_ci
 publish_ci: publish_sdk_target
+
 
 .PHONY: publish_sdk_target
 publish_sdk_target: publish_mkdir_dest $(INTERNAL_SDK_TARGET)
@@ -300,15 +279,4 @@ publish: aic
 else # ANDROID_AS_GUEST
 publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_qemu_scripts  publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
 	@$(ACP) out/dist/* $(publish_dest)
-	@echo "Publishing Release files started"
-	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/caas-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
-	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf caas_release.tar.gz scripts patches caas-flashfiles-*.zip
-	$(hide) cp -r $(TOP)/caas_release.tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
-	$(hide) rm -rf $(TOP)/caas_release.tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/patches
-	@echo "Release files are published"
 endif # ANDROID_AS_GUEST
