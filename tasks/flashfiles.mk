@@ -217,37 +217,51 @@ endif # BOARD_HAS_NO_IFWI
 
 endif # USE_INTEL_FLASHFILES
 
+# Publish the vertical patches to vertical release tar ball
+.PHONY: publish_vertical
+publish_vertical:
+ifneq (,$(wildcard vendor/intel/utils_vertical))
+publish_vertical:
+	@echo "Identified Vertical repo and copy the patches to the tar ball"
+	$(hide) mkdir -p $(publish_dest)
+	$(hide) rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) cp -r vendor/intel/utils_vertical $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/utils_vertical $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/vertical_patches
+else
+publish_vertical:
+	$(hide) rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+endif
+
 .PHONY: flashfiles
 ifeq ($(RELEASE_BUILD),true)
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE)
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) publish_mkdir_dest publish_vertical
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
 	@echo "Publishing Release files started"
-	$(hide) rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/caas-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
 	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts patches caas-flashfiles-*.zip
+	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches caas-flashfiles-*.zip
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
-	$(hide) rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/patches && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	@echo "Release files are published"
 else
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET)
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_mkdir_dest publish_vertical
 	@echo "Publishing Release files started"
-	$(hide) rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/caas-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
 	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts patches caas-flashfiles-*.zip
+	$(hide) tar --checkpoint=1000 --checkpoint-action=dot -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches caas-flashfiles-*.zip
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
-	$(hide) rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/patches && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	@echo "Release files are published"
 
 endif
