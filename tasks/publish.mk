@@ -31,7 +31,7 @@ PUB_SYSTEM_SYMBOLS := symbols.tar.gz
 $(PUB_SYSTEM_SYMBOLS): $(systemtarball)
 	@echo "Publish system symbols"
 	$(hide) mkdir -p $(publish_dest)
-	tar --checkpoint=1000 --checkpoint-action=dot -czf $(publish_dest)/$@ $(PRODUCT_OUT)/symbols
+	tar -czf $(publish_dest)/$@ $(PRODUCT_OUT)/symbols
 
 .PHONY: publish_system_symbols
 publish_system_symbols: $(PUB_SYSTEM_SYMBOLS)
@@ -43,7 +43,7 @@ PUB_QEMU_SCRIPTS := qemu_scripts.tar.gz
 $(PUB_QEMU_SCRIPTS): $(scriptstarball)
 	@echo "Publish scripts"
 	$(hide) mkdir -p $(publish_dest)
-	tar --checkpoint=1000 --checkpoint-action=dot -czf $(publish_dest)/$@ $(PRODUCT_OUT)/scripts
+	tar -czf $(publish_dest)/$@ $(PRODUCT_OUT)/scripts
 
 .PHONY: publish_qemu_scripts
 publish_qemu_scripts: $(PUB_QEMU_SCRIPTS)
@@ -70,7 +70,7 @@ PUB_KERNEL_MODULES = kernel_modules-$(TARGET_BUILD_VARIANT).tar.bz2
 $(PUB_KERNEL_MODULES): $(LOCAL_KERNEL_PATH)/copy_modules
 	@echo "Publish Kernel Modules"
 	$(hide) mkdir -p $(PUB_KERNEL_DBG_PATH)
-	-tar --checkpoint=1000 --checkpoint-action=dot -cjf $(PUB_KERNEL_DBG_PATH)/$@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
+	-tar -cjf $(PUB_KERNEL_DBG_PATH)/$@ -C $(LOCAL_KERNEL_PATH)/lib/modules .
 
 publish_kernel_debug: $(PUB_KERNEL_DBG) $(PUB_KERNEL_MODULES)
 	@echo "Publish kernel debug: $(notdir $^)"
