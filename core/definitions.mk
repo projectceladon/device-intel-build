@@ -88,9 +88,9 @@ IAFW_CC := $(IAFW_TOOLS_CLANG_PREFIX)/clang
 IAFW_OBJCOPY := $(IAFW_TOOLS_GCC_PREFIX)objcopy$(HOST_EXECUTABLE_SUFFIX)
 EFI_OBJCOPY := $(IAFW_OBJCOPY)
 ifeq ($(TARGET_IAFW_ARCH),x86_64)
-IAFW_LIBCLANG := $(IAFW_TOOLCHAIN_CLANG_ROOT)/../lib64/clang/11.0.2/lib/linux/libclang_rt.builtins-x86_64-android.a
+IAFW_LIBCLANG := $(IAFW_TOOLCHAIN_CLANG_ROOT)/../lib64/clang/12.0.7/lib/linux/libclang_rt.builtins-x86_64-android.a
 else
-IAFW_LIBCLANG := $(IAFW_TOOLCHAIN_CLANG_ROOT)/../lib64/clang/11.0.2/lib/linux/libclang_rt.builtins-i686-android.a
+IAFW_LIBCLANG := $(IAFW_TOOLCHAIN_CLANG_ROOT)/../lib64/clang/12.0.7/lib/linux/libclang_rt.builtins-i686-android.a
 endif
 
 # Transformation definitions, ala build system's definitions.mk
