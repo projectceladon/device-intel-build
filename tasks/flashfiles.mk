@@ -238,6 +238,9 @@ publish_vertical:
 	$(hide) rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 endif
 
+LOCAL_TOOL:= \
+   PATH="/bin:$$PATH"
+
 .PHONY: flashfiles
 ifeq ($(RELEASE_BUILD),true)
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) publish_mkdir_dest publish_vertical host-pkg
@@ -263,6 +266,26 @@ endif
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
 	$(hide) rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas*-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	@echo "Release files are published"
+ifneq (,$(filter  caas_dev,$(TARGET_PRODUCT)))
+	@echo "publishing caas_dev entred first loop4444"
+ifneq (,$(wildcard $(TOP)/pub/$(TARGET_PRODUCT)/kernel))
+	@echo "Publish the CaaS image as debian_package"
+    $(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
+    $(hide)rm -rf $(PRODUCT_OUT)/RELEASE
+    $(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+    $(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+    $(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
+    $(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
+    $(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+    $(hide)cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/ $(PRODUCT_OUT)
+    $(hide)(cd $(PRODUCT_OUT) && $(LOCAL_TOOL) dpkg-deb --build Release/)
+    $(hide) cp -r $(PRODUCT_OUT)/*.deb $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+else
+	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release
+endif
+else
+	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release
+endif
 else
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_mkdir_dest publish_vertical host-pkg
 	@echo "Publishing Release files started"
@@ -286,7 +309,26 @@ endif
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
 	$(hide) rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/caas*-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	@echo "Release files are published"
-
+ifneq (,$(filter  caas_dev,$(TARGET_PRODUCT)))
+	@echo "publishing caas_dev entred first loop"
+ifneq (,$(wildcard $(TOP)/pub/$(TARGET_PRODUCT/kernel)))
+	@echo "Publish the CaaS image as debian package- 2nd loop"
+	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
+	$(hide)rm -rf $(PRODUCT_OUT)/RELEASE
+	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
+	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
+	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/ $(PRODUCT_OUT)
+	$(hide)(cd $(PRODUCT_OUT) && $(LOCAL_TOOL) dpkg-deb --build Release/)
+	$(hide) cp -r $(PRODUCT_OUT)/*.deb $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+else
+	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release
+endif
+else
+	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release
+endif
 endif
 ifeq ($(USE_INTEL_FLASHFILES),false)
 publish_ifwi:
