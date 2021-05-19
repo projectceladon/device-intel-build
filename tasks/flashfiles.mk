@@ -269,16 +269,16 @@ endif
 ifneq (,$(filter  caas_dev,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard out/dist))
 	@echo "Publish the CaaS image as debian_package"
-    $(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
-    $(hide)rm -rf $(PRODUCT_OUT)/RELEASE
-    $(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
-    $(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
-    $(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
-    $(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
-    $(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
-    $(hide)cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/ $(PRODUCT_OUT)
-    $(hide)(cd $(PRODUCT_OUT) && $(LOCAL_TOOL) dpkg-deb --build Release/)
-    $(hide) cp -r $(PRODUCT_OUT)/*.deb $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
+	$(hide)rm -rf $(PRODUCT_OUT)/RELEASE
+	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
+	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
+	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/ $(PRODUCT_OUT)
+	$(hide)(cd $(PRODUCT_OUT) && $(LOCAL_TOOL) dpkg-deb --build Release/)
+	$(hide) cp -r $(PRODUCT_OUT)/*.deb $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else
 	$(hide)rm -rf  $(PRODUCT_OUT)/*.deb
 	$(hide)rm -rf  $(PRODUCT_OUT)/Release
