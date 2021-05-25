@@ -275,6 +275,10 @@ ifneq (,$(filter  caas_dev,$(TARGET_PRODUCT)))
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
 	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r system/update_engine/scripts/update_device.py $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb/scripts
+	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb/scripts/update_payload
+	$(hide)cp -r system/update_engine/scripts/update_payload/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb/scripts/update_payload
+	$(hide)cp -r $(PRODUCT_OUT)/caas*-ota-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 	$(hide)cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/ $(PRODUCT_OUT)
 	$(hide)(cd $(PRODUCT_OUT) && $(LOCAL_TOOL) dpkg-deb --build Release/)
 	$(hide) cp -r $(PRODUCT_OUT)/*.deb $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
@@ -315,6 +319,10 @@ ifneq (,$(filter  caas_dev,$(TARGET_PRODUCT)))
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
 	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r system/update_engine/scripts/update_device.py $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb/scripts
+	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb/scripts/update_payload
+	$(hide)cp -r system/update_engine/scripts/update_payload/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb/scripts/update_payload
+	$(hide)cp -r $(PRODUCT_OUT)/caas*-ota-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 	$(hide)cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/ $(PRODUCT_OUT)
 	$(hide)(cd $(PRODUCT_OUT) && $(LOCAL_TOOL) dpkg-deb --build Release/)
 	$(hide) cp -r $(PRODUCT_OUT)/*.deb $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
