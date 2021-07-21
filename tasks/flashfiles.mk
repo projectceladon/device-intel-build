@@ -20,8 +20,7 @@ endif
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
 	@echo "Package release: $@"
 	build/tools/releasetools/sign_target_files_apks -o \
-	-d device/intel/build/testkeys/cts-release-test \
-	--key_mapping  build/target/product/security/networkstack=device/intel/build/testkeys/cts-release-test/networkstack \
+	-d device/intel/build/releasekeys \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
 
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
