@@ -17,9 +17,12 @@ BUILT_RELEASE_TARGET_FILES_PACKAGE := $(PRODUCT_OUT)/$(target_name).zip
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
 BUILT_RELEASE_SUPER_IMAGE := $(PRODUCT_OUT)/release_sign/super.img
 endif
+SOONG_ZIP_TOOL := \
+   PATH="$$PATH:$(ANDROID_SOONG_HOST_OUT)/bin"
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
 	@echo "Package release: $@"
-	build/tools/releasetools/sign_target_files_apks -o \
+	$(SOONG_ZIP_TOOL) \
+	$(HOST_OUT_EXECUTABLES)/sign_target_files_apks -o \
 	-d device/intel/build/testkeys/cts-release-test \
 	--key_mapping  build/target/product/security/networkstack=device/intel/build/testkeys/cts-release-test/networkstack \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
