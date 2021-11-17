@@ -8,6 +8,7 @@ endif
 ifeq ($(RELEASE_BUILD),true)
 flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
 target_name := $(name)-sign-targetfile-$(FILE_NAME_TAG)
+gpt_name := $(PRODUCT_OUT)/release_sign/$(name).img
 endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
@@ -17,17 +18,49 @@ BUILT_RELEASE_TARGET_FILES_PACKAGE := $(PRODUCT_OUT)/$(target_name).zip
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
 BUILT_RELEASE_SUPER_IMAGE := $(PRODUCT_OUT)/release_sign/super.img
 endif
+SOONG_HOST_TOOL := \
+	PATH="$(SOONG_HOST_OUT)/bin:$$PATH"
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
 	@echo "Package release: $@"
+	$(SOONG_HOST_TOOL) \
 	build/tools/releasetools/sign_target_files_apks -o \
 	-d device/intel/build/testkeys/cts-release-test \
 	--key_mapping  build/target/product/security/networkstack=device/intel/build/testkeys/cts-release-test/networkstack \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
-
+	
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
 $(BUILT_RELEASE_SUPER_IMAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE)
 	mkdir -p $(PRODUCT_OUT)/release_sign
 	build/make/tools/releasetools/build_super_image.py -v $< $@
+
+GPT_DIR := $(PRODUCT_OUT)/ff_temp
+tos_image := $(GPT_DIR)/tos.img
+ifeq ($(tos_bin),none)
+tos_image := none
+endif
+
+$(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
+	mkdir -p $(GPT_DIR)
+	unzip $< -d $(GPT_DIR)
+	$(SIMG2IMG) $(GPT_DIR)/super.img $(GPT_DIR)/super.img.raw
+	$(SIMG2IMG) $(GPT_DIR)/config.img $(GPT_DIR)/config.img.raw
+	
+	$(INTEL_PATH_BUILD)/create_gpt_image.py \
+		--create $@ \
+		--block $(BOARD_FLASH_BLOCK_SIZE) \
+		--table $(BOARD_GPT_INI) \
+		--size $(gptimage_size) \
+		--bootloader $(GPT_DIR)/bootloader.img \
+		--tos $(tos_image) \
+		--boot $(GPT_DIR)/boot.img \
+		--vbmeta $(GPT_DIR)/vbmeta.img \
+		--super $(GPT_DIR)/super.img.raw \
+		--acpio  $(GPT_DIR)/acpio.img \
+		--vendor_boot $(GPT_DIR)/vendor_boot.img \
+		--config $(GPT_DIR)/config.img.raw
+	$(hide) rm -f $@.gz
+	$(hide) gzip -f $@
+	$(hide) rm -rf $(GPT_DIR)
 
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
@@ -247,7 +280,7 @@ LOCAL_TOOL:= \
 
 .PHONY: flashfiles
 ifeq ($(RELEASE_BUILD),true)
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) publish_mkdir_dest publish_vertical host-pkg
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
@@ -276,7 +309,7 @@ ifneq (,$(wildcard out/dist))
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
 	$(hide)rm -rf $(PRODUCT_OUT)/RELEASE
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
-	$(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+	$(hide)cp -r $(PRODUCT_OUT)/release_sign/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
 	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
