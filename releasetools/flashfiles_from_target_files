@@ -242,7 +242,7 @@ def getIntermediates(product_out, component, subdir):
     return os.path.join(product_out, "obj", "PACKAGING",
                         component + "_intermediates", subdir)
 
-def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out=None):
+def process_image(unpack_dir, dest_zip, source, target, configs, variant=None, target_out=None):
     if target_out is None:
         target_out = target
 
@@ -276,6 +276,21 @@ def process_image(unpack_dir, dest_zip, source, target, variant=None, target_out
         ifile = common.File.FromLocalFile(target, os.path.join(unpack_dir, "RADIO", target))
     else:
         raise Exception("unknown source image type " + source)
+
+    # Split flashed filename to severl parts according image size if size is larger than 4GiB
+    # Which is Vfat file limit if write the image to U disk.
+    # The change just impact the command in installer.cmd but not file itself, we need
+    # split >4G file in another script.
+    # Here we specify the splited filename should [filename].part00, [filename].part02,...
+    # Split sample:
+    #             split --bytes=4G --numeric-suffixes [filename] [filename].part
+    if ifile.size >= (1 << 32):
+        image_part=""
+        count = int(ifile.size/(1 << 32)) + 1
+        for i in range(count):
+           image_part+=target_out+".part0"+str(i)+" "
+        configs[1]=tuple([(x== configs[1][1] and configs[1][1].replace(target_out, image_part) or x )for x in configs[1]])
+
     # Add file to zip, using target_out for naming.  According to the
     # documentation the File.AddToZip() interface is not suitable for
     # file larger than 2GiB and common.ZipWrite() must be used
@@ -452,13 +467,14 @@ def main(argv):
                         if variantFilename(target, variant) in vip.variant_exclude_files \
                            or (target_out == None and target not in cmd_files):
                             continue
-                        process_image(unpack_dir, dest_zip, src, target, variant, target_out)
+                        process_image(unpack_dir, dest_zip, src, target, configs, variant, target_out)
                 else:
-                    process_image(unpack_dir, dest_zip, src, target)
+                    process_image(unpack_dir, dest_zip, src, target, configs)
             if OPTIONS.variants:
                 for variant, file in vip.variant_include_files:
                     src,target = file.split(":")
-                    process_image(unpack_dir, dest_zip, src, target, variant, variantFilename(target, variant))
+
+                    process_image(unpack_dir, dest_zip, src, target, configs, variant, variantFilename(target, variant))
 
             # Write flash_cmd_generator parsed PFT flashing instructions to file & insert into flashfile zip
             print "Generating JSON flash configuration files..."
