@@ -373,3 +373,34 @@ ifeq ($(USE_INTEL_FLASHFILES),false)
 publish_ifwi:
 	@echo "Warning: Unable to fulfill publish_ifwi makefile request"
 endif
+
+.PHONY: usb_image
+
+USB_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-usb-install-$(TARGET_BUILD_VARIANT).img
+BOOT_IMG = $(PRODUCT_OUT)/efi_tmp.img
+
+usb_image: flashfiles
+	@echo "Generating USB installer image $(USB_INSTALL_IMG) ..."
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/
+	@$(hide)unzip $(PRODUCT_OUT)/caas*-flashfiles-*.zip -d $(PRODUCT_OUT)/efi_images_tmp/ > /dev/null
+
+	$(hide)rm -rf $(USB_INSTALL_IMG) $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/system.img; \
+	flashfile_size=`du -sh ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
+	flashfile_size=`echo $${flashfile_size} | cut -d '.' -f1`; \
+	flashfile_size=`expr $${flashfile_size} + 1`; \
+	total_count=`expr 16 \* $${flashfile_size} + 16`; \
+	dd if=/dev/zero of=$(USB_INSTALL_IMG) bs=63M count=$${total_count}; \
+	sgdisk --new EFI::+$${flashfile_size}G --typecode EFI:ef00 --change-name=EFI:'EFI System' $(USB_INSTALL_IMG) > /dev/null; \
+	flashfile_count=$(shell expr $${flashfile_size} \* 1024 \* 1024 \* 1024 \/ 512); \
+	dd if=/dev/zero of=$(BOOT_IMG) bs=512 count=$${flashfile_count};
+
+	$(hide)mkdosfs -F32 -n EFI $(BOOT_IMG);
+	$(hide)mmd -i $(BOOT_IMG) ::EFI;
+	$(hide)mmd -i $(BOOT_IMG) ::EFI/BOOT;
+	$(hide)mcopy -Q -i $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/installer.efi ::EFI/BOOT/bootx64.efi;
+	$(hide)mcopy -Q -i $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/* ::;
+	$(hide)dd if=$(BOOT_IMG) of=$(USB_INSTALL_IMG) bs=512 seek=2048  conv=notrunc;
+
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(BOOT_IMG)
+
+	@echo "make USB installer image done ---"
