@@ -384,6 +384,16 @@ usb_image: flashfiles
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/
 	@$(hide)unzip $(PRODUCT_OUT)/caas*-flashfiles-*.zip -d $(PRODUCT_OUT)/efi_images_tmp/ > /dev/null
 
+	G_size=`echo "$$((1 << 32))"`;\
+	for img in `ls $(PRODUCT_OUT)/efi_images_tmp/`;do \
+		size=`stat -c %s $(PRODUCT_OUT)/efi_images_tmp/$${img}`; \
+		if [[ $${size} -gt $${G_size} ]]; then \
+			echo "Split $${img} due to its size bigger than 4G"; \
+			split --bytes=`expr $${G_size} - 1` --numeric-suffixes $(PRODUCT_OUT)/efi_images_tmp/$${img} $(PRODUCT_OUT)/efi_images_tmp/$${img}.part; \
+			rm $(PRODUCT_OUT)/efi_images_tmp/$${img}; \
+		fi;\
+	done;
+
 	$(hide)rm -rf $(USB_INSTALL_IMG) $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/system.img; \
 	flashfile_size=`du -sh ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
 	flashfile_size=`echo $${flashfile_size} | cut -d '.' -f1`; \
