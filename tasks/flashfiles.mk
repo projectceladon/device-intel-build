@@ -377,6 +377,7 @@ endif
 .PHONY: usb_image
 
 USB_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-usb-install-$(TARGET_BUILD_VARIANT).img
+USB_INSTALL_IMG_ZIP = $(USB_INSTALL_IMG).zip
 BOOT_IMG = $(PRODUCT_OUT)/efi_tmp.img
 
 usb_image: flashfiles
@@ -410,6 +411,8 @@ usb_image: flashfiles
 	$(hide)mcopy -Q -i $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/installer.efi ::EFI/BOOT/bootx64.efi;
 	$(hide)mcopy -Q -i $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/* ::;
 	$(hide)dd if=$(BOOT_IMG) of=$(USB_INSTALL_IMG) bs=512 seek=2048  conv=notrunc;
+	@echo "Zipping USB installer image $(USB_INSTALL_IMG_ZIP) ..."
+	$(hide)zip -r $(USB_INSTALL_IMG_ZIP) $(USB_INSTALL_IMG)
 
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(BOOT_IMG)
 
