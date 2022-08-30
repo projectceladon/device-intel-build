@@ -409,6 +409,8 @@ civ_iso: flashfiles
 	$(hide)rm -rf $(ISO_EFI); \
 	flashfile_size=`du -s ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
 	flashfile_size=`expr $${flashfile_size} + 102400`; \
+	flashfile_size=`expr $${flashfile_size} / 63 + 1 `; \
+	flashfile_size=`expr $${flashfile_size} \* 63 `; \
 	dd if=/dev/zero of=$(ISO_EFI) bs=1024 count=$${flashfile_size};
 
 	$(hide)mkdosfs -F32 -n EFI $(ISO_EFI);
@@ -432,6 +434,7 @@ civ_iso: flashfiles
 
 	@echo "make ISO image done ---"
 	$(hide) cp -r $(ISO_RELEASE_TAR) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+	$(hide) cp -r $(ISO_INSTALL_IMG_ZIP) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/releasefile_tmp/ $(PRODUCT_OUT)/iso $(ISO_EFI)
 
