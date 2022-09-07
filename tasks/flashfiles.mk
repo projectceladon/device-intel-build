@@ -374,18 +374,29 @@ publish_ifwi:
 	@echo "Warning: Unable to fulfill publish_ifwi makefile request"
 endif
 
-.PHONY: usb_image
+.PHONY: civ_iso
 
-USB_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-usb-install-$(TARGET_BUILD_VARIANT).img
-USB_INSTALL_IMG_ZIP = $(USB_INSTALL_IMG).zip
-BOOT_IMG = $(PRODUCT_OUT)/efi_tmp.img
+ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-$(TARGET_BUILD_VARIANT).iso
+ISO_INSTALL_IMG_ZIP = $(ISO_INSTALL_IMG).zip
+ISO_RELEASE_TAR = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefile-$(TARGET_BUILD_VARIANT).iso.tar.gz
+ISO_EFI = $(PRODUCT_OUT)/iso_tmp.efi
 
-usb_image: flashfiles
-	@echo "Generating USB installer image $(USB_INSTALL_IMG) ..."
-	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/
-	@$(hide)unzip $(PRODUCT_OUT)/caas*-flashfiles-*.zip -d $(PRODUCT_OUT)/efi_images_tmp/ > /dev/null
+civ_iso: flashfiles
+	@echo "Generating ISO image $(ISO_INSTALL_IMG) ...";
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/releasefile_tmp;
+	$(hide)rm -rf $(ISO_INSTALL_IMG) $(ISO_INSTALL_IMG_ZIP)
+	$(hide)mkdir -p $(PRODUCT_OUT)/releasefile_tmp;
+	$(hide)mkdir -p $(PRODUCT_OUT)/efi_images_tmp;
 
-	G_size=`echo "$$((1 << 32))"`;\
+	$(hide)tar -xvzf $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz -C $(PRODUCT_OUT)/releasefile_tmp >/dev/null;
+	$(hide)unzip $(PRODUCT_OUT)/releasefile_tmp/*-flashfiles-*.zip -d $(PRODUCT_OUT)/efi_images_tmp/ > /dev/null;
+	$(hide)rm $(PRODUCT_OUT)/releasefile_tmp/$(TARGET_PRODUCT)-flashfiles*;
+
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/system.img;
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/vendor.img;
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/product.img;
+
+	G_size=`echo "$$((1 << 32))"`; \
 	for img in `ls $(PRODUCT_OUT)/efi_images_tmp/`;do \
 		size=`stat -c %s $(PRODUCT_OUT)/efi_images_tmp/$${img}`; \
 		if [[ $${size} -gt $${G_size} ]]; then \
@@ -395,26 +406,36 @@ usb_image: flashfiles
 		fi;\
 	done;
 
-	$(hide)rm -rf $(USB_INSTALL_IMG) $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/system.img; \
-	flashfile_size=`du -sh ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
-	flashfile_size=`echo $${flashfile_size} | cut -d '.' -f1`; \
-	flashfile_size=`expr $${flashfile_size} + 1`; \
-	total_count=`expr 16 \* $${flashfile_size} + 16`; \
-	dd if=/dev/zero of=$(USB_INSTALL_IMG) bs=63M count=$${total_count}; \
-	sgdisk --new EFI::+$${flashfile_size}G --typecode EFI:ef00 --change-name=EFI:'EFI System' $(USB_INSTALL_IMG) > /dev/null; \
-	flashfile_count=$(shell expr $${flashfile_size} \* 1024 \* 1024 \* 1024 \/ 512); \
-	dd if=/dev/zero of=$(BOOT_IMG) bs=512 count=$${flashfile_count};
+	$(hide)rm -rf $(ISO_EFI); \
+	flashfile_size=`du -s ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
+	flashfile_size=`expr $${flashfile_size} + 102400`; \
+	flashfile_size=`expr $${flashfile_size} / 63 + 1 `; \
+	flashfile_size=`expr $${flashfile_size} \* 63 `; \
+	dd if=/dev/zero of=$(ISO_EFI) bs=1024 count=$${flashfile_size};
 
-	$(hide)mkdosfs -F32 -n EFI $(BOOT_IMG);
-	$(hide)mmd -i $(BOOT_IMG) ::EFI;
-	$(hide)mmd -i $(BOOT_IMG) ::EFI/BOOT;
-	$(hide)mcopy -Q -i $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/installer.efi ::EFI/BOOT/bootx64.efi;
-	$(hide)mcopy -Q -i $(BOOT_IMG) $(PRODUCT_OUT)/efi_images_tmp/* ::;
-	$(hide)dd if=$(BOOT_IMG) of=$(USB_INSTALL_IMG) bs=512 seek=2048  conv=notrunc;
-	@echo "Zipping USB installer image $(USB_INSTALL_IMG_ZIP) ..."
-	$(hide)rm -rf $(USB_INSTALL_IMG_ZIP)
-	$(hide)zip -r -j $(USB_INSTALL_IMG_ZIP) $(USB_INSTALL_IMG)
+	$(hide)mkdosfs -F32 -n EFI $(ISO_EFI);
+	$(hide)mmd -i $(ISO_EFI) ::EFI;
+	$(hide)mmd -i $(ISO_EFI) ::EFI/BOOT;
+	$(hide)mcopy -Q -i $(ISO_EFI) $(PRODUCT_OUT)/efi_images_tmp/installer.efi ::EFI/BOOT/bootx64.efi;
+	$(hide)mcopy -Q -i $(ISO_EFI) $(PRODUCT_OUT)/efi_images_tmp/* ::;
 
-	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(BOOT_IMG)
+	$(hide)rm -rf $(PRODUCT_OUT)/iso
+	$(hide)mkdir -p $(PRODUCT_OUT)/iso
+	$(hide)xorriso -as mkisofs -iso-level 3  -r -V "Civ ISO" -J -joliet-long  -append_partition 2 0xef $(ISO_EFI) \
+	 -partition_cyl_align all -o $(ISO_INSTALL_IMG) $(PRODUCT_OUT)/iso/
 
-	@echo "make USB installer image done ---"
+	@echo "Zipping ISO image $(ISO_INSTALL_IMG_ZIP) ..."
+	$(hide)zip -r -j $(ISO_INSTALL_IMG_ZIP) $(ISO_INSTALL_IMG)
+
+	@echo "Zipping ISO release image $(ISO_RELEASE_TAR) ..."
+	$(hide)rm -rf $(ISO_RELEASE_TAR)
+	$(hide)cp $(ISO_INSTALL_IMG) $(PRODUCT_OUT)/releasefile_tmp
+	$(hide)tar --exclude=*.git -czf $(ISO_RELEASE_TAR) -C $(PRODUCT_OUT)/releasefile_tmp/ .
+
+	@echo "make ISO image done ---"
+	$(hide) cp -r $(ISO_RELEASE_TAR) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+	$(hide) cp -r $(ISO_INSTALL_IMG_ZIP) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+
+	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/releasefile_tmp/ $(PRODUCT_OUT)/iso $(ISO_EFI)
+
+	@echo "ISO Release files are published"
