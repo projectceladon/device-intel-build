@@ -374,14 +374,14 @@ publish_ifwi:
 	@echo "Warning: Unable to fulfill publish_ifwi makefile request"
 endif
 
-.PHONY: civ_iso
+.PHONY: iso
 
 ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-$(TARGET_BUILD_VARIANT).iso
 ISO_INSTALL_IMG_ZIP = $(ISO_INSTALL_IMG).zip
 ISO_RELEASE_TAR = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefile-$(TARGET_BUILD_VARIANT).iso.tar.gz
 ISO_EFI = $(PRODUCT_OUT)/iso_tmp.efi
 
-civ_iso: flashfiles
+iso: flashfiles
 	@echo "Generating ISO image $(ISO_INSTALL_IMG) ...";
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/releasefile_tmp;
 	$(hide)rm -rf $(ISO_INSTALL_IMG) $(ISO_INSTALL_IMG_ZIP)
