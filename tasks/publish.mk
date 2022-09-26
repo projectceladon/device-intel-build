@@ -170,6 +170,15 @@ publish_gptimage:
 	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
 endif # GPTIMAGE_BIN
 
+.PHONY: publish_gptimage_var
+ifeq ($(BUILD_GPTIMAGE), true)
+publish_gptimage_var: publish_gptimage
+	@echo "building gptimages ..."
+else  # GPTIMAGE_BIN is not defined
+publish_gptimage_var:
+	@echo "skip build gptimage"
+endif # GPTIMAGE_BIN
+
 .PHONY: publish_androidia_image
 ifdef ANDROID_IA_IMAGE
 publish_androidia_image: publish_mkdir_dest $(ANDROID_IA_IMAGE)
@@ -225,7 +234,7 @@ publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 	@$(hide) mkdir -p $(publish_tool_destw)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_CROSS_ZIP) $(publish_tool_destw)
 else
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage_var publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -277,6 +286,6 @@ publish: aic
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
 	@$(ACP) out/dist/* $(publish_dest)
 endif # ANDROID_AS_GUEST

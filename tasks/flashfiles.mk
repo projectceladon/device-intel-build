@@ -39,6 +39,7 @@ ifeq ($(tos_bin),none)
 tos_image := none
 endif
 
+ifeq ($(BUILD_GPTIMAGE), true)
 $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
 	rm -rf $(GPT_DIR)
 	mkdir -p $(GPT_DIR)
@@ -62,6 +63,10 @@ $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
 	$(hide) rm -f $@.gz
 	$(hide) gzip -f $@
 	$(hide) rm -rf $(GPT_DIR)
+else
+$(gpt_name):
+	@echo "skip build gptimages"
+endif
 
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
@@ -318,7 +323,9 @@ ifneq (,$(wildcard out/dist))
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
 	$(hide)rm -rf $(PRODUCT_OUT)/RELEASE
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+ifeq ($(BUILD_GPTIMAGE), true)
 	$(hide)cp -r $(PRODUCT_OUT)/release_sign/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+endif
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
 	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
@@ -336,7 +343,7 @@ else
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release
 endif
 else
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_mkdir_dest publish_vertical host-pkg
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdir_dest publish_vertical host-pkg
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
@@ -363,7 +370,9 @@ ifneq (,$(wildcard out/dist))
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
 	$(hide)rm -rf $(PRODUCT_OUT)/RELEASE
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+ifeq ($(BUILD_GPTIMAGE), true)
 	$(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+endif
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas_dev/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
 	$(hide)cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
