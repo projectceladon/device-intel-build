@@ -520,6 +520,7 @@ class TableEntryInfos(object):
                       'mfos':'4f33cfe4-a0c1-448b-aec4-40f10a0cef3f',
                       'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'super': '0fc63daf-8483-4772-8e79-3d69d8477de4',
+                      'share_data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'reserved': '0fc63daf-8483-4772-8e79-3d69d8477de4'
                       }
             }
@@ -876,6 +877,7 @@ class GPTImage(object):
         'mfos',
         'teedata',
         'super',
+        'share_data',
         'reserved'
         ]
 
