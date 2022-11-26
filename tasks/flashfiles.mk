@@ -317,7 +317,7 @@ endif
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
 	@echo "Release files are published"
-ifneq (,$(filter  caas caas_dev caas_cfc,$(TARGET_PRODUCT)))
+ifneq (,$(filter caas,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard out/dist))
 	@echo "Publish the CaaS image as debian_package"
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
@@ -364,7 +364,7 @@ endif
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
 	@echo "Release files are published"
-ifneq (,$(filter  caas caas_dev caas_cfc,$(TARGET_PRODUCT)))
+ifneq (,$(filter caas,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard out/dist))
 	@echo "Publish the CaaS image as debian package"
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/
