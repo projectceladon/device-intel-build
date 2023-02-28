@@ -10,8 +10,9 @@ on:
     branches: "**"
 jobs:
   TriggerWorkfows:
-    uses: projectceladon/celadonworkflows/.github/workflows/Triggerall.yml@main
+    uses: projectceladon/celadonworkflows/.github/workflows/Triggerall.yml@github-workflows-text
     with:
       PR_EVENT: ${{ github.event.action }}
       PR_URL: https://github.com/${{github.repository}}/pull/${{ github.event.pull_request.number }}
       PR_LABEL: ${{ github.event.label.name }}
+      EVENT: ${{ toJSON(github.event) }}
