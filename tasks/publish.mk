@@ -155,7 +155,7 @@ ifdef GPTIMAGE_BIN
 ifeq ($(COMPRESS_GPTIMAGE), true)
 publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
 	@echo compress $(GPTIMAGE_BIN) into $(GPTIMAGE_GZ)
-	@gzip -fk $(GPTIMAGE_BIN)
+	@gzip -fk $(GPTIMAGE_BIN) & PID=$!; echo "Waiting for $PID to complete"; while ps -p $PID > /dev/null; do echo "Process $PID is running"; sleep 20; done; echo "Process $PID is not running"
 	@$(ACP) $(GPTIMAGE_GZ) $(publish_dest)
 else # COMPRESS_GPTIMAGE is not true
 publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
