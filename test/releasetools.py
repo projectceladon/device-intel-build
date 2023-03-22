@@ -21,6 +21,7 @@ from io import StringIO
 
 #Added a comment
 
+
 sys.path.append("device/intel/build/releasetools")
 import intel_common
 
