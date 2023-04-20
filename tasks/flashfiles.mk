@@ -71,8 +71,8 @@ endif
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(BUILT_RELEASE_SUPER_IMAGE) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
-	#remove system.img vendor.img product.img from flashfiles.zip
-	$(hide)zip -d $@ "system.img" "product.img" "vendor.img";
+	#remove system.img vendor.img product.img odm.img from flashfiles.zip
+	$(hide)zip -d $@ "system.img" "product.img" "vendor.img" "odm.img";
 else
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
@@ -146,8 +146,8 @@ ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS) $(INTERNAL_SUPERIMAGE_DIST_TARGET)
 	$(hide) mkdir -p $(dir $@)
 	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(INTERNAL_SUPERIMAGE_DIST_TARGET) $(BUILT_TARGET_FILES_PACKAGE) $@
-	#remove system.img vendor.img product.img from flashfiles.zip
-	$(hide)zip -d $@ "system.img" "product.img" "vendor.img";
+	#remove system.img vendor.img product.img odm.img from flashfiles.zip
+	$(hide)zip -d $@ "system.img" "product.img" "vendor.img" "odm.img";
 else
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
