@@ -5,6 +5,7 @@ IAFW_BUILD_SYSTEM := $(INTEL_PATH_BUILD)/core
 BUILD_EFI_STATIC_LIBRARY := $(IAFW_BUILD_SYSTEM)/iafw_static_library.mk
 BUILD_IAFW_STATIC_LIBRARY := $(IAFW_BUILD_SYSTEM)/iafw_static_library.mk
 BUILD_EFI_EXECUTABLE := $(IAFW_BUILD_SYSTEM)/efi_executable.mk
+BUILD_ABL_EXECUTABLE := $(IAFW_BUILD_SYSTEM)/abl_executable.mk
 
 # Override default definition
 CLEAR_VARS := $(IAFW_BUILD_SYSTEM)/clear_vars.mk
@@ -15,18 +16,35 @@ GENERATE_VERITY_KEY := $(HOST_OUT_EXECUTABLES)/generate_verity_key$(HOST_EXECUTA
 OPENSSL := openssl
 SBSIGN := sbsign
 MKDOSFS := mkdosfs
-MKEXT2IMG := $(HOST_OUT_EXECUTABLES)/mkext2img
-DUMPEXT2IMG := $(HOST_OUT_EXECUTABLES)/dumpext2img
+#MKEXT2IMG := $(HOST_OUT_EXECUTABLES)/mkext2img
+#DUMPEXT2IMG := $(HOST_OUT_EXECUTABLES)/dumpext2img
 MCOPY := mcopy
 SESL := sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 CTESL := cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
+
+# Generation
+KF4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4abl_symbols.zip
+FB4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4abl_symbols.zip
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
     $(GENERATE_VERITY_KEY) \
     $(AVBTOOL)
+
+ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
+# NON UEFI platform
+INTEL_OTATOOLS += \
+ #   $(MKEXT2IMG) \
+ #  $(DUMPEXT2IMG) \
+    $(FASTBOOT) \
+    $(IASL)
+endif
+
+ifeq ($(BOARD_USE_ABL),true)
+INTEL_OTATOOLS += abl_toolchain
+endif
 
 otatools: $(INTEL_OTATOOLS)
 
@@ -73,6 +91,7 @@ GNU_EFI_CRT0 := crt0-efi-$(TARGET_IAFW_ARCH_NAME)
 LIBPAYLOAD_CRT0 := crt0-libpayload-$(TARGET_IAFW_ARCH_NAME)
 
 TARGET_EFI_LDS := $(IAFW_BUILD_SYSTEM)/elf_$(TARGET_IAFW_ARCH_NAME)_efi.lds
+TARGET_ABL_LDS := $(IAFW_BUILD_SYSTEM)/elf_$(TARGET_IAFW_ARCH_NAME)_abl.lds
 TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS := \
 	-j .text -j .sdata -j .data \
 	-j .dynamic -j .dynsym  -j .rel \
@@ -123,6 +142,32 @@ $(hide) $(IAFW_LD) $3 \
 $(hide) $(IAFW_OBJCOPY) $(PRIVATE_OBJCOPY_FLAGS) \
     --target=efi-app-$(TARGET_IAFW_ARCH_NAME) $(@:.efi=.so) $(@:.efi=.efiunsigned)
 $(hide) $(SBSIGN) --key $1 --cert $2 --output $@ $(@:.efi=.efiunsigned)
+endef
+
+define transform-o-to-sbl-executable
+@echo "target ABL Executable: $(PRIVATE_MODULE) ($@)"
+$(hide) mkdir -p $(dir $@)
+$(hide) $(IAFW_LD) $1 \
+    --defsym=CONFIG_LP_BASE_ADDRESS=$(LIBPAYLOAD_BASE_ADDRESS) \
+    --defsym=CONFIG_LP_HEAP_SIZE=$(LIBPAYLOAD_HEAP_SIZE) \
+    --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
+    --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
+    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
+    -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
+$(hide)$(IAFW_STRIP) --strip-all $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
+
+$(hide) cp $(@:.abl=.elf) $@
+
+
+python3 $(INTEL_PATH_BUILD)/GenContainer.py create -t NORMAL -cl ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA2048.pem -o $(PRODUCT_OUT)/sbl_os
+
+
+$(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4abl-user ]; then \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $@; \
+elif [ "$(PRIVATE_MODULE:debug=)" = kf4abl-user ]; then \
+	zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+fi
 endef
 
 # Hook up the prebuilts generation mechanism
