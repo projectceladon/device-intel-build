@@ -158,9 +158,9 @@ $(hide)$(IAFW_STRIP) --strip-all $(@:.sbl=.sym.elf) -o $(@:.sbl=.elf)
 
 $(hide) cp $(@:.sbl=.elf) $@
 
-
-python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t NORMAL -cl ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA2048.pem -o $(PRODUCT_OUT)/sbl_os
-
+$(hide)rm -rf $(PRODUCT_OUT)/cmdline1
+$(hide)touch $(PRODUCT_OUT)/cmdline1
+python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT -cl CMD1:$(PRODUCT_OUT)/cmdline1 ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_os
 
 $(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4sbl-user ]; then \
 	zip -juy $(FB4SBL_SYMBOLS_ZIP) $(@:.sbl=.map) $(@:.sbl=.sym.elf); \
