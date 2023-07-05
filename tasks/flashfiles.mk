@@ -366,6 +366,7 @@ publish_ifwi:
 	@echo "Warning: Unable to fulfill publish_ifwi makefile request"
 endif
 
+ifneq ($(iso_img),false)
 	@echo "Generating ISO image $(ISO_INSTALL_IMG) ...";
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/;
 	$(hide)rm -rf $(ISO_INSTALL_IMG) $(ISO_INSTALL_IMG_ZIP)
@@ -414,5 +415,5 @@ endif
 	$(hide) cp -r $(ISO_INSTALL_IMG_ZIP) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/iso $(ISO_EFI)
-
+endif
 	$(hide)rm -rf && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/$(TARGET_PRODUCT)-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files $(TOP)/*-flashfile-*.iso
