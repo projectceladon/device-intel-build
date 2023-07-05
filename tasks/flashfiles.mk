@@ -287,7 +287,6 @@ else
 ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-$(FILE_NAME_TAG).iso
 endif
 ISO_INSTALL_IMG_ZIP = $(ISO_INSTALL_IMG).zip
-ISO_RELEASE_TAR = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefile-$(TARGET_BUILD_VARIANT).iso.tar.gz
 ISO_EFI = $(PRODUCT_OUT)/iso_tmp.efi
 
 LOCAL_TOOL:= \
@@ -304,18 +303,6 @@ flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKA
 	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
 	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-ifneq (,$(wildcard vendor/intel/utils_vertical))
-ifneq (,$(wildcard vendor/intel/fw/keybox_provisioning))
-	@echo "vertical_keybox_provisioning included"
-	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip *provisioning
-else 
-	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
-endif
-else
-	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
-endif 	
-	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
-	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
 	@echo "Release files are published"
 ifneq (,$(filter  caas_dev caas_cfc,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard out/dist))
@@ -347,22 +334,6 @@ flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdi
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
-	$(hide) cp -r $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/* $(TOP)
-ifneq (,$(wildcard vendor/intel/utils_vertical))
-ifneq (,$(wildcard vendor/intel/fw/keybox_provisioning))
-	@echo "vertical_keybox_provisioning included"
-	$(hide) tar  --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip *provisioning
-else
-	$(hide) tar  --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
-endif
-else
-	$(hide) tar  --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
-endif
-	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
-	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
 	@echo "Release files are published"
 ifneq (,$(filter  caas_dev caas_cfc,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard out/dist))
@@ -437,25 +408,11 @@ endif
 	@echo "Zipping ISO image $(ISO_INSTALL_IMG_ZIP) ..."
 	$(hide)zip -r -j $(ISO_INSTALL_IMG_ZIP) $(ISO_INSTALL_IMG)
 
-	@echo "Zipping ISO release image $(ISO_RELEASE_TAR) ..."
-	$(hide)rm -rf $(ISO_RELEASE_TAR)
 	$(hide)cp $(ISO_INSTALL_IMG) $(TOP)/
-ifneq (,$(wildcard vendor/intel/utils_vertical))
-ifneq (,$(wildcard vendor/intel/fw/keybox_provisioning))
-	@echo "vertical_keybox_provisioning included"
-	$(hide) tar  --exclude=*.git -czf $(ISO_RELEASE_TAR) scripts *patches *-flashfile-*.iso *provisioning
-else
-	$(hide) tar  --exclude=*.git -czf $(ISO_RELEASE_TAR) scripts *patches *-flashfile-*.iso
-endif
-else
-	$(hide) tar  --exclude=*.git -czf $(ISO_RELEASE_TAR) scripts *patches *-flashfile-*.iso
-endif
 
 	@echo "make ISO image done ---"
-	$(hide) cp -r $(ISO_RELEASE_TAR) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(ISO_INSTALL_IMG_ZIP) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/iso $(ISO_EFI)
-	$(hide)rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/$(TARGET_PRODUCT)-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files $(TOP)/*-flashfile-*.iso
 
-	@echo "ISO Release files are published"
+	$(hide)rm -rf && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/$(TARGET_PRODUCT)-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files $(TOP)/*-flashfile-*.iso
