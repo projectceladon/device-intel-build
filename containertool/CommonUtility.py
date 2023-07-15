@@ -311,6 +311,8 @@ def get_auth_hash_type (key_type, sign_scheme):
 
 def gen_pub_key (in_key, pub_key = None):
 
+    print ("in_key = %s" % in_key)
+    print ("pub_key = %s" % pub_key)
     keydata = single_sign_gen_pub_key (in_key, pub_key)
 
     publickey = PUB_KEY_HDR()

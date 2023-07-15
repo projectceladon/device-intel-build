@@ -275,19 +275,29 @@ class CONTAINER ():
             pass
         elif auth_type in ["SHA2_256"]:
             data = get_file_data (file)
+
+            print ("SHA2_256")
             hash_data.extend (hashlib.sha256(data).digest())
         elif auth_type in ["SHA2_384"]:
+            print ("SHA2_384")
             data = get_file_data (file)
             hash_data.extend (hashlib.sha384(data).digest())
         elif auth_type in ['RSA2048_PKCS1_SHA2_256', 'RSA3072_PKCS1_SHA2_384', 'RSA2048_PSS_SHA2_256', 'RSA3072_PSS_SHA2_384' ]:
+            print ("auth_type %s" % auth_type)
+            print ("priv_key %s" % priv_key)
             auth_type = adjust_auth_type (auth_type, priv_key)
+            print ("adjust auth_type %s" % auth_type)
             pub_key = os.path.join(out_dir, basename + '.pub')
+            print ("pub_key %s" % pub_key)
             di = gen_pub_key (priv_key, pub_key)
             key_hash = CONTAINER.get_pub_key_hash (di, CONTAINER._auth_to_hashalg_str[auth_type])
             hash_data.extend (key_hash)
+            print ("hash_data %s" % hash_data)
             out_file = os.path.join(out_dir, basename + '.sig')
+            print ("out_file %s" % out_file)
             rsa_sign_file (priv_key, pub_key, CONTAINER._auth_to_hashalg_str[auth_type], CONTAINER._auth_to_signscheme_str[auth_type], file, out_file, False, True)
             auth_data.extend (get_file_data(out_file))
+            print ("auth_data %s" % auth_data)
         else:
             raise Exception ("Unsupport AuthType '%s' !" % auth_type)
         return hash_data, auth_data
@@ -365,15 +375,22 @@ class CONTAINER ():
             header.data_size   = (length + alignment) & ~alignment
         else:
             header.data_size   = 0
+        print ("header.data_size: %X" %  header.data_size)
         auth_type = self.get_auth_type_str (header.auth_type)
         basename = header.signature.decode()
         hdr_file = os.path.join(self.out_dir, basename + '.hdr')
         hdr_data = bytearray (header)
+        print ("basename: %s" %  basename)
+        print ("hdr_file: %s" %  hdr_file)
         for component in header.comp_entry:
             hdr_data.extend (component)
             hdr_data.extend (component.hash_data)
         gen_file_from_object (hdr_file, hdr_data)
         hash_data, auth_data = CONTAINER.calculate_auth_data (hdr_file, auth_type, header.priv_key, self.out_dir)
+        print ("auth_tye: %s" %  auth_type)
+        print ("header.priv_key: %s" %  header.priv_key)
+        print ("self.out_dir: %s" %  self.out_dir)
+        print (len(auth_data) , len(header.auth_data))
         if len(auth_data) != len(header.auth_data):
             print (len(auth_data) , len(header.auth_data))
             raise Exception ("Unexpected authentication data length for container header !")
@@ -588,6 +605,7 @@ class CONTAINER ():
             else:
                 file_name = os.path.splitext(os.path.basename (file_path))[0] + '.bin'
 
+            print ("extract file_file : %s" % file_name)
             # create header entry
             auth_type_str = self.get_auth_type_str (self.header.auth_type)
             match = re.match('RSA(\d+)_', auth_type_str)
@@ -598,6 +616,7 @@ class CONTAINER ():
                     key_file = 'KEY_ID_CONTAINER_RSA%s' % match.group(1)
             else:
                 key_file = ''
+            print ("key_file : %s" % key_file)
             alignment = self.header.alignment
             image_type_str = CONTAINER.get_image_type_str(self.header.image_type)
             header = ['%s' % self.header.signature.decode(), file_name, image_type_str,  auth_type_str,  key_file]
@@ -663,6 +682,10 @@ def gen_container_bin (container_list, out_dir, inp_dir, key_dir = '.', tool_dir
     for each in container_list:
         container = CONTAINER ()
         container.set_dir_path (out_dir, inp_dir, key_dir, tool_dir)
+        print ("out_dir: %s \n" % out_dir)
+        print ("inp_dir: %s \n" % inp_dir)
+        print ("key_dir: %s \n" % key_dir)
+        print ("tool_dir: %s \n" % tool_dir)
         out_file = container.create (each)
         print ("Container '%s' was created successfully at:  \n  %s" % (container.header.signature.decode(), out_file))
 
@@ -766,7 +789,10 @@ def create_container (args):
         hdr_entry = list (container_list[0][0])
         hdr_entry[3] = args.auth
         container_list[0][0] = tuple(hdr_entry)
-
+    print ("out_dir: %s" % out_dir)
+    print ("comp_dir: %s" % comp_dir)
+    print ("key_dir: %s" % key_dir)
+    print ("tool_dir: %s" % tool_dir)
     gen_container_bin (container_list, out_dir, comp_dir, key_dir, tool_dir)
 
 def extract_container (args):
