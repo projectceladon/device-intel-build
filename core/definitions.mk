@@ -158,9 +158,17 @@ $(hide)$(IAFW_STRIP) --strip-all $(@:.sbl=.sym.elf) -o $(@:.sbl=.elf)
 
 $(hide) cp $(@:.sbl=.elf) $@
 
-$(hide)rm -rf $(PRODUCT_OUT)/cmdline1
-$(hide)touch $(PRODUCT_OUT)/cmdline1
-python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT -cl CMD1:$(PRODUCT_OUT)/cmdline1 ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_os
+$(eval SBL_DIR := $(dir $@))
+$(hide)rm -rf $(SBL_DIR)/cmdline1
+$(hide)touch $(SBL_DIR)/cmdline1
+python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT -cl CMD1:$(SBL_DIR)/cmdline1 \
+ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(SBL_DIR)/sbl_os
+
+if [ $(findstring kf4sbl,$(PRIVATE_MODULE) ) ]; then \
+	cp $(SBL_DIR)/sbl_os $(PRODUCT_OUT)/sbl_os; \
+elif [ $(findstring fb4sbl,$(PRIVATE_MODULE) ) ]; then \
+	cp $(SBL_DIR)/sbl_os $(PRODUCT_OUT)/sbl_fb; \
+fi
 
 $(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4sbl-user ]; then \
 	zip -juy $(FB4SBL_SYMBOLS_ZIP) $(@:.sbl=.map) $(@:.sbl=.sym.elf); \
