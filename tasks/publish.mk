@@ -97,8 +97,8 @@ endif
 # Publish kf4sbl symbols files
 .PHONY: publish_kf4sbl_symbols
 ifeq ($(TARGET_BUILD_VARIANT:debug=)|$(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),user|true)
-publish_kf4sbl_symbols: publish_mkdir_dest kf4sbl-$(TARGET_BUILD_VARIANT) fb4sbl-$(TARGET_BUILD_VARIANT)
-	$(hide)($(ACP) $(KF4SBL_SYMBOLS_ZIP) $(FB4SBL_SYMBOLS_ZIP) $(publish_dest))
+publish_kf4sbl_symbols: publish_mkdir_dest kf4sbl-$(TARGET_BUILD_VARIANT)
+	$(hide)($(ACP) $(KF4SBL_SYMBOLS_ZIP) $(publish_dest))
 else
 publish_kf4sbl_symbols:
 	@echo "Publish kf4sbl symbols: skipped"
