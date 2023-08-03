@@ -5,6 +5,7 @@ IAFW_BUILD_SYSTEM := $(INTEL_PATH_BUILD)/core
 BUILD_EFI_STATIC_LIBRARY := $(IAFW_BUILD_SYSTEM)/iafw_static_library.mk
 BUILD_IAFW_STATIC_LIBRARY := $(IAFW_BUILD_SYSTEM)/iafw_static_library.mk
 BUILD_EFI_EXECUTABLE := $(IAFW_BUILD_SYSTEM)/efi_executable.mk
+BUILD_ABL_EXECUTABLE := $(IAFW_BUILD_SYSTEM)/abl_executable.mk
 
 # Override default definition
 CLEAR_VARS := $(IAFW_BUILD_SYSTEM)/clear_vars.mk
@@ -14,6 +15,8 @@ FASTBOOT := $(HOST_OUT_EXECUTABLES)/fastboot
 GENERATE_VERITY_KEY := $(HOST_OUT_EXECUTABLES)/generate_verity_key$(HOST_EXECUTABLE_SUFFIX)
 OPENSSL := openssl
 SBSIGN := sbsign
+ABLIMAGE := $(HOST_OUT_EXECUTABLES)/ias_image_app$(HOST_EXECUTABLE_SUFFIX)
+ABLSIGN := $(HOST_OUT_EXECUTABLES)/ias_image_signer$(HOST_EXECUTABLE_SUFFIX)
 MKDOSFS := mkdosfs
 MKEXT2IMG := $(HOST_OUT_EXECUTABLES)/mkext2img
 DUMPEXT2IMG := $(HOST_OUT_EXECUTABLES)/dumpext2img
@@ -22,11 +25,30 @@ SESL := sign-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 CTESL := cert-to-efi-sig-list$(HOST_EXECUTABLE_SUFFIX)
 IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
 
+# Generation
+KF4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4abl_symbols.zip
+FB4ABL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4abl_symbols.zip
+
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
     $(GENERATE_VERITY_KEY) \
     $(AVBTOOL)
+
+ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
+# NON UEFI platform
+INTEL_OTATOOLS += \
+    $(ABLIMAGE) \
+    $(ABLSIGN) \
+    $(MKEXT2IMG) \
+    $(DUMPEXT2IMG) \
+    $(FASTBOOT) \
+    $(IASL)
+endif
+
+ifeq ($(BOARD_USE_ABL),true)
+INTEL_OTATOOLS += abl_toolchain
+endif
 
 otatools: $(INTEL_OTATOOLS)
 
@@ -73,6 +95,7 @@ GNU_EFI_CRT0 := crt0-efi-$(TARGET_IAFW_ARCH_NAME)
 LIBPAYLOAD_CRT0 := crt0-libpayload-$(TARGET_IAFW_ARCH_NAME)
 
 TARGET_EFI_LDS := $(IAFW_BUILD_SYSTEM)/elf_$(TARGET_IAFW_ARCH_NAME)_efi.lds
+TARGET_ABL_LDS := $(IAFW_BUILD_SYSTEM)/elf_$(TARGET_IAFW_ARCH_NAME)_abl.lds
 TARGET_IAFW_GLOBAL_OBJCOPY_FLAGS := \
 	-j .text -j .sdata -j .data \
 	-j .dynamic -j .dynsym  -j .rel \
@@ -124,6 +147,76 @@ $(hide) $(IAFW_OBJCOPY) $(PRIVATE_OBJCOPY_FLAGS) \
     --target=efi-app-$(TARGET_IAFW_ARCH_NAME) $(@:.efi=.so) $(@:.efi=.efiunsigned)
 $(hide) $(SBSIGN) --key $1 --cert $2 --output $@ $(@:.efi=.efiunsigned)
 endef
+
+define transform-o-to-abl-executable
+@echo "target ABL Executable: $(PRIVATE_MODULE) ($@)"
+$(hide) mkdir -p $(dir $@)
+$(hide) $(IAFW_LD) $1 \
+    --defsym=CONFIG_LP_BASE_ADDRESS=$(LIBPAYLOAD_BASE_ADDRESS) \
+    --defsym=CONFIG_LP_HEAP_SIZE=$(LIBPAYLOAD_HEAP_SIZE) \
+    --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
+    --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
+    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
+    -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
+$(hide)$(IAFW_STRIP) --strip-all $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
+
+$(hide) if [ -e $(TARGET_DEVICE_DIR)/ablvars/acpi_table ]; then \
+			cp $(TARGET_DEVICE_DIR)/ablvars/acpi_table $(dir $@)/ -rf; \
+		fi
+
+$(hide) wait
+
+$(hide) if [ -e $(dir $@)/acpi.tables ]; then \
+            rm -rf $(dir $@)/acpi.tables; \
+        fi
+$(hide) find $(dir $@)/acpi_table -type f | while read file; do \
+	detect_size=`od -j4 -N4 -An -t u4 $${file}`; \
+	[ -z "$${detect_size}" ] && detect_size=0; \
+	actual_size=`stat -c '%s' $${file}`; \
+	if [ $${detect_size} -eq $${actual_size} ]; then \
+		echo ACPI table length match: $${file}; \
+		printf "Signature: %s, Length: $${actual_size}\n" `head -c 4 $${file}`; \
+		cat $${file} >> $(dir $@)/acpi.tables; \
+	fi; \
+done
+$(hide) dd if=/dev/zero of=$(dir $@)/cmdline bs=512 count=1;
+$(hide) if [ -s $(dir $@)/acpi.tables ];then \
+	echo 8600b1ac | xxd -r -ps > $(dir $@)/acpi_tag; \
+	$(ABLIMAGE) create -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf) $(dir $@)/acpi_tag $(dir $@)/acpi.tables; else \
+	$(ABLIMAGE) create -o $(@:.abl=.ablunsigned) -i 0x40300 $(dir $@)/cmdline $(@:.abl=.elf); fi
+	$(ABLSIGN) $(@:.abl=.ablunsigned) \
+	$(ABL_OS_KERNEL_KEY).pk8 \
+	$(ABL_OS_KERNEL_KEY).x509.pem \
+	$@
+$(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4abl-user ]; then \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $@; \
+elif [ "$(PRIVATE_MODULE:debug=)" = kf4abl-user ]; then \
+	zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+fi
+endef
+
+define transform-o-to-sbl-executable
+@echo "target SBL Executable: $(PRIVATE_MODULE) ($@)"
+$(hide) mkdir -p $(dir $@)
+$(hide) $(IAFW_LD) $1 \
+    --defsym=CONFIG_LP_BASE_ADDRESS=$(LIBPAYLOAD_BASE_ADDRESS) \
+    --defsym=CONFIG_LP_HEAP_SIZE=$(LIBPAYLOAD_HEAP_SIZE) \
+    --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
+    --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
+    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
+    -Map $(@:.abl=.map) -o $(@:.abl=.sym.elf)
+$(hide)$(IAFW_STRIP) --strip-all $(@:.abl=.sym.elf) -o $(@:.abl=.elf)
+$(hide) cp $(@:.abl=.elf) $@
+
+$(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4abl-user ]; then \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+	zip -juy $(FB4ABL_SYMBOLS_ZIP) $@; \
+elif [ "$(PRIVATE_MODULE:debug=)" = kf4abl-user ]; then \
+	zip -juy $(KF4ABL_SYMBOLS_ZIP) $(@:.abl=.map) $(@:.abl=.sym.elf); \
+fi
+endef
+
 
 # Hook up the prebuilts generation mechanism
 include $(INTEL_PATH_COMMON)/external/external.mk
