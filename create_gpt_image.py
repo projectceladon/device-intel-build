@@ -17,7 +17,7 @@
 Script to create a GPT/UEFI image or to show information it contains.
 """
 
-from sys import version_info
+from sys import version_info, exit
 
 if version_info < (2, 7, 3):
     exit('Python version must be 2.7.3 or higher')
@@ -35,7 +35,7 @@ from collections import namedtuple
 if version_info < (3, 0, 1):
     from ConfigParser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
 else:
-    from configparser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
+    from configparser import ConfigParser, ParsingError, NoOptionError, NoSectionError
 from math import floor, log
 
 
@@ -93,7 +93,7 @@ class MBRInfos(object):
         if self.lba_size > 0:
             units = ('KBytes', 'MBytes', 'GBytes')
             index = int(floor(log(self.lba_size, 1024)))
-            computed_size = round(self.lba_size / (1024**index), 2)
+            computed_size = round(self.lba_size // (1024**index), 2)
             human_size = '{0} {1}'.format(computed_size, units[index])
         else:
             human_size = '0 Bytes'
@@ -135,8 +135,8 @@ class MBRInfos(object):
         Used to write MBR in an image file
         """
         self.raw = pack(MBRInfos._FMT, self.boot, self.os_type,
-                        self.lba_start, self.lba_size, '',
-                        MBRInfos._PART_ENTRY, '', self.sign)
+                        self.lba_start, self.lba_size, b'',
+                        MBRInfos._PART_ENTRY.encode('utf-8'), b'', self.sign.encode('utf-8'))
         img_file.seek(offset)
         img_file.write(self.raw)
 
@@ -213,13 +213,13 @@ class GPTHeaderInfos(object):
         self.entry_size = 128
 
         # calculates the size of image in block
-        size_in_block = img_size / block_size
+        size_in_block = img_size // block_size
 
         # sets the lba backup at the value of first lba used by GPT backup
         self.lba_backup = size_in_block - 1
 
         # calculates the size of the partition table in block
-        table_size = (self.table_length * self.entry_size) / block_size
+        table_size = (self.table_length * self.entry_size) // block_size
 
         # sets the lba first at the first usable lba for a partition
         self.lba_first = table_size + 2
@@ -284,12 +284,12 @@ class GPTHeaderInfos(object):
         """
         Used to write GPT header and backup in an image file
         """
-        self.raw = pack(GPTHeaderInfos._FMT, self.sign, self.rev,
+        self.raw = pack(GPTHeaderInfos._FMT, self.sign.encode('utf-8'), self.rev.encode('utf-8'),
                         self.size, 0, 1, self.lba_backup,
                         self.lba_first, self.lba_last, self.uuid,
                         2, self.table_length, self.entry_size, 0)
 
-        backup_raw = pack(GPTHeaderInfos._FMT, self.sign, self.rev,
+        backup_raw = pack(GPTHeaderInfos._FMT, self.sign.encode('utf-8'), self.rev.encode('utf-8'),
                           self.size, 0, self.lba_backup, 1,
                           self.lba_first, self.lba_last, self.uuid,
                           self.lba_start, self.table_length,
@@ -300,7 +300,7 @@ class GPTHeaderInfos(object):
         img_file.write(self.raw)
 
         # writes zero on unused blocks of GPT header
-        raw_stuffing = '\x00' * (block_size - len(self.raw))
+        raw_stuffing = b'\x00' * (block_size - len(self.raw))
         img_file.write(raw_stuffing)
 
         # saves the end of the GPT header
@@ -690,7 +690,7 @@ class TLBInfos(list):
                     readlen = cfg.getint(partname, 'len')
 
                 if readlen > 0:
-                    size = (readlen * 1024 * 1024) / block_size
+                    size = (readlen * 1024 * 1024) // block_size
                     start_lba = begin + size
                 else:
                     size = readlen
@@ -724,7 +724,7 @@ class TLBInfos(list):
                     begin = start_lba
 
                 if readlen > 0:
-                    size = (readlen * 1024 * 1024) / block_size
+                    size = (readlen * 1024 * 1024) // block_size
                     start_lba = begin + size
                 else:
                     size = readlen
@@ -738,7 +738,7 @@ class TLBInfos(list):
         Used to read a INI TLB partition file
         """
         # sets a parser to read the INI TLB partition file
-        cfg = SafeConfigParser()
+        cfg = ConfigParser(strict=False)
         try:
             cfg.read(self.path)
 
@@ -1035,7 +1035,7 @@ class GPTImage(object):
             # no binary file used to build the partition or slot_b case
             label = tlb_part.label[0:]
             if bin_path == 'none' or label[len(label)-2:] == '_b':
-                line = '\0'
+                line = b'\0'
                 img_file.seek(offset)
                 img_file.write(line)
                 bin_size = 0
@@ -1048,7 +1048,7 @@ class GPTImage(object):
             # checks if partition size is greather or equal to the binary file
             bin_size_in_bytes = stat(bin_path).st_size
             part_size_in_bytes = tlb_part.size * self.block_size
-            bin_size = bin_size_in_bytes / self.block_size
+            bin_size = bin_size_in_bytes // self.block_size
             if tlb_part.size < bin_size:
                 error('Size of binary file {0} ({1} Bytes) is greather than '
                       '{2} partition size ({3} Bytes)'.format(bin_path,
@@ -1081,7 +1081,7 @@ class GPTImage(object):
 
             # fill output image header with 0x00: MBR size + GPT header size +
             # (partition table length * entry size)
-            zero = '\x00' * (2 * self.block_size +
+            zero = b'\x00' * (2 * self.block_size +
                              self.gpt_header.table_length *
                              self.gpt_header.entry_size)
             img_file.seek(0)
