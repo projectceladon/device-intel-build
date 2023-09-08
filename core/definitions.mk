@@ -162,12 +162,26 @@ $(eval SBL_DIR := $(dir $@))
 $(hide)rm -rf $(SBL_DIR)/cmdline1
 $(hide)touch $(SBL_DIR)/cmdline1
 python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT -cl CMD1:$(SBL_DIR)/cmdline1 \
-ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(SBL_DIR)/sbl_os
+ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(SBL_DIR)/sbl_bm
 
 if [ $(findstring kf4sbl,$(PRIVATE_MODULE) ) ]; then \
-	cp $(SBL_DIR)/sbl_os $(PRODUCT_OUT)/sbl_os; \
+	cp $(SBL_DIR)/sbl_bm $(PRODUCT_OUT)/sbl_bm; \
 elif [ $(findstring fb4sbl,$(PRIVATE_MODULE) ) ]; then \
-	cp $(SBL_DIR)/sbl_os $(PRODUCT_OUT)/sbl_fb; \
+	cp $(SBL_DIR)/sbl_bm $(PRODUCT_OUT)/sbl_fb; \
+fi
+
+if [ $(findstring true, $(ACRN_HV)) ]; then \
+if [ $(findstring kf4sbl,$(PRIVATE_MODULE) ) ]; then \
+	rm -rf $(SBL_DIR)/cmdline-acrn; \
+	rm -rf $(SBL_DIR)/cmdline-kf; \
+	rm -rf $(SBL_DIR)/acrn.32.out; \
+	echo -ne "serail_baseaddr=0x3f8 serail_type=1 serail_regwidth=1\0" > $(SBL_DIR)/cmdline-acrn; \
+	echo -ne "kernelflinger\0" > $(SBL_DIR)/cmdline-kf; \
+	cp $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out $(SBL_DIR)/acrn.32.out; \
+	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT \
+	-cl CMD1:$(SBL_DIR)/cmdline-acrn ELF1:$(SBL_DIR)/acrn.32.out CMD2:$(SBL_DIR)/cmdline-kf ELF2:$@ \
+	-k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_acrn; \
+fi \
 fi
 
 $(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4sbl-user ]; then \
