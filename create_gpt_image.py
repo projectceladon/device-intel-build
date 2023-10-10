@@ -874,6 +874,7 @@ class GPTImage(object):
         'config',
         'tos',
         'mfos',
+        'tee',
         'teedata',
         'super',
         'reserved'
