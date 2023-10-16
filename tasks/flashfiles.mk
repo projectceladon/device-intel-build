@@ -297,7 +297,7 @@ LOCAL_TOOL:= \
 ifeq ($(RELEASE_BUILD),true)
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
-ifeq (,$(filter apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
+ifeq (,$(filter blizzard_ivi,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started ..."
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
@@ -346,7 +346,7 @@ else
 endif
 else
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdir_dest publish_vertical host-pkg
-ifeq (,$(filter apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
+ifeq (,$(filter blizzard_ivi,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
