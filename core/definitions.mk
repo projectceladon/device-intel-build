@@ -191,14 +191,14 @@ else \
 	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT \
 	-cl CMD1:$(SBL_DIR)/cmdline-acrn ELF1:$(SBL_DIR)/acrn.32.out CMD2:$(SBL_DIR)/cmdline-kf ELF2:$@ \
 	-k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_acrn; \
+fi; \
 	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT \
 	-cl CMD1:$(SBL_DIR)/cmdline-acrn ELF1:$(SBL_DIR)/acrn.32.out \
 	-k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_mod_acrn; \
 	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT_MODULE \
 	-cl CMD2:$(SBL_DIR)/cmdline-kf ELF2:$@ \
 	-k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_mod_kf; \
-fi \
-fi \
+fi; \
 fi
 
 $(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4sbl-user ]; then \
