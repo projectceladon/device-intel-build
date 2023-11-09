@@ -27,6 +27,12 @@ IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
 KF4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4sbl_symbols.zip
 FB4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4sbl_symbols.zip
 
+ifeq ($(TARGET_BUILD_VARIANT),user)
+ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out.release
+else
+ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out
+endif
+
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
 INTEL_OTATOOLS := \
@@ -177,7 +183,7 @@ if [ $(findstring kf4sbl,$(PRIVATE_MODULE) ) ]; then \
 	rm -rf $(SBL_DIR)/acrn.32.out; \
 	echo -ne "serail_baseaddr=0x3f8 serail_type=1 serail_regwidth=1\0" > $(SBL_DIR)/cmdline-acrn; \
 	echo -ne "kernelflinger\0" > $(SBL_DIR)/cmdline-kf; \
-	cp $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out $(SBL_DIR)/acrn.32.out; \
+	cp $(ACRN_BIN) $(SBL_DIR)/acrn.32.out; \
 if [ $(findstring optee,$(TEE) ) ]; then \
 	rm -rf $(SBL_DIR)/cmdline-tee; \
 	rm -rf $(SBL_DIR)/tee.elf; \
