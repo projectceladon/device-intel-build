@@ -28,15 +28,23 @@ KF4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4sbl_symbols.zip
 FB4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4sbl_symbols.zip
 
 ifeq ($(TARGET_BUILD_VARIANT),user)
+ifeq ($(TEE),optee)
+ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out.tee.release
+else
 ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out.release
+endif
+else
+ifeq ($(TEE),optee)
+ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out.tee
 else
 ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out
 endif
+endif
 
 ifeq ($(TARGET_BUILD_VARIANT),user)
-OPTEE_BIN := $(TOP)/vendor/intel/optee/optee_release_binaries/release/tee.elf
+OPTEE_ELF := $(TOP)/vendor/intel/optee/optee_release_binaries/release/tee.elf
 else
-OPTEE_BIN := $(TOP)/vendor/intel/optee/optee_release_binaries/debug/tee.elf
+OPTEE_ELF := $(TOP)/vendor/intel/optee/optee_release_binaries/debug/tee.elf
 endif
 
 # Extra host tools we need built to use our *_from_target_files
@@ -194,7 +202,7 @@ if [ $(findstring optee,$(TEE) ) ]; then \
 	rm -rf $(SBL_DIR)/cmdline-tee; \
 	rm -rf $(SBL_DIR)/tee.elf; \
 	echo -ne "tee_elf\0" > $(SBL_DIR)/cmdline-tee; \
-	cp $(OPTEE_BIN) $(SBL_DIR)/tee.elf; \
+	cp $(OPTEE_ELF) $(SBL_DIR)/tee.elf; \
 	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT \
         -cl CMD1:$(SBL_DIR)/cmdline-acrn ELF1:$(SBL_DIR)/acrn.32.out CMD2:$(SBL_DIR)/cmdline-kf ELF2:$@ \
         CMD3:$(SBL_DIR)/cmdline-tee ELF3:$(SBL_DIR)/tee.elf \
