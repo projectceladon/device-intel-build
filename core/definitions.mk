@@ -207,6 +207,9 @@ if [ $(findstring optee,$(TEE) ) ]; then \
         -cl CMD1:$(SBL_DIR)/cmdline-acrn ELF1:$(SBL_DIR)/acrn.32.out CMD2:$(SBL_DIR)/cmdline-kf ELF2:$@ \
         CMD3:$(SBL_DIR)/cmdline-tee ELF3:$(SBL_DIR)/tee.elf \
         -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_acrn; \
+	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT_MODULE \
+	-cl CMD3:$(SBL_DIR)/cmdline-tee ELF3:$(SBL_DIR)/tee.elf \
+	-k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(PRODUCT_OUT)/sbl_mod_tee; \
 else \
 	python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT \
 	-cl CMD1:$(SBL_DIR)/cmdline-acrn ELF1:$(SBL_DIR)/acrn.32.out CMD2:$(SBL_DIR)/cmdline-kf ELF2:$@ \
