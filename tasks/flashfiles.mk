@@ -68,21 +68,28 @@ $(gpt_name):
 	@echo "skip build gptimages"
 endif
 
-$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
+$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
-	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(BUILT_RELEASE_SUPER_IMAGE) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
+	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(BUILT_RELEASE_SUPER_IMAGE) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
 	#remove system.img vendor.img product.img from flashfiles.zip
 	$(hide)zip -d $@ "system.img" "product.img" "vendor.img";
 else
-$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
+$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
-	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
+	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
 endif
 endif
 
 ifeq ($(USE_INTEL_FLASHFILES),true)
-fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
+fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files.sh
+legacy_fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
 odf := $(INTEL_PATH_BUILD)/releasetools/ota_deployment_fixup
+
+ifeq ($(LEGACY_FLASHZIP_TRUE),true)
+    fn_compress_format := zip
+else
+    fn_compress_format := tar.gz
+endif
 
 ifneq ($(FLASHFILE_VARIANTS),)
   # Generate variant specific flashfiles if VARIANT_SPECIFIC_FLASHFILES is True
@@ -92,17 +99,17 @@ ifneq ($(FLASHFILE_VARIANTS),)
 	    $(info Adding $(var)) \
 	    $(eval fn_prefix := $(PRODUCT_OUT)/$(TARGET_PRODUCT)) \
 	    $(eval fn_suffix := $(var)-$(FILE_NAME_TAG)) \
-	    $(eval ff_zip := $(fn_prefix)-flashfiles-$(fn_suffix).zip) \
+	    $(eval ff_zip := $(fn_prefix)-flashfiles-$(fn_suffix).$(fn_compress_format)) \
 	    $(eval INTEL_FACTORY_FLASHFILES_TARGET += $(ff_zip)) \
 	    $(call dist-for-goals,droidcore,$(ff_zip):$(notdir $(ff_zip))))
 
-	  $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
+	  $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
 	  $(hide) mkdir -p $(dir $@)
 	  $(eval y = $(subst -, ,$(basename $(@F))))
 	  $(eval DEV = $(word 3, $(y)))
 	  $(eval mvcfg_dev = $(MV_CONFIG_DEFAULT_TYPE.$(DEV)))
 	  $(if $(mvcfg_dev), $(eval mvcfg_default_arg = $(mvcfg_dev)),$(eval mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)))
-	  $(hide) $(fftf) --variant=$(DEV) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
+	  $(hide) $(legacy_fftf) --variant=$(DEV) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
   endif
 
 ifneq ($(TARGET_SKIP_OTA_PACKAGE), true)
@@ -134,7 +141,11 @@ ifneq ($(FLASHFILE_VARIANTS),)
 FLASHFILES_ADD_ARGS := '--unified-variants'
 endif
 
-INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
+ifeq ($(LEGACY_FLASHZIP_TRUE),true)
+    INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).zip
+else
+    INTEL_FACTORY_FLASHFILES_TARGET := $(PRODUCT_OUT)/$(name).tar.gz
+endif
 
 ifneq ($(SOFIA_FIRMWARE_VARIANTS),)
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE.$(firstword $(SOFIA_FIRMWARE_VARIANTS)))
@@ -142,16 +153,22 @@ else
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)
 endif
 
+##########################################
+##########################################
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
-$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS) $(INTERNAL_SUPERIMAGE_DIST_TARGET)
+$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS) $(INTERNAL_SUPERIMAGE_DIST_TARGET)
 	$(hide) mkdir -p $(dir $@)
-	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(INTERNAL_SUPERIMAGE_DIST_TARGET) $(BUILT_TARGET_FILES_PACKAGE) $@
+ifeq ($(LEGACY_FLASHZIP_TRUE),true)
+	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(INTERNAL_SUPERIMAGE_DIST_TARGET) $(BUILT_TARGET_FILES_PACKAGE) $@
 	#remove system.img vendor.img product.img from flashfiles.zip
 	$(hide)zip -d $@ "system.img" "product.img" "vendor.img";
 else
-$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
+	$(fftf) $@
+endif
+else
+$(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
-	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
+	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_TARGET_FILES_PACKAGE) $@
 endif
 
 ifeq ($(PUBLISH_CMCC_IMG),true)
@@ -181,10 +198,10 @@ FAST_FLASHFILES_DEPS := \
     $(USERFASTBOOT_BOOTIMAGE) \
     $(INSTALLED_VBMETAIMAGE_TARGET) \
 
-fast_flashfiles: $(fftf) $(UEFI_ADDITIONAL_TOOLS) $(FAST_FLASHFILES_DEPS) | $(ACP)
+fast_flashfiles: $(fftf) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS) $(FAST_FLASHFILES_DEPS) | $(ACP)
 	$(hide) rm -rf $(FAST_FLASHFILES_DIR)
 	$(hide) mkdir -p $(FAST_FLASHFILES_DIR)
-	$(fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
+	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --fast $(PRODUCT_OUT) $(FAST_FLASHFILES_DIR)
 
 # add dependencies
 droid: fast_flashfiles
@@ -286,7 +303,7 @@ ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-sign-flashfile-$(FILE_NAME_TA
 else
 ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-$(FILE_NAME_TAG).iso
 endif
-ISO_INSTALL_IMG_ZIP = $(ISO_INSTALL_IMG).zip
+ISO_INSTALL_IMG_TAR = $(ISO_INSTALL_IMG).tar.gz
 ISO_RELEASE_TAR = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefile-$(TARGET_BUILD_VARIANT).iso.tar.gz
 ISO_EFI = $(PRODUCT_OUT)/iso_tmp.efi
 
@@ -300,7 +317,7 @@ flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKA
 ifeq (,$(filter apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started ..."
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.$(fn_compress_format) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
@@ -308,12 +325,12 @@ ifeq (,$(filter apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard vendor/intel/utils_vertical))
 ifneq (,$(wildcard vendor/intel/fw/keybox_provisioning))
 	@echo "vertical_keybox_provisioning included"
-	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip *provisioning
+	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format) *provisioning
 else 
-	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
+	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format)
 endif
 else
-	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
+	$(hide) tar --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format)
 endif 	
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
@@ -349,7 +366,7 @@ flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdi
 ifeq (,$(filter apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
-	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.zip $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
+	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.$(fn_compress_format) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/scripts $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r vendor/intel/utils/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) mv $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/host $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files/patches
@@ -357,12 +374,12 @@ ifeq (,$(filter apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard vendor/intel/utils_vertical))
 ifneq (,$(wildcard vendor/intel/fw/keybox_provisioning))
 	@echo "vertical_keybox_provisioning included"
-	$(hide) tar  --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip *provisioning
+	$(hide) tar  --exclude=*.git -cvf - scripts *patches $(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format) *provisioning | /usr/bin/pigz > $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz
 else
-	$(hide) tar  --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
+	$(hide) tar  --exclude=*.git -cvf - scripts *patches $(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format) | /usr/bin/pigz > $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz
 endif
 else
-	$(hide) tar  --exclude=*.git -czf $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz scripts *patches $(TARGET_PRODUCT)-flashfiles-*.zip
+	$(hide) tar  --exclude=*.git -cvf - scripts *patches $(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format) | /usr/bin/pigz > $(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz
 endif
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp -r $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz $(PRODUCT_OUT)
@@ -402,14 +419,17 @@ endif
 ifneq ($(iso_image),false)
 	@echo "Generating ISO image $(ISO_INSTALL_IMG) ...";
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/;
-	$(hide)rm -rf $(ISO_INSTALL_IMG) $(ISO_INSTALL_IMG_ZIP)
+	$(hide)rm -rf $(ISO_INSTALL_IMG) $(ISO_INSTALL_IMG_TAR)
 	$(hide)mkdir -p $(PRODUCT_OUT)/efi_images_tmp;
 
-ifeq ($(RELEASE_BUILD),true)
+ifeq ($(LEGACY_FLASHZIP_TRUE),true)
+  ifeq ($(RELEASE_BUILD),true)
 	$(hide)unzip $(BUILT_RELEASE_FLASH_FILES_PACKAGE) -d $(PRODUCT_OUT)/efi_images_tmp/ > /dev/null;
-else
-
+  else
 	$(hide)unzip $(INTEL_FACTORY_FLASHFILES_TARGET) -d $(PRODUCT_OUT)/efi_images_tmp/ > /dev/null;
+  endif
+else
+	cp -r $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfiles-*/* $(PRODUCT_OUT)/efi_images_tmp/.
 endif
 	G_size=`echo "$$((1 << 32))"`; \
 	for img in `ls $(PRODUCT_OUT)/efi_images_tmp/`;do \
@@ -439,8 +459,8 @@ endif
 	$(hide)xorriso -as mkisofs -iso-level 3  -r -V "Civ ISO" -J -joliet-long  -append_partition 2 0xef $(ISO_EFI) \
 	 -partition_cyl_align all -o $(ISO_INSTALL_IMG) $(PRODUCT_OUT)/iso/
 
-	@echo "Zipping ISO image $(ISO_INSTALL_IMG_ZIP) ..."
-	$(hide)zip -r -j $(ISO_INSTALL_IMG_ZIP) $(ISO_INSTALL_IMG)
+	@echo "Tar ISO image $(ISO_INSTALL_IMG_TAR) ..."
+	$(hide) tar -cvf - $(ISO_INSTALL_IMG) | /usr/bin/pigz > $(ISO_INSTALL_IMG_TAR)
 ifeq (,$(filter  apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 	@echo "Zipping ISO release image $(ISO_RELEASE_TAR) ..."
 	$(hide)rm -rf $(ISO_RELEASE_TAR)
@@ -448,22 +468,22 @@ ifeq (,$(filter  apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 ifneq (,$(wildcard vendor/intel/utils_vertical))
 ifneq (,$(wildcard vendor/intel/fw/keybox_provisioning))
 	@echo "vertical_keybox_provisioning included"
-	$(hide) tar  --exclude=*.git -czf $(ISO_RELEASE_TAR) scripts *patches *-flashfile-*.iso *provisioning
+	$(hide) tar  --exclude=*.git -cvf - scripts *patches *-flashfile-*.iso *provisioning | /usr/bin/pigz > $(ISO_RELEASE_TAR)
 else
-	$(hide) tar  --exclude=*.git -czf $(ISO_RELEASE_TAR) scripts *patches *-flashfile-*.iso
+	$(hide) tar  --exclude=*.git -cvf - scripts *patches *-flashfile-*.iso | /usr/bin/pigz > $(ISO_RELEASE_TAR)
 endif
 else
-	$(hide) tar  --exclude=*.git -czf $(ISO_RELEASE_TAR) scripts *patches *-flashfile-*.iso
+	$(hide) tar  --exclude=*.git -cvf - scripts *patches *-flashfile-*.iso | /usr/bin/pigz > $(ISO_RELEASE_TAR)
 endif
 endif
 	@echo "make ISO image done ---"
 ifeq (,$(filter  apollo_ivi blizzard_ivi celadon_ivi,$(TARGET_PRODUCT)))
 	$(hide) cp -r $(ISO_RELEASE_TAR) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 endif
-	$(hide) cp -r $(ISO_INSTALL_IMG_ZIP) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
+	$(hide) cp -r $(ISO_INSTALL_IMG_TAR) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 
 	$(hide)rm -rf $(PRODUCT_OUT)/efi_images_tmp/ $(PRODUCT_OUT)/iso $(ISO_EFI)
 
 	@echo "ISO Release files are published"
 endif
-	$(hide)rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/$(TARGET_PRODUCT)-flashfiles-*.zip && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files $(TOP)/*-flashfile-*.iso
+	$(hide)rm -rf $(TOP)/$(TARGET_PRODUCT)-releasefiles-$(TARGET_BUILD_VARIANT).tar.gz && rm -rf $(TOP)/Release_Files && rm -rf $(TOP)/$(TARGET_PRODUCT)-flashfiles-*.$(fn_compress_format) && rm -rf $(TOP)/scripts && rm -rf $(TOP)/*patches && rm -rf $(TOP)/*provisioning && rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files $(TOP)/*-flashfile-*.iso
