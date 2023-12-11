@@ -10,7 +10,11 @@ flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
 target_name := $(name)-sign-targetfile-$(FILE_NAME_TAG)
 gpt_name := $(PRODUCT_OUT)/release_sign/$(name).img
 endif
+ifeq ($(VM3),true)
+name := $(name)-flashfiles-vm3-$(FILE_NAME_TAG)
+else
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
+endif
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 ifeq ($(RELEASE_BUILD),true)
 BUILT_RELEASE_FLASH_FILES_PACKAGE := $(PRODUCT_OUT)/$(flash_name).zip
@@ -284,7 +288,11 @@ endif
 ifeq ($(RELEASE_BUILD),true)
 ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-sign-flashfile-$(FILE_NAME_TAG).iso
 else
+ifeq ($(VM3),true)
+ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-vm3-$(FILE_NAME_TAG).iso
+else
 ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-$(FILE_NAME_TAG).iso
+endif
 endif
 ISO_INSTALL_IMG_ZIP = $(ISO_INSTALL_IMG).zip
 ISO_RELEASE_TAR = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefile-$(TARGET_BUILD_VARIANT).iso.tar.gz
