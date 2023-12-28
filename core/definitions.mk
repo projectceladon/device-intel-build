@@ -41,11 +41,7 @@ ACRN_BIN := $(TOP)/vendor/intel/acrn/sample_a/acrn.32.out
 endif
 endif
 
-ifeq ($(TARGET_BUILD_VARIANT),user)
-OPTEE_ELF := $(TOP)/vendor/intel/optee/optee_release_binaries/release/tee.elf
-else
-OPTEE_ELF := $(TOP)/vendor/intel/optee/optee_release_binaries/debug/tee.elf
-endif
+OPTEE_ELF := $(PRODUCT_OUT)/optee/x86_64-plat-standalonevm/core/tee.elf
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
