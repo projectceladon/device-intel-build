@@ -94,6 +94,16 @@ $(PUB_OSAGNOSTIC_TAG): publish_mkdir_dest $(OS_AGNOSTIC_INFO)
 	$(hide)($(ACP) $(OS_AGNOSTIC_INFO) $@)
 endif
 
+# Publish kf4sbl
+.PHONY: publish_kf4sbl
+ifeq ($(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),true)
+publish_kf4sbl: publish_mkdir_dest kf4sbl-$(TARGET_BUILD_VARIANT)
+	$(hide)($(ACP) $(BOARD_BOOTLOADER_IASIMAGE) $(publish_dest))
+else
+publish_kf4sbl:
+	@echo "Publish kf4sbl: skipped"
+endif
+
 # Publish kf4sbl symbols files
 .PHONY: publish_kf4sbl_symbols
 ifeq ($(TARGET_BUILD_VARIANT:debug=)|$(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),user|true)
@@ -234,7 +244,7 @@ publish_windows_tools: $(PLATFORM_RMA_TOOLS_CROSS_ZIP)
 	@$(hide) mkdir -p $(publish_tool_destw)
 	@$(hide) $(ACP) $(PLATFORM_RMA_TOOLS_CROSS_ZIP) $(publish_tool_destw)
 else
-publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage_var publish_grubinstaller publish_ifwi publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
+publish_ci: publish_liveimage publish_ota_flashfile publish_gptimage_var publish_grubinstaller publish_ifwi publish_kf4sbl publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) $(PUB_CMCC_ZIP)
 	$(if $(wildcard $(publish_dest)), \
 	  $(foreach f,$(PUBLISH_CI_FILES), \
 	    $(if $(wildcard $(f)),$(ACP) $(f) $(publish_dest);,)),)
@@ -286,6 +296,6 @@ publish: aic
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4sbl publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
 	@$(ACP) out/dist/* $(publish_dest)
 endif # ANDROID_AS_GUEST
