@@ -319,6 +319,8 @@ ISO_INSTALL_IMG_COMP = $(ISO_INSTALL_IMG).zip
 endif
 ISO_RELEASE_TAR = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-releasefile-$(TARGET_BUILD_VARIANT).iso.tar.gz
 ISO_EFI = $(PRODUCT_OUT)/iso_tmp.efi
+iso_basename = $(shell basename $(ISO_INSTALL_IMG))
+iso_path = $(shell dirname $(ISO_INSTALL_IMG))
 
 LOCAL_TOOL:= \
    PATH="/bin:$$PATH"
@@ -475,7 +477,7 @@ endif
 
 	@echo "Compress ISO image $(ISO_INSTALL_IMG_COMP) ..."
 ifeq ($(use_tar),true)
-	$(hide) tar -cvf - $(ISO_INSTALL_IMG) | /usr/bin/pigz > $(ISO_INSTALL_IMG_COMP)
+	$(hide) tar -cvf - -C $(iso_path) $(iso_basename) | /usr/bin/pigz > $(ISO_INSTALL_IMG_COMP)
 else
 	$(hide)zip -r -j $(ISO_INSTALL_IMG_COMP) $(ISO_INSTALL_IMG)
 endif
