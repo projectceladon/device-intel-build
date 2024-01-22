@@ -76,7 +76,7 @@ if [[ $SUPER_IMG == "true" ]]; then
   rm -f $flashfile_dir/system.img $flashfile_dir/vendor.img $flashfile_dir/product.img
 fi
 
-tar -cvf - $flashfile_dir/ | /usr/bin/pigz > $flashfile
+tar -cvf - -C $flashfile_dir/ . | /usr/bin/pigz > $flashfile
 
 echo "========================"
 echo "Flashfiles Tar $PRODUCT_OUT/$flashfile_dir/$flashfile created"
