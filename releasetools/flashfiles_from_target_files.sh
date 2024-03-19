@@ -48,7 +48,7 @@ do
     else
       if [[ $i == "startup.nsh" ]]; then
         cp efi/startup.nsh $flashfile_dir/.
-      elif [[ $i == "gpt.ini" ]]; then
+      elif [[ $i == "gpt.ini" || $i == "create_gpt_image.py" || $i == "gpt_ini2bin.py" ]]; then
         cp obj/PACKAGING/flashfiles_intermediates/root/$i $flashfile_dir/.
       else
 	  if [[ $i == "system.img" || $i == "odm.img" || $i == "vbmeta.img" || $i == "vendor_boot.img" ]]; then
