@@ -26,17 +26,21 @@ from logging import (debug, info, error, DEBUG, INFO, getLogger,
                      basicConfig)
 from argparse import ArgumentParser
 from os import remove, stat
-from os.path import isfile, normcase, normpath, realpath, abspath, dirname
+from os import open as os_open, close as os_close, lseek, O_RDONLY, SEEK_END
+from os.path import isfile, normcase, normpath, realpath, abspath, dirname, exists
+from stat import S_ISBLK
 from struct import unpack, pack
 from uuid import UUID, uuid4
 from binascii import crc32
 from re import compile as re_compile
 from collections import namedtuple
+from time import time
+
 if version_info < (3, 0, 1):
     from ConfigParser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
 else:
-    from configparser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
-from math import floor, log
+    from configparser import ConfigParser, ParsingError, NoOptionError, NoSectionError
+from math import floor, ceil, log
 
 
 class MBRInfos(object):
@@ -69,8 +73,8 @@ class MBRInfos(object):
 
     _FMT = '<IIII430s16s48s2s'
 
-    _PART_ENTRY = ('\x00\x00\x00\x00\xee\x00\x00\x00\x01\x00\x00\x00\x00\x00'
-                   '\xee\x00')
+    _PART_ENTRY = (b'\x00\x00\x00\x00\xee\x00\x00\x00\x01\x00\x00\x00\x00\x00'
+                   b'\xee\x00')
 
     def __init__(self, block_size=512):
         self.block_size = block_size
@@ -86,14 +90,14 @@ class MBRInfos(object):
         self.dummy_1 = ''
         self.dummy_2 = ''
         self.dummy_3 = ''
-        self.sign = '\x55\xaa'
+        self.sign = b'\x55\xaa'
 
     def __repr__(self):
         # converts the size
         if self.lba_size > 0:
             units = ('KBytes', 'MBytes', 'GBytes')
             index = int(floor(log(self.lba_size, 1024)))
-            computed_size = round(self.lba_size / (1024**index), 2)
+            computed_size = round(self.lba_size / (1024 ** index), 2)
             human_size = '{0} {1}'.format(computed_size, units[index])
         else:
             human_size = '0 Bytes'
@@ -127,7 +131,7 @@ class MBRInfos(object):
 
         # unpacks the raw MBR to a named tuple
         self.boot, self.os_type, self.lba_start, self.lba_size, self.dummy_1, \
-            self.dummy_2, self.dummy_3, self.sign \
+        self.dummy_2, self.dummy_3, self.sign \
             = unpack(MBRInfos._FMT, self.raw)
 
     def write(self, img_file, offset=0):
@@ -135,8 +139,8 @@ class MBRInfos(object):
         Used to write MBR in an image file
         """
         self.raw = pack(MBRInfos._FMT, self.boot, self.os_type,
-                        self.lba_start, self.lba_size, '',
-                        MBRInfos._PART_ENTRY, '', self.sign)
+                        self.lba_start, self.lba_size, b'',
+                        MBRInfos._PART_ENTRY, b'', self.sign)
         img_file.seek(offset)
         img_file.write(self.raw)
 
@@ -203,8 +207,8 @@ class GPTHeaderInfos(object):
 
         # TODO use decorators and properties to subtitute by r/w access in the
         # raw attribute with pack and unpack function all these attributes
-        self.sign = 'EFI PART'
-        self.rev = '\x00\x00\x01\x00'
+        self.sign = b'EFI PART'
+        self.rev = b'\x00\x00\x01\x00'
         self.size = size
 
         # sets the length and the entry size of the GPT partition table with
@@ -213,13 +217,13 @@ class GPTHeaderInfos(object):
         self.entry_size = 128
 
         # calculates the size of image in block
-        size_in_block = img_size / block_size
+        size_in_block = int(ceil(img_size / block_size))
 
         # sets the lba backup at the value of first lba used by GPT backup
         self.lba_backup = size_in_block - 1
 
         # calculates the size of the partition table in block
-        table_size = (self.table_length * self.entry_size) / block_size
+        table_size = int(ceil((self.table_length * self.entry_size) / block_size))
 
         # sets the lba first at the first usable lba for a partition
         self.lba_first = table_size + 2
@@ -276,9 +280,9 @@ class GPTHeaderInfos(object):
 
         # unpacks the raw GPT header of the image file to a named tuple
         self.sign, self.rev, self.size, self.crc, self.lba_current, \
-            self.lba_backup, self.lba_first, self.lba_last, self.uuid, \
-            self.lba_start, self.table_length, self.entry_size, \
-            self.table_crc = unpack(GPTHeaderInfos._FMT, self.raw)
+        self.lba_backup, self.lba_first, self.lba_last, self.uuid, \
+        self.lba_start, self.table_length, self.entry_size, \
+        self.table_crc = unpack(GPTHeaderInfos._FMT, self.raw)
 
     def write(self, img_file, offset, block_size):
         """
@@ -300,7 +304,7 @@ class GPTHeaderInfos(object):
         img_file.write(self.raw)
 
         # writes zero on unused blocks of GPT header
-        raw_stuffing = '\x00' * (block_size - len(self.raw))
+        raw_stuffing = b'\x00' * (block_size - len(self.raw))
         img_file.write(raw_stuffing)
 
         # saves the end of the GPT header
@@ -420,8 +424,8 @@ class TableEntryInfos(object):
 
     def __repr__(self):
         result = 'UUID partition entry {0}\n'.format(self.pos)
-        result = '\t{0}type: {1}\n'.format(result, UUID(bytes_le=self.type))
-        result = '\t{0}UUID: {1}\n'.format(result, UUID(bytes_le=self.uuid))
+        result = '\t{0}type: {1}\n'.format(result, self.type)
+        result = '\t{0}UUID: {1}\n'.format(result, self.uuid)
         result = '\t{0}first LBA: {1}\n'.format(result, self.lba_first)
         result = '\t{0}last LBA: {1}\n'.format(result, self.lba_last)
         result = '\t{0}attribute flags: 0x{1:08x}\n'.format(result, self.attr)
@@ -443,101 +447,15 @@ class TableEntryInfos(object):
 
         # unpacks the raw partition table entry read to a named tuple
         self.type, self.uuid, self.lba_first, self.lba_last, self.attr, \
-            self.name = unpack(TableEntryInfos._FMT, self.raw)
+        self.name = unpack(TableEntryInfos._FMT, self.raw)
 
     def write(self, img_file, offset, entry_info):
         """
         Use to write a partition table entries in an image file
         """
-        types = {
-            'Unused': '00000000-0000-0000-0000-000000000000',
-            'esp': 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B',
-            'fat': '024DEE41-33E7-11D3-9D69-0008C781F39F',
-            'bootloader': '2568845D-2332-4675-BC39-8FA5A4748D15',
-            'boot': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-            'boot_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-            'boot_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-            'recovery': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-            'misc': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-            'metadata': '5808C8AA-7E8F-42E0-85D2-E1E90434CFB3',
-            'reserved': '8DA63339-0007-60C0-C436-083AC8230908',
-            'linux': {
-                      'xen_dom0' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'xen_misc' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'xen_guest' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'xen_rootfs' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'sos_boot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'uos_boot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'android_guest' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'sos_rootfs' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'uos_rootfs' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vbmeta': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vbmeta_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vbmeta_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'multiboot' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'multiboot_a' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'multiboot_b' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'tos' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'tos_a' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'tos_b' : '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'system': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'system_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'system_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'esp': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'esp2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'bootloader': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'bootloader_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'bootloader_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'bootloader2': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'bldr_utils': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vendor': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vendor_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vendor_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vendor_boot': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vendor_boot_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'vendor_boot_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'product': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'product_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'product_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'odm': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'odm_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'odm_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'acpi': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'acpi_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'acpi_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'acpio': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'acpio_a': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'acpio_b': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'cache': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'userdata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'persistent': ('ebc597d0-2053-4b15-8b64-'
-                                             'e0aac75f4db1'),
-                      'factory': ('0fc63daf-8483-4772-8e79-'
-                                          '3d69d8477de4'),
-                      'config': ('0fc63daf-8483-4772-8e79-'
-                                         '3d69d8477de4'),
-                      'mfos':'4f33cfe4-a0c1-448b-aec4-40f10a0cef3f',
-                      'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'super': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'share_data': '0fc63daf-8483-4772-8e79-3d69d8477de4',
-                      'reserved': '0fc63daf-8483-4772-8e79-3d69d8477de4'
-                      }
-            }
-
-        # checks if the partition type used is available
-        if entry_info.type in types:
-            if isinstance(types[entry_info.type], dict):
-                tuuid = UUID(types[entry_info.type][entry_info.label]).bytes_le
-            else:
-                tuuid = UUID(types[entry_info.type]).bytes_le
-        else:
-            error('Unknown partition type: {0} {1}'
-                  .format(entry_info.label, entry_info.type))
-            exit(-1)
-
+        tuuid = entry_info.type.bytes_le
         # sets the partition uuid
-        puuid = UUID(entry_info.uuid).bytes_le
+        puuid = entry_info.uuid.bytes_le
         last = int(entry_info.size) + int(entry_info.begin) - 1
 
         self.raw = pack(TableEntryInfos._FMT, tuuid, puuid,
@@ -560,14 +478,14 @@ class TLBInfos(list):
     def __init__(self, path):
         super(TLBInfos, self).__init__()
         self.path = path
-        self._set_format()
         self.slotab = 0
+        self.format = 'bin'
 
     def __repr__(self):
         result = ''
 
         for item in self:
-            line = ('add -b {0} -s {1} -t {2} -u {3} -l {4}'
+            line = ('add -b {0} -s {1} -u {2} -u {3} -l {4}'
                     '\n').format(item.begin, item.size, item.type, item.uuid,
                                  item.label)
             result = '{0}{1}'.format(result, line)
@@ -601,10 +519,10 @@ class TLBInfos(list):
         """
         with open(self.path, 'r') as tlb_file:
             re_parser = re_compile(r'^add\s-b\s(?P<begin>\w+)\s-s\s'
-                                   '(?P<size>[\w$()-]+)\s-t\s'
-                                   '(?P<type>\w+)\s-u\s'
-                                   '(?P<uuid>[\w-]+)\s'
-                                   '-l\s(?P<label>\w+)'
+                                   r'(?P<size>[\w$()-]+)\s-t\s'
+                                   r'(?P<type>\w+)\s-u\s'
+                                   r'(?P<uuid>[\w-]+)\s'
+                                   r'-l\s(?P<label>\w+)'
                                    )
             # reads the JSON TLB file to instantiate a the TLBInfos
             for line in tlb_file:
@@ -701,7 +619,7 @@ class TLBInfos(list):
                     self.append(TLB_INFO(begin, size, ptype, uuid, label))
                     break
                 self.append(TLB_INFO(begin, size, ptype, uuid,
-                            label + '_%c' % (ord('a') + slot_id)))
+                                     label + '_%c' % (ord('a') + slot_id)))
         return start_lba
 
     def _contruct_tlb_grp_info(self, start_lba, cfg, block_size, parts):
@@ -731,7 +649,7 @@ class TLBInfos(list):
                     size = readlen
 
                 self.append(TLB_INFO(begin, size, ptype, uuid,
-                            label + '_%c' % (ord('a') + grp_id)))
+                                     label + '_%c' % (ord('a') + grp_id)))
         return start_lba
 
     def _read_ini(self, block_size):
@@ -739,7 +657,11 @@ class TLBInfos(list):
         Used to read a INI TLB partition file
         """
         # sets a parser to read the INI TLB partition file
-        cfg = SafeConfigParser()
+        if version_info < (3, 0, 1):
+            cfg = SafeConfigParser()
+        else:
+            cfg = ConfigParser()
+
         try:
             cfg.read(self.path)
 
@@ -771,17 +693,41 @@ class TLBInfos(list):
                                                 slot_group_aosp)
         self._contruct_tlb_info(start_lba, cfg, block_size, end_part)
 
+    def _read_bin(self, block_size):
+        """
+        Used to read a binary TLB partition file
+        """
+
+        with open(self.path, 'rb') as f:
+            magic = unpack('<I', f.read(4))
+            if magic[0] != 0x6a8b0da1:
+                info("Wrong format for the GPT BIN file!")
+                exit(-1)
+
+            start_lba = 1024 * 1024 / block_size
+            start_lba_temp = unpack('<I', f.read(4))
+            if start_lba_temp[0] != 0x00:
+                start_lba = start_lba_temp[0]
+
+            part_count = unpack('<I', f.read(4))[0]
+            for i in range(part_count):
+                part_len = unpack('<i', f.read(4))[0]
+                label = f.read(72).decode('utf-16le')
+                ptype = UUID(bytes_le=f.read(16))
+                puuid = UUID(bytes_le=f.read(16))
+                begin = start_lba
+                if part_len > 0:
+                    size = (part_len * 1024 * 1024) / block_size
+                    start_lba = begin + size
+                else:
+                    size = part_len
+                self.append(TLB_INFO(begin, size, ptype, puuid, label))
+
     def read(self, block_size):
         """
         Read a TLB file
         """
-        # reads the JSON TLB partition file
-        if self.format == 'tbl':
-            self._read_json(block_size)
-
-        # reads the INI TLB partition file
-        else:
-            self._read_ini(block_size)
+        self._read_bin(block_size)
 
     def _recompute_partition_begin(self):
         """
@@ -793,6 +739,7 @@ class TLBInfos(list):
                 new_begin = self[pos].begin + self[pos].size
                 continue
             self[pos] = self[pos]._replace(begin=new_begin)
+            debug('label {2} start_lba {0} size {1}'.format(new_begin, self[pos].size, self[pos].label))
             new_begin += self[pos].size
 
     def compute_last_size_entry(self, img_size, block_size, entry_size,
@@ -875,12 +822,10 @@ class GPTImage(object):
         'config',
         'tos',
         'mfos',
-        'tee',
         'teedata',
         'super',
-        'share_data',
         'reserved'
-        ]
+    ]
 
     def __init__(self, path, size='5G', block_size=512, gpt_header_size=92):
 
@@ -936,7 +881,7 @@ class GPTImage(object):
             return int(str_size[:-1])
 
         index = units.index(unit)
-        return value * 1024**index
+        return value * 1024 ** index
 
     def read(self):
         """
@@ -944,18 +889,17 @@ class GPTImage(object):
         """
         # opens and reads the image file
         with open(self.path, 'rb') as img_file:
-
             # reads the MBR of the image file
-            debug('Reading MBR from {0}'.format(self.path))
+            info('Reading MBR from {0}'.format(self.path))
             self.mbr.read(img_file)
 
             # reads the GPT header of the image file
-            debug('Reading GPT header from {0}'.format(self.path))
+            info('Reading GPT header from {0}'.format(self.path))
             offset = self.block_size
             self.gpt_header.read(img_file, offset)
 
             # reads the partition table of the image file
-            debug('Reading partition table from {0}'.format(self.path))
+            info('Reading partition table from {0}'.format(self.path))
             offset = self.block_size * self.gpt_header.lba_start
             self.table.read(img_file, offset, self.gpt_header.table_length,
                             self.gpt_header.entry_size)
@@ -1023,10 +967,10 @@ class GPTImage(object):
         """
         for tlb_part in tlb_infos:
             # removes the prefix "android_"
-            truncated_label = tlb_part.label[0:]
+            truncated_label = tlb_part.label[0:].rstrip('\x00')
             # removes the postfix "_a" or "_b" for slotab cases
-            if (truncated_label[len(truncated_label)-2:] == '_a' or
-            truncated_label[len(truncated_label)-2:] == '_b') :
+            if (truncated_label[len(truncated_label) - 2:] == '_a' or
+                    truncated_label[len(truncated_label) - 2:] == '_b'):
                 truncated_label = truncated_label[:-2]
 
             # gives the path of binary used to write the partition
@@ -1036,9 +980,10 @@ class GPTImage(object):
             offset = int(tlb_part.begin) * self.block_size
 
             # no binary file used to build the partition or slot_b case
-            label = tlb_part.label[0:]
-            if bin_path == 'none' or label[len(label)-2:] == '_b':
-                line = '\0'
+            label = tlb_part.label[0:].rstrip('\x00')
+            if bin_path == 'none' or label[len(label) - 2:] == '_b':
+                info('Write null data to {0} partition'.format(label))
+                line = b'\0' * 1024 * 500
                 img_file.seek(offset)
                 img_file.write(line)
                 bin_size = 0
@@ -1048,6 +993,7 @@ class GPTImage(object):
             if not is_safe_path(basedir, bin_path):
                 sys.stdout.write('Not allowed!\n')
 
+            info('Write {0} to {1} partition'.format(bin_path, label))
             # checks if partition size is greather or equal to the binary file
             bin_size_in_bytes = stat(bin_path).st_size
             part_size_in_bytes = tlb_part.size * self.block_size
@@ -1087,8 +1033,9 @@ class GPTImage(object):
             zero = '\x00' * (2 * self.block_size +
                              self.gpt_header.table_length *
                              self.gpt_header.entry_size)
+            zero_bytes = zero.encode('utf-8')
             img_file.seek(0)
-            img_file.write(zero)
+            img_file.write(zero_bytes)
 
             info('Writing the MBR of the GPT/UEFI image: {0}'
                  .format(self.path))
@@ -1123,10 +1070,17 @@ class GPTImage(object):
 
             info('GPT/UEFI Image {0} created successfully !!!'
                  .format(self.path))
+            info('Sync data to {0}, wait...'
+                 .format(self.path))
 
 
 def is_safe_path(basedir, path):
     return abspath(path).startswith(basedir)
+
+def is_sparse_image(image_path):
+  """Checks whether a file is a sparse image."""
+  with open(image_path, "rb") as image_file:
+    return image_file.read(4) == b"\x3a\xff\x26\xed"
 
 def usage():
     """
@@ -1159,15 +1113,19 @@ def usage():
     create_group.add_argument('--table', action='store',
                               help='The path of the partition table file.')
 
+    # commande line option used to specify the path of TBL file
+    create_group.add_argument('--flashfiles', action='store', type=str,
+                              help='The path of the images dir.')
+
     # command line option used to specify a new block size value
     create_group.add_argument('--block', action='store', type=int,
                               default=512, help=('The size of a block in Bytes'
                                                  ' [default=512].'))
 
     # command line option used to specify the size of image wrote
-    create_group.add_argument('--size', action='store', type=str, default='5G',
+    create_group.add_argument('--size', action='store', type=str, default='0G',
                               help=('the size of the GPT/UEFI image in Bytes '
-                                    '[default: 5G]'))
+                                    '[default: 12G]'))
 
     # command line option used to specify binary filename used to wrote
     # partitions of new image file
@@ -1185,6 +1143,7 @@ def main():
     """
     main function used to create or to show GPT/UEFI image information
     """
+    start_time = time()
     # catches the command line parameters
     cmdargs = usage().parse_args()
 
@@ -1212,6 +1171,15 @@ def main():
     # checks the image size value
     img_size = cmdargs.size
 
+    if img_size == '0G':
+        if exists(img_path) and S_ISBLK(stat(img_path).st_mode):
+            fd= os_open(img_path, O_RDONLY)
+            img_size = str(int(lseek(fd, 0, SEEK_END) / (1024 * 1024 * 1024)))  + 'G'
+            info('The size of {0} is {1}G'.format(img_path, img_size))
+            os_close(fd)
+        else:
+            img_size = '12G'
+            info('The size is set to 12G')
     # create an instance of GPTImage with the GPT/UEFI image path and the block
     # size value
     gpt_img = GPTImage(img_path, img_size, block_size)
@@ -1222,8 +1190,13 @@ def main():
 
         info('The GPT/UEFI image size: {0}'.format(img_size))
 
+        image_dir = getattr(cmdargs, 'flashfiles')
+        norm_image_dir = realpath(normpath(normcase(image_dir)))
+        info("image dir is {0}".format(realpath(normpath(normcase(image_dir)))))
+
         # normalizes and check if the path of TBL partition file is valid
-        tlb_path = realpath(normpath(normcase(cmdargs.table)))
+        #tlb_path = realpath(normpath(normcase(cmdargs.table)))
+        tlb_path = norm_image_dir + '/gpt.bin'
         if not isfile(tlb_path):
             error('The path of partition table is invalid: {0}'
                   .format(tlb_path))
@@ -1253,26 +1226,31 @@ def main():
 
         # creates the list of necessary binaries used to wrote GPT/UEFI image
         binaries_path = {}
-        for label in GPTImage.ANDROID_PARTITIONS:
-
-            # if the binary file is undefined
-            bin_path = getattr(cmdargs, label)
-            if bin_path == 'none':
-                debug('Partition {0} doesn\'t use a binary file'.format(label))
-                binaries_path[label] = bin_path
+        for item in tlb_infos:
+            truncated_label = item.label.rstrip('\x00')
+            if truncated_label[len(truncated_label) - 2:] == '_b':
                 continue
 
-            # check if binary file exist
-            norm_bin_path = realpath(normpath(normcase(bin_path)))
-            if not isfile(norm_bin_path):
-                error('The binary used to create the partition "{0}" is '
-                      'invalid: {1}'.format(label, norm_bin_path))
-                exit(-1)
+            if truncated_label[len(truncated_label) - 2:] == '_a':
+                #temp_label = item.label[:-2].encode('utf-8').rstrip('\x00')
+                temp_label = truncated_label[:-2]
+                bin_path = norm_image_dir + '/' + temp_label + '.img'
+            else:
+                temp_label = truncated_label
+                bin_path = norm_image_dir + '/' + temp_label + '.img'
 
-            debug('Partition {0} uses this binary file: {1}'
-                  .format(label, norm_bin_path))
-            binaries_path[label] = norm_bin_path
-
+            debug('truncated label is {0}'.format(temp_label))
+            if not isfile(bin_path):
+                binaries_path[temp_label] = 'none'
+            else:
+                binaries_path[temp_label] = bin_path
+                if is_sparse_image(bin_path):
+                    info('\n')
+                    error('{0} is a sparse image, please translate it to a raw image '
+                          'by using simg2img'.format(bin_path))
+                    info('\n')
+                    exit(-1)
+        
         # removes the GTP image, if it already exists
         if isfile(img_path):
             info('Deleting the GPT/UEFI image previous created: {0}'
@@ -1281,20 +1259,23 @@ def main():
 
         # calls function to write new GPT/UEFI image
         gpt_img.write(tlb_infos, binaries_path)
-
-    # checks if the GPT/UEFI image exists
-    if not isfile(img_path):
-        error('GPT/UEFI image not found: {0}'.format(img_path))
-        exit(-1)
+        info('gpt_image write successfully!!!')
 
     # reads the GPT/UEFI image to check it's valid, it uses CRC32
     gpt_img.read()
+    info('gpt_image read successfully!!!')
 
     # processes the command show, to print information of the GPT/UEFI image
     if cmdargs.show:
         print(gpt_img)
 
+    end_time = time()
+    time_delta = int(end_time - start_time)
+    info('ready exit!!!')
+    info("\nSpend total {0} minutes {1} seconds".format(int(time_delta/60), time_delta%60))
     exit(0)
 
+
 if __name__ == '__main__':
-        main()
+    main()
+
