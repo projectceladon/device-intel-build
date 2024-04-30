@@ -20,12 +20,29 @@ BUILT_RELEASE_SUPER_IMAGE := $(PRODUCT_OUT)/release_sign/super.img
 endif
 SOONG_HOST_TOOL := \
 	PATH="$(SOONG_HOST_OUT)/bin:$$PATH"
+
+APEX_LIST := com.android.tethering.apex,\
+			 com.android.media.swcodec.apex,\
+			 com.android.ondevicepersonalization.apex,\
+			 com.android.scheduling.apex,\
+			 com.android.media.apex,\
+			 com.android.conscrypt.apex,\
+			 com.android.resolv.apex,\
+			 com.android.tzdata.apex,\
+			 com.android.btservices.apex,\
+			 com.android.sdkext.apex,\
+			 com.android.runtime.apex,\
+			 com.android.i18n.apex
+BUILT_APEXS := $(subst $(space),,$(APEX_LIST))
+
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
 	@echo "Package release: $@"
 	$(SOONG_HOST_TOOL) \
 	$(HOST_OUT_EXECUTABLES)/sign_target_files_apks -o \
 	-d device/intel/build/testkeys/cts-release-test \
 	--key_mapping  build/target/product/security/networkstack=device/intel/build/testkeys/cts-release-test/networkstack \
+	--extra_apks             $(BUILT_APEXS)=device/intel/build/testkeys/cts-release-test/apex \
+	--extra_apex_payload_key $(BUILT_APEXS)=device/intel/build/testkeys/cts-release-test/apex.pem \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
 
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
