@@ -9,6 +9,7 @@ ifeq ($(RELEASE_BUILD),true)
 flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
 target_name := $(name)-sign-targetfile-$(FILE_NAME_TAG)
 gpt_name := $(PRODUCT_OUT)/release_sign/$(name).img
+qcow2_name := $(PRODUCT_OUT)/release_sign/$(name).qcow2
 endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
@@ -66,6 +67,15 @@ $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
 else
 $(gpt_name):
 	@echo "skip build gptimages"
+endif
+
+ifdef QCOW2IMAGE_BIN
+$(qcow2_name):$(gpt_name)
+	rm -f $@
+	$(hide) $(QEMU_IMG) convert -f raw -O qcow2 $(gpt_name) $@
+else
+$(qcow2_name):
+	@echo "skip build qcow2images"
 endif
 
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(fftf) $(UEFI_ADDITIONAL_TOOLS)
@@ -295,7 +305,7 @@ LOCAL_TOOL:= \
 
 .PHONY: flashfiles
 ifeq ($(RELEASE_BUILD),true)
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) $(qcow2_name) publish_mkdir_dest publish_vertical host-pkg
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
 	@echo "Publishing Release files started ..."
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
@@ -325,6 +335,9 @@ ifneq (,$(wildcard out/dist))
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 ifeq ($(BUILD_GPTIMAGE), true)
 	$(hide)cp -r $(PRODUCT_OUT)/release_sign/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+endif
+ifdef QCOW2IMAGE_BIN
+	$(hide)cp -r $(PRODUCT_OUT)/release_sign/caas*.qcow2 $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 endif
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/
@@ -372,6 +385,9 @@ ifneq (,$(wildcard out/dist))
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 ifeq ($(BUILD_GPTIMAGE), true)
 	$(hide)cp -r $(PRODUCT_OUT)/caas*.img.gz $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
+endif
+ifdef GPTIMAGE_QCOW2
+	$(hide)cp -r $(PRODUCT_OUT)/caas*.qcow2 $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/Release_Deb
 endif
 	$(hide)mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN
 	$(hide)cp -r device/intel/mixins/groups/device-specific/caas/addon/debian/* $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release/DEBIAN/

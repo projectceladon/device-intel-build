@@ -153,7 +153,7 @@ endif
 .PHONY: publish_gptimage
 ifdef GPTIMAGE_BIN
 ifeq ($(COMPRESS_GPTIMAGE), true)
-publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN)
+publish_gptimage: publish_mkdir_dest $(GPTIMAGE_BIN) $(QCOW2IMAGE_BIN)
 	@echo compress $(GPTIMAGE_BIN) into $(GPTIMAGE_GZ)
 	@gzip -fk $(GPTIMAGE_BIN)
 	@$(ACP) $(GPTIMAGE_GZ) $(publish_dest)
@@ -165,6 +165,9 @@ ifdef CRAFFIMAGE_BIN
 	$(TOP)/$(INTEL_PATH_BUILD)/createcraffimage.py --image $(GPTIMAGE_BIN)
 	@$(ACP) $(CRAFFIMAGE_BIN) $(publish_dest)
 endif
+ifdef QCOW2IMAGE_BIN
+	@$(ACP) $(QCOW2IMAGE_BIN) $(publish_dest)
+endif # QCOW2IMAGE_BIN
 else  # GPTIMAGE_BIN is not defined
 publish_gptimage:
 	@echo "Warning: Unable to fulfill publish_gptimage makefile request"
