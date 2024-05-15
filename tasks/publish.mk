@@ -94,14 +94,14 @@ $(PUB_OSAGNOSTIC_TAG): publish_mkdir_dest $(OS_AGNOSTIC_INFO)
 	$(hide)($(ACP) $(OS_AGNOSTIC_INFO) $@)
 endif
 
-# Publish kf4abl symbols files
-.PHONY: publish_kf4abl_symbols
+# Publish kf4sbl symbols files
+.PHONY: publish_kf4sbl_symbols
 ifeq ($(TARGET_BUILD_VARIANT:debug=)|$(KERNELFLINGER_SUPPORT_NON_EFI_BOOT),user|true)
-publish_kf4abl_symbols: publish_mkdir_dest kf4abl-$(TARGET_BUILD_VARIANT) fb4abl-$(TARGET_BUILD_VARIANT)
-	$(hide)($(ACP) $(KF4ABL_SYMBOLS_ZIP) $(FB4ABL_SYMBOLS_ZIP) $(publish_dest))
+publish_kf4sbl_symbols: publish_mkdir_dest kf4sbl-$(TARGET_BUILD_VARIANT) fb4sbl-$(TARGET_BUILD_VARIANT)
+	$(hide)($(ACP) $(KF4SBL_SYMBOLS_ZIP) $(FB4SBL_SYMBOLS_ZIP) $(publish_dest))
 else
-publish_kf4abl_symbols:
-	@echo "Publish kf4abl symbols: skipped"
+publish_kf4sbl_symbols:
+	@echo "Publish kf4sbl symbols: skipped"
 endif
 
 # Publish Firmware symbols
@@ -286,6 +286,6 @@ publish: aic
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4abl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
 	@$(ACP) out/dist/* $(publish_dest)
 endif # ANDROID_AS_GUEST
