@@ -600,7 +600,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
         shutil.rmtree(ramdisk_tmp)
         raise exc
 
-    cmd2 = ["minigzip"]
+    cmd2 = ["gzip"]
     try:
         p2 = common.Run(
             cmd2, stdin=p1.stdout, stdout=ramdisk_img.file.fileno())
@@ -613,7 +613,7 @@ def GetFastbootImage(unpack_dir, info_dict=None):
     p2.communicate()
     p1.wait()
     assert p1.returncode == 0, "mkbootfs of fastboot ramdisk failed"
-    assert p2.returncode == 0, "minigzip of fastboot ramdisk failed"
+    assert p2.returncode == 0, "gzip of fastboot ramdisk failed"
 
     # use MKBOOTIMG from environ, or "mkbootimg" if empty or not set
     mkbootimg = os.getenv('MKBOOTIMG') or "mkbootimg"
