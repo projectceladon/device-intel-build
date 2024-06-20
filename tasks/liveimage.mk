@@ -50,7 +50,7 @@ $(live_ramdisk): \
 		$(INSTALLED_RAMDISK_TARGET) \
 		$(MKBOOTFS) \
 		$(live_initrc) \
-		| $(MINIGZIP) $(ACP) \
+		| $(GZIP) $(ACP) \
 
 	$(hide) mkdir -p $(dir $@)
 	$(hide) rm -rf $(ramdisk_dir)
@@ -63,7 +63,7 @@ $(live_ramdisk): \
 	$(hide) echo "import init.live.rc" >> $(ramdisk_dir)/init.rc
 	$(hide) sed -i -r 's/^[\t ]*(mount_all|mount yaffs|mount ext).*//g' $(ramdisk_dir)/init*.rc
 	$(hide) $(ACP) $(live_initrc) $(ramdisk_dir)
-	$(hide) $(MKBOOTFS) $(ramdisk_dir) | $(MINIGZIP) > $@
+	$(hide) $(MKBOOTFS) $(ramdisk_dir) | $(GZIP) > $@
 
 $(live_bootimage): \
 		$(INTEL_PATH_BUILD)/tasks/liveimage.mk \
