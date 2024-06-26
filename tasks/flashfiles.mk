@@ -318,7 +318,7 @@ LOCAL_TOOL:= \
 ifeq ($(RELEASE_BUILD),true)
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
-ifeq (,$(filter  base_aaos,$(TARGET_PRODUCT)))
+ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started ..."
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.$(fn_compress_format) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
@@ -367,7 +367,7 @@ else
 endif
 else
 flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdir_dest publish_vertical host-pkg
-ifeq (,$(filter  base_aaos,$(TARGET_PRODUCT)))
+ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
 	$(hide) cp -r $(PRODUCT_OUT)/*-flashfiles-*.$(fn_compress_format) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
@@ -470,7 +470,7 @@ ifeq ($(use_tar),true)
 else
 	$(hide)zip -r -j $(ISO_INSTALL_IMG_COMP) $(ISO_INSTALL_IMG)
 endif
-ifeq (,$(filter  base_aaos,$(TARGET_PRODUCT)))
+ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	@echo "Zipping ISO release image $(ISO_RELEASE_TAR) ..."
 	$(hide)rm -rf $(ISO_RELEASE_TAR)
 	$(hide)cp $(ISO_INSTALL_IMG) $(TOP)/
@@ -498,7 +498,7 @@ endif
 endif
 endif
 	@echo "make ISO image done ---"
-ifeq (,$(filter  base_aaos,$(TARGET_PRODUCT)))
+ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	$(hide) cp -r $(ISO_RELEASE_TAR) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 endif
 	$(hide) cp -r $(ISO_INSTALL_IMG_COMP) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
