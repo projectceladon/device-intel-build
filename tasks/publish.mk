@@ -255,6 +255,10 @@ publish_sdk_target: publish_mkdir_dest $(INTERNAL_SDK_TARGET)
 
 
 endif # !PUBLISH_SDK
+ 
+.PHONY: publish_vmlinux
+publish_vmlinux:
+	@$(hide)($(ACP) $(BOARD_VMLINUX_DEFAULT_IMG) $(publish_dest))
 
 # We need to make sure our 'publish' target depends on the other targets so
 # that it will get done at the end.  Logic copied from build/core/distdir.mk
@@ -286,6 +290,6 @@ publish: aic
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller publish_vmlinux
 	@$(ACP) out/dist/* $(publish_dest)
 endif # ANDROID_AS_GUEST
