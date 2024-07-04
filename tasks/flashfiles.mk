@@ -316,7 +316,7 @@ LOCAL_TOOL:= \
 
 .PHONY: flashfiles
 ifeq ($(RELEASE_BUILD),true)
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg sepolicy_freeze_test check-vintf-all
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
 ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started ..."
@@ -366,7 +366,7 @@ else
 	$(hide)rm -rf $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release
 endif
 else
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdir_dest publish_vertical host-pkg
+flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) publish_gptimage_var publish_mkdir_dest publish_vertical host-pkg sepolicy_freeze_test check-vintf-all
 ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started"
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)/Release_Files
