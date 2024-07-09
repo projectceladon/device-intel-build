@@ -32,7 +32,7 @@ import os
 
 _FLASHALL_FILENAME = "flash-all.sh"
 # chmod (octal) -rwxr-x--x
-_PERMS = 0751
+_PERMS = 0o751
 _FLASH_HEADER = """#!/bin/bash
 
 # Copyright 2012 The Android Open Source Project
@@ -103,7 +103,7 @@ def ConvertToDOSFormat(filename):
 
 
 def AddFlashScript(filename, tar, commands, windows):
-    print "Archiving", filename
+    print ("Archiving", filename)
     tf = tempfile.NamedTemporaryFile(delete=False)
     if (windows):
         tf.write(_WIN_FLASH_HEADER)
@@ -146,8 +146,8 @@ class CommandlineParser(ArgumentParser):
         self.description = __doc__
 
     def error(self, message):
-        print >>stderr, "ERROR: {}".format(message)
-        print >>stderr, "\n------\n"
+        print ("ERROR: {}".format(message), file=sys.stderr)
+        print ("\n------\n", file=sys.stderr)
         self.print_help()
         exit(2)
 
@@ -230,18 +230,18 @@ def main():
     archive_name = args.output
 
     # Create Archive
-    print "Creating archive: " + archive_name
+    print ("Creating archive: " + archive_name)
     tar = TarOpen(archive_name, "w:gz")
 
     for src_path, dst_path in files:
-        print "Archiving " + src_path
+        print ("Archiving " + src_path)
         RequireFile(src_path)
         tar.add(src_path, arcname=dst_path)
 
     # 'fastboot update' covers the additional AOSP pieces, add this to the
     # command list now
     commands.append(UpdateCommand(update_fn, True))
-    print "Archiving " + args.update_archive
+    print ("Archiving " + args.update_archive)
     RequireFile(args.update_archive)
     tar.add(args.update_archive, update_fn)
     AddFlashScript(_FLASHALL_FILENAME, tar, commands, windows=False)
@@ -249,12 +249,12 @@ def main():
 
     tar.close()
 
-    print "Done."
+    print ("Done.")
 
 if __name__ == "__main__":
     try:
         exit(main())
     except Usage, err:
-        print >>stderr, "ERROR: {}".format(err.msg)
-        print >>stderr, "       for help use --help"
+        print ("ERROR: {}".format(err.msg), file=sys.stderr)
+        print ("       for help use --help", file=sys.stderr)
         exit(2)
