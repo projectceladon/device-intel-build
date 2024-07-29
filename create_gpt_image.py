@@ -17,7 +17,7 @@
 Script to create a GPT/UEFI image or to show information it contains.
 """
 
-from sys import version_info, exit
+from sys import version_info
 
 if version_info < (2, 7, 3):
     exit('Python version must be 2.7.3 or higher')
@@ -35,7 +35,7 @@ from collections import namedtuple
 if version_info < (3, 0, 1):
     from ConfigParser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
 else:
-    from configparser import ConfigParser, ParsingError, NoOptionError, NoSectionError
+    from configparser import SafeConfigParser, ParsingError, NoOptionError, NoSectionError
 from math import floor, log
 
 
@@ -135,8 +135,8 @@ class MBRInfos(object):
         Used to write MBR in an image file
         """
         self.raw = pack(MBRInfos._FMT, self.boot, self.os_type,
-                        self.lba_start, self.lba_size, b'',
-                        MBRInfos._PART_ENTRY.encode('utf-8'), b'', self.sign.encode('utf-8'))
+                        self.lba_start, self.lba_size, '',
+                        MBRInfos._PART_ENTRY, '', self.sign)
         img_file.seek(offset)
         img_file.write(self.raw)
 
@@ -284,15 +284,15 @@ class GPTHeaderInfos(object):
         """
         Used to write GPT header and backup in an image file
         """
-        self.raw = pack(GPTHeaderInfos._FMT, self.sign.encode('utf-8'), self.rev.encode('utf-8'),
-                        self.size, 0, 1, int(self.lba_backup),
-                        int(self.lba_first), int(self.lba_last), self.uuid,
+        self.raw = pack(GPTHeaderInfos._FMT, self.sign, self.rev,
+                        self.size, 0, 1, self.lba_backup,
+                        self.lba_first, self.lba_last, self.uuid,
                         2, self.table_length, self.entry_size, 0)
 
-        backup_raw = pack(GPTHeaderInfos._FMT, self.sign.encode('utf-8'), self.rev.encode('utf-8'),
-                          self.size, 0, int(self.lba_backup), 1,
-                          int(self.lba_first), int(self.lba_last), self.uuid,
-                          int(self.lba_start), self.table_length,
+        backup_raw = pack(GPTHeaderInfos._FMT, self.sign, self.rev,
+                          self.size, 0, self.lba_backup, 1,
+                          self.lba_first, self.lba_last, self.uuid,
+                          self.lba_start, self.table_length,
                           self.entry_size, 0)
 
         # writes a new GPT header
@@ -300,14 +300,14 @@ class GPTHeaderInfos(object):
         img_file.write(self.raw)
 
         # writes zero on unused blocks of GPT header
-        raw_stuffing = b'\x00' * (block_size - len(self.raw))
+        raw_stuffing = '\x00' * (block_size - len(self.raw))
         img_file.write(raw_stuffing)
 
         # saves the end of the GPT header
         gpt_header_end = img_file.tell()
 
         # writes a new GPT backup
-        backup_position = int(self.lba_backup) * block_size
+        backup_position = self.lba_backup * block_size
         img_file.seek(backup_position)
         img_file.write(backup_raw)
 
@@ -357,7 +357,6 @@ class PartTableInfos(list):
         """
         # erases the partition table entries
         self = []
-        offset=int(offset)
 
         # writes all new partition entries in GPT header
         current_offset = offset
@@ -372,7 +371,7 @@ class PartTableInfos(list):
         img_file.seek(offset)
         raw_entries_size = current_offset - offset
         raw_entries = img_file.read(raw_entries_size)
-        img_file.seek(int(last_usable) + 1)
+        img_file.seek(last_usable + 1)
         img_file.write(raw_entries)
 
         img_file.seek(current_offset)
@@ -739,7 +738,7 @@ class TLBInfos(list):
         Used to read a INI TLB partition file
         """
         # sets a parser to read the INI TLB partition file
-        cfg = ConfigParser(strict=False)
+        cfg = SafeConfigParser()
         try:
             cfg.read(self.path)
 
@@ -966,7 +965,7 @@ class GPTImage(object):
         img_file.seek(2 * self.block_size)
         raw_table = img_file.read(self.gpt_header.table_length *
                                   self.gpt_header.entry_size)
-        img_file.seek((int(self.gpt_header.lba_backup) - 32) * self.block_size)
+        img_file.seek((self.gpt_header.lba_backup - 32) * self.block_size)
         raw_backup_table = img_file.read(self.gpt_header.table_length *
                                          self.gpt_header.entry_size)
 
@@ -1036,7 +1035,7 @@ class GPTImage(object):
             # no binary file used to build the partition or slot_b case
             label = tlb_part.label[0:]
             if bin_path == 'none' or label[len(label)-2:] == '_b':
-                line = b'\0'
+                line = '\0'
                 img_file.seek(offset)
                 img_file.write(line)
                 bin_size = 0
@@ -1082,7 +1081,7 @@ class GPTImage(object):
 
             # fill output image header with 0x00: MBR size + GPT header size +
             # (partition table length * entry size)
-            zero = b'\x00' * (2 * self.block_size +
+            zero = '\x00' * (2 * self.block_size +
                              self.gpt_header.table_length *
                              self.gpt_header.entry_size)
             img_file.seek(0)
