@@ -330,13 +330,7 @@ def parse_config(ips, variant, platform):
     results_list = []
     for k,v in results.items():
         results_list.append((k,v))
-    unique_files = []
-    for file in files:
-    # If the number is not already in the unique_numbers list, add it
-        if file not in unique_files:
-            unique_files.append(file)
-
-    flist = [f.rsplit(':', 1) for f in unique_files]
+    flist = [f.rsplit(':', 1) for f in set(files)]
     return results_list, flist
 
 
