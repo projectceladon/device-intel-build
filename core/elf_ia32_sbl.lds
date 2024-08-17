@@ -29,6 +29,7 @@ SECTIONS
 	_edata = .;
 
 	.bss : {
+		*(.sbss.pae)
 		*(.sbss)
 		*(.sbss.*)
 		*(.bss)
