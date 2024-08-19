@@ -35,7 +35,7 @@ APEX_LIST := com.android.tethering.apex,\
 			 com.android.i18n.apex
 BUILT_APEXS := $(subst $(space),,$(APEX_LIST))
 
-$(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE)
+$(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE) sign_target_files_apks
 	@echo "Package release: $@"
 	$(SOONG_HOST_TOOL) \
 	$(HOST_OUT_EXECUTABLES)/sign_target_files_apks -o \
