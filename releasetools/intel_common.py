@@ -394,7 +394,7 @@ def GetBootloaderImageFromTFP(unpack_dir, autosize=False, extra_files=None, vari
                            block_size=info["block_size"],
                            extra_files=extra_files)
 
-    bootloader = open(filename)
+    bootloader = open(filename, 'rb')
     data = bootloader.read()
     bootloader.close()
     os.unlink(filename)
@@ -461,7 +461,7 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, block_size
                 size += os.path.getsize(os.path.join(dpath, f))
 
         # Add 1% extra space, minimum 32K
-        extra = size / 100
+        extra = size // 100
         if extra < (32 * 1024):
             extra = 32 * 1024
         size += extra
@@ -482,7 +482,7 @@ def MakeVFATFilesystem(root_zip, filename, title="ANDROIDIA", size=0, block_size
     cmd = ["mkdosfs"]
     if block_size:
         cmd.extend(["-S", str(block_size)])
-    cmd.extend(["-n", title, "-C", filename, str(size / 1024)])
+    cmd.extend(["-n", title, "-C", filename, str(size // 1024)])
     try:
         p = common.Run(cmd)
     except Exception as exc:
