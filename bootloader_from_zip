@@ -83,12 +83,12 @@ def main(argv):
         sys.exit(1)
 
     if not OPTIONS.zipfile:
-        print "--zipfile is required"
+        print ("--zipfile is required")
         common.Usage(__doc__)
         sys.exit(1)
 
     tf = tempfile.NamedTemporaryFile()
-    tf.write("foo")
+    tf.write(b"foo")
     tf.flush()
 
     extra_files = OPTIONS.bootimage
@@ -106,9 +106,9 @@ if __name__ == '__main__':
     try:
         common.CloseInheritedPipes()
         main(sys.argv[1:])
-    except common.ExternalError, e:
+    except common.ExternalError as e:
         print
-        print "   ERROR: %s" % (e,)
+        print ("   ERROR: %s" % (e,))
         print
         sys.exit(1)
 
