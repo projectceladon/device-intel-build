@@ -5,6 +5,13 @@ endif
 ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
+
+ifeq ($(use_tar),true)
+    fn_compress_format := tar.gz
+else
+    fn_compress_format := zip
+endif
+
 ifeq ($(RELEASE_BUILD),true)
 flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG)
 target_name := $(name)-sign-targetfile-$(FILE_NAME_TAG)
@@ -13,7 +20,7 @@ endif
 name := $(name)-flashfiles-$(FILE_NAME_TAG)
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 ifeq ($(RELEASE_BUILD),true)
-BUILT_RELEASE_FLASH_FILES_PACKAGE := $(PRODUCT_OUT)/$(flash_name).zip
+BUILT_RELEASE_FLASH_FILES_PACKAGE := $(PRODUCT_OUT)/$(flash_name).$(fn_compress_format)
 BUILT_RELEASE_TARGET_FILES_PACKAGE := $(PRODUCT_OUT)/$(target_name).zip
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
 BUILT_RELEASE_SUPER_IMAGE := $(PRODUCT_OUT)/release_sign/super.img
@@ -58,9 +65,13 @@ endif
 
 ifeq ($(BUILD_GPTIMAGE), true)
 $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
+ifeq ($(use_tar),true)
+	tar -xvzf $< -C $(GPT_DIR)
+else
 	rm -rf $(GPT_DIR)
 	mkdir -p $(GPT_DIR)
 	unzip $< -d $(GPT_DIR)
+endif
 	$(SIMG2IMG) $(GPT_DIR)/super.img $(GPT_DIR)/super.img.raw
 	$(SIMG2IMG) $(GPT_DIR)/config.img $(GPT_DIR)/config.img.raw
 
@@ -85,28 +96,31 @@ $(gpt_name):
 	@echo "skip build gptimages"
 endif
 
+ifeq ($(use_tar),true)
+$(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(fftf) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
+	rm -rf $(GPT_DIR)
+	mkdir -p $(GPT_DIR)
+	unzip $(BUILT_RELEASE_TARGET_FILES_PACKAGE) -d $(GPT_DIR)
+	$(fftf) $@ RELEASE_BUILD=true
+	rm -rf $(GPT_DIR)
+else
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_SUPER_IMAGE) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) --add_image=$(BUILT_RELEASE_SUPER_IMAGE) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
 	#remove system.img vendor.img product.img from flashfiles.zip
 	$(hide)zip -d $@ "system.img" "product.img" "vendor.img";
+endif
 else
 $(BUILT_RELEASE_FLASH_FILES_PACKAGE):$(BUILT_RELEASE_TARGET_FILES_PACKAGE) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS)
 	$(hide) mkdir -p $(dir $@)
 	$(legacy_fftf) $(FLASHFILES_ADD_ARGS) --mv_config_default=$(notdir $(mvcfg_default_arg)) $(BUILT_RELEASE_TARGET_FILES_PACKAGE) $@
-endif
-endif
+endif #SUPER_IMG_IN_FLASHZIP
+endif #RELEASE_BUILD
 
 ifeq ($(USE_INTEL_FLASHFILES),true)
 fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files.sh
 legacy_fftf := $(INTEL_PATH_BUILD)/releasetools/flashfiles_from_target_files
 odf := $(INTEL_PATH_BUILD)/releasetools/ota_deployment_fixup
-
-ifeq ($(use_tar),true)
-    fn_compress_format := tar.gz
-else
-    fn_compress_format := zip
-endif
 
 ifneq ($(FLASHFILE_VARIANTS),)
   # Generate variant specific flashfiles if VARIANT_SPECIFIC_FLASHFILES is True
@@ -169,6 +183,7 @@ mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE.$(firstword $(SOFIA_FIRMWARE_VARIAN
 else
 mvcfg_default_arg = $(MV_CONFIG_DEFAULT_TYPE)
 endif
+
 
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
 $(INTEL_FACTORY_FLASHFILES_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(fftf) $(legacy_fftf) $(UEFI_ADDITIONAL_TOOLS) $(INTERNAL_SUPERIMAGE_DIST_TARGET)
@@ -333,7 +348,7 @@ LOCAL_TOOL:= \
 
 .PHONY: flashfiles
 ifeq ($(RELEASE_BUILD),true)
-flashfiles: $(INTEL_FACTORY_FLASHFILES_TARGET) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg sepolicy_freeze_test check-vintf-all
+flashfiles: $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(gpt_name) publish_mkdir_dest publish_vertical host-pkg sepolicy_freeze_test check-vintf-all
 	@$(ACP) $(BUILT_RELEASE_FLASH_FILES_PACKAGE) $(publish_dest)
 ifeq (,$(filter  base_aaos aaos_iasw,$(TARGET_PRODUCT)))
 	@echo "Publishing Release files started ..."
