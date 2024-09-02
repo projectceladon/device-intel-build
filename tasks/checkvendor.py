@@ -168,12 +168,12 @@ def main():
     try:
         for mk in makefile:
             nb_err, searched_output = search_string(options.light, tup, mk, nb_err, searched_output)
-            if nb_err is not nb_err_tmp:
+            if nb_err != nb_err_tmp:
                 num_mk = num_mk+1
                 nb_err_tmp = nb_err
 
         if not options.light:
-            if nb_err is not 0:
+            if nb_err != 0:
                 print(separative_line)
                 print_vendor(informative_message)
                 print(separative_line)
@@ -186,4 +186,4 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())
