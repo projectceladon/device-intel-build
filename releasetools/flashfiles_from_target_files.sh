@@ -13,6 +13,16 @@ VARIANT=`grep -i "ro.system.build.type=" $PRODUCT_OUT/system/build.prop | cut -d
 TARGET=`grep -i "ro.build.product=" $PRODUCT_OUT/system/build.prop | cut -d '=' -f2`
 ANDROID_ROOT=${PWD}
 
+for arg in "$@"
+do
+    case $arg in
+        RELEASE_BUILD=*)
+        RELEASE_BUILD="${arg#*=}"
+        shift
+        ;;
+    esac
+done
+
 echo "========================"
 echo "Images / Files to be packed"
 echo "========================"
@@ -38,25 +48,33 @@ mkdir $flashfile_dir
 
 for i in $IMAGES
 do
-  echo "Adding $i"
-  if [[ $i == "super.img" ]]; then
-    SUPER_IMG=true
-    cp ./obj/PACKAGING/super.img_intermediates/super.img $flashfile_dir/.
-  else
-    if [[ $i == "installer.efi" ]]; then
-      cp efi/installer.efi $flashfile_dir/.
-    else
-      if [[ $i == "startup.nsh" ]]; then
-        cp efi/startup.nsh $flashfile_dir/.
-      else
-	  if [[ $i == "system.img" || $i == "odm.img" || $i == "vbmeta.img" || $i == "vendor_boot.img" ]]; then
-	    cp obj/PACKAGING/target_files_intermediates/$TARGET-target_files-*/IMAGES/$i $flashfile_dir/.
-	  else
-            cp $i $flashfile_dir/.
-	  fi
-      fi
-    fi
-  fi
+	echo "Adding $i"
+	if [[ $i == "super.img" ]]; then
+		SUPER_IMG=true
+		if [[ "$RELEASE_BUILD" == "true" ]]; then
+			cp  release_sign/super.img $flashfile_dir/.
+		else
+			cp ./obj/PACKAGING/super.img_intermediates/super.img $flashfile_dir/.
+		fi
+	else
+		if [[ $i == "installer.efi" ]]; then
+			cp efi/installer.efi $flashfile_dir/.
+		else
+			if [[ $i == "startup.nsh" ]]; then
+				cp efi/startup.nsh $flashfile_dir/.
+			else
+				if [[ $i == "boot.img" || $i == "odm.img" || $i == "vbmeta.img" || $i == "vendor_boot.img" ]]; then
+					if [[ "$RELEASE_BUILD" == "true" ]]; then
+						cp ff_temp/IMAGES/$i $flashfile_dir/.
+					else
+						cp obj/PACKAGING/target_files_intermediates/$TARGET-target_files-*/IMAGES/$i $flashfile_dir/.
+					fi
+				else
+					cp $i $flashfile_dir/.
+				fi
+			fi
+		fi
+	fi
 done
 
 cd $ANDROID_ROOT
