@@ -517,6 +517,7 @@ class TableEntryInfos(object):
                                           '3d69d8477de4'),
                       'config': ('0fc63daf-8483-4772-8e79-'
                                          '3d69d8477de4'),
+                      'swap': ('0657fd6d-a4ab-43c4-84e5-0933c84b4f4f'),
                       'mfos':'4f33cfe4-a0c1-448b-aec4-40f10a0cef3f',
                       'teedata': '0fc63daf-8483-4772-8e79-3d69d8477de4',
                       'super': '0fc63daf-8483-4772-8e79-3d69d8477de4',
@@ -872,6 +873,7 @@ class GPTImage(object):
         'persistent',
         'factory',
         'config',
+        'swap',
         'tos',
         'mfos',
         'teedata',
