@@ -49,6 +49,9 @@ SIGNING_KEY = {
     "KEY_ID_OS2_PUBLIC_RSA2048"      :    "OS2_TestKey_Pub_RSA2048.pem",
     "KEY_ID_OS2_PUBLIC_RSA3072"      :    "OS2_TestKey_Pub_RSA3072.pem",
 
+    # KEY_ID_OS1_PRIVATE is used for signing container header with BOOT signature
+    "KEY_ID_OS1_PRIVATE_RSA2048"     :    "OS1_TestKey_Priv_RSA2048.pem",
+    "KEY_ID_OS1_PRIVATE_RSA3072"     :    "OS1_TestKey_Priv_RSA3072.pem",
     }
 
 MESSAGE_SBL_KEY_DIR = (
@@ -257,6 +260,7 @@ def single_sign_gen_pub_key (in_key, pub_key_file = None):
     # Expect key to be in PEM format
     is_prv_key = False
     cmdline = [get_openssl_path(), 'rsa', '-pubout', '-text', '-noout', '-in', '%s' % in_key]
+    print ("cmdline1 = %s" % cmdline)
     # Check if it is public key or private key
     text = open(in_key, 'r').read()
     if '-BEGIN RSA PRIVATE KEY-' in text or '-BEGIN PRIVATE KEY-' in text:
@@ -266,12 +270,14 @@ def single_sign_gen_pub_key (in_key, pub_key_file = None):
     else:
         raise Exception('Unknown key format "%s" !' % in_key)
 
+    print ("cmdline2 = %s" % cmdline)
     if pub_key_file:
         cmdline.extend (['-out', '%s' % pub_key_file])
         capture = False
     else:
         capture = True
 
+    print ("cmdline3 = %s" % cmdline)
     output = run_process (cmdline, capture_out = capture)
     if not capture:
         output = text = open(pub_key_file, 'r').read()
@@ -279,11 +285,17 @@ def single_sign_gen_pub_key (in_key, pub_key_file = None):
     data     = data.replace('\n', '')
     data     = data.replace('  ', '')
 
+    print ("data = %s" % data)
     # Extract the modulus
     if is_prv_key:
+        print ("prv_key")
         match = re.search('modulus(.*)publicExponent:\s+(\d+)\s+', data)
     else:
+        print ("pub_key")
         match = re.search('Modulus(?:.*?):(.*)Exponent:\s+(\d+)\s+', data)
+
+    print ("match %X", match)
+
     if not match:
         raise Exception('Public key not found!')
     modulus  = match.group(1).replace(':', '')
