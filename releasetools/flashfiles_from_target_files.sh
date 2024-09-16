@@ -27,7 +27,7 @@ echo "========================"
 echo "Images / Files to be packed"
 echo "========================"
 IMAGES_TUPLE=`./device/intel/build/releasetools/flash_cmd_generator.py device/intel/project-celadon/$TARGET/flashfiles.ini $TARGET $VARIANT | tail -1`
-c=-2
+c=0
 for i in $IMAGES_TUPLE
 do
   if [[ $c -gt 0 && `expr $c % 2` == 1 ]]; then
@@ -62,7 +62,7 @@ do
 		else
 			if [[ $i == "startup.nsh" ]]; then
 				cp efi/startup.nsh $flashfile_dir/.
-			elif [[ $i == "gpt.ini" ]]; then
+			elif [[ $i == "gpt.ini"  || $i == "gpt_ro.bin" || $i == "gpt_rw.bin" || $i == "gpt_rw_nolic.bin" ]]; then
 				cp obj/PACKAGING/flashfiles_intermediates/root/$i $flashfile_dir/.
 			else
 				if [[ $i == "boot.img" || $i == "odm.img" || $i == "vbmeta.img" || $i == "vendor_boot.img" ]]; then
