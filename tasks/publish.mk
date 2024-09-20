@@ -296,6 +296,6 @@ publish: aic
 	$(hide) mkdir -p $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 	$(hide) cp $(PRODUCT_OUT)/$(TARGET_AIC_FILE_NAME) $(TOP)/pub/$(TARGET_PRODUCT)/$(TARGET_BUILD_VARIANT)
 else # ANDROID_AS_GUEST
-publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG)  publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller publish_kernel_debug
+publish: publish_mkdir_dest $(PUBLISH_GOALS) publish_ifwi publish_gptimage_var publish_firmware_symbols $(PUB_OSAGNOSTIC_TAG) publish_kf4sbl publish_kf4sbl_symbols $(PUB_CMCC_ZIP) publish_androidia_image publish_grubinstaller publish_kernel_debug
 	@$(ACP) out/dist/* $(publish_dest)
 endif # ANDROID_AS_GUEST
