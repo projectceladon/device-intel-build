@@ -5,12 +5,13 @@ endif
 ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
+FILE_NAME_TAG_PLACEHOLDER := $(TARGET_BUILD_VARIANT)-$(file <$(OUT_DIR)/file_name_tag.txt)
 ifeq ($(RELEASE_BUILD),true)
-flash_name := $(name)-sign-flashfiles-intel
-target_name := $(name)-sign-targetfile-intel
+flash_name := $(name)-sign-flashfiles-$(FILE_NAME_TAG_PLACEHOLDER)
+target_name := $(name)-sign-targetfile-$(FILE_NAME_TAG_PLACEHOLDER)
 gpt_name := $(PRODUCT_OUT)/release_sign/$(name).img
 endif
-name := $(name)-flashfiles-intel
+name := $(name)-flashfiles-$(FILE_NAME_TAG_PLACEHOLDER)
 BUILDNUM := $(shell $(DATE) +%H%M%3S)
 ifeq ($(RELEASE_BUILD),true)
 BUILT_RELEASE_FLASH_FILES_PACKAGE := $(PRODUCT_OUT)/$(flash_name).zip
@@ -115,7 +116,7 @@ ifneq ($(FLASHFILE_VARIANTS),)
       $(foreach var,$(FLASHFILE_VARIANTS), \
 	    $(info Adding $(var)) \
 	    $(eval fn_prefix := $(PRODUCT_OUT)/$(TARGET_PRODUCT)) \
-	    $(eval fn_suffix := $(var)-intel) \
+	    $(eval fn_suffix := $(var)-$(FILE_NAME_TAG_PLACEHOLDER)) \
 	    $(eval ff_zip := $(fn_prefix)-flashfiles-$(fn_suffix).$(fn_compress_format)) \
 	    $(eval INTEL_FACTORY_FLASHFILES_TARGET += $(ff_zip)) \
 	    $(call dist-for-goals,droidcore,$(ff_zip):$(notdir $(ff_zip))))
@@ -135,7 +136,7 @@ ifneq ($(TARGET_SKIP_OTA_PACKAGE), true)
   $(foreach var,$(OTA_VARIANTS), \
 	$(info Adding $(var)) \
 	$(eval fn_prefix := $(PRODUCT_OUT)/$(TARGET_PRODUCT)) \
-	$(eval fn_suffix := $(var)-intel) \
+	$(eval fn_suffix := $(var)-$(FILE_NAME_TAG_PLACEHOLDER)) \
 	$(eval ota_zip := $(fn_prefix)-ota-$(fn_suffix).zip) \
 	$(eval INTEL_OTA_PACKAGES += $(ota_zip)) \
 	$(call dist-for-goals,droidcore,$(ota_zip):$(notdir $(ota_zip))))
@@ -314,9 +315,9 @@ publish_vertical:
 endif
 
 ifeq ($(RELEASE_BUILD),true)
-ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-sign-flashfile-intel.iso
+ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-sign-flashfile-$(FILE_NAME_TAG_PLACEHOLDER).iso
 else
-ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-intel.iso
+ISO_INSTALL_IMG = $(PRODUCT_OUT)/$(TARGET_PRODUCT)-flashfile-$(FILE_NAME_TAG_PLACEHOLDER).iso
 endif
 ifeq ($(use_tar),true)
 ISO_INSTALL_IMG_COMP = $(ISO_INSTALL_IMG).tar.gz
