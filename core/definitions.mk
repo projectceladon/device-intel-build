@@ -26,6 +26,7 @@ IASL := $(INTEL_PATH_BUILD)/acpi-tools/linux64/bin/iasl
 # Generation
 KF4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/kf4sbl_symbols.zip
 FB4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/fb4sbl_symbols.zip
+CD4SBL_SYMBOLS_ZIP := $(PRODUCT_OUT)/cd4sbl_symbols.zip
 
 # Extra host tools we need built to use our *_from_target_files
 # or sign_target_files_* scripts
@@ -147,13 +148,24 @@ endef
 define transform-o-to-sbl-executable
 @echo "target SBL Executable: $(PRIVATE_MODULE) ($@)"
 $(hide) mkdir -p $(dir $@)
-$(hide) $(IAFW_LD) $1 \
+$(hide) if [ $(findstring cd4sbl,$(PRIVATE_MODULE) ) ]; then \
+$(IAFW_LD) $1 \
+    --defsym=CONFIG_LP_BASE_ADDRESS=$(CRASHDUMP_BASE_ADDRESS) \
+    --defsym=CONFIG_LP_HEAP_SIZE=$(CRASHDUMP_HEAP_SIZE) \
+    --defsym=CONFIG_LP_STACK_SIZE=$(CRASHDUMP_STACK_SIZE) \
+    --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
+    $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
+    -Map $(@:.sbl=.map) -o $(@:.sbl=.sym.elf); \
+else \
+$(IAFW_LD) $1 \
     --defsym=CONFIG_LP_BASE_ADDRESS=$(LIBPAYLOAD_BASE_ADDRESS) \
     --defsym=CONFIG_LP_HEAP_SIZE=$(LIBPAYLOAD_HEAP_SIZE) \
     --defsym=CONFIG_LP_STACK_SIZE=$(LIBPAYLOAD_STACK_SIZE) \
     --whole-archive $(call module-built-files,$(LIBPAYLOAD_CRT0)) --no-whole-archive \
     $(PRIVATE_ALL_OBJECTS) --start-group $(PRIVATE_ALL_STATIC_LIBRARIES) --end-group $(IAFW_LIBCLANG) \
-    -Map $(@:.sbl=.map) -o $(@:.sbl=.sym.elf)
+    -Map $(@:.sbl=.map) -o $(@:.sbl=.sym.elf); \
+fi
+
 $(hide)$(IAFW_STRIP) --strip-all $(@:.sbl=.sym.elf) -o $(@:.sbl=.elf)
 
 $(hide) cp $(@:.sbl=.elf) $@
@@ -168,6 +180,8 @@ if [ $(findstring kf4sbl,$(PRIVATE_MODULE) ) ]; then \
 	cp $(SBL_DIR)/sbl_bm $(PRODUCT_OUT)/sbl_bm; \
 elif [ $(findstring fb4sbl,$(PRIVATE_MODULE) ) ]; then \
 	cp $(SBL_DIR)/sbl_bm $(PRODUCT_OUT)/sbl_fb; \
+elif [ $(findstring cd4sbl,$(PRIVATE_MODULE) ) ]; then \
+	cp $(SBL_DIR)/sbl_bm $(PRODUCT_OUT)/sbl_cd; \
 fi
 
 
@@ -176,6 +190,8 @@ $(hide) if [ "$(PRIVATE_MODULE:debug=)" = fb4sbl-user ]; then \
 	zip -juy $(FB4SBL_SYMBOLS_ZIP) $@; \
 elif [ "$(PRIVATE_MODULE:debug=)" = kf4sbl-user ]; then \
 	zip -juy $(KF4SBL_SYMBOLS_ZIP) $(@:.sbl=.map) $(@:.sbl=.sym.elf); \
+elif [ "$(PRIVATE_MODULE:debug=)" = cd4sbl-user ]; then \
+	zip -juy $(CD4SBL_SYMBOLS_ZIP) $(@:.sbl=.map) $(@:.sbl=.sym.elf); \
 fi
 endef
 
