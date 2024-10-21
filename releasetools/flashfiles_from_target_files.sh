@@ -84,7 +84,6 @@ echo "========================"
 echo "Generate installer.cmd"
 echo "========================"
 device/intel/build/releasetools/flash_cmd_generator.py device/intel/project-celadon/$TARGET/flashfiles.ini $TARGET $VARIANT | sed '$d' | sed '$d' | sed -n '/installer.cmd/,$p' | sed '1d' > $PRODUCT_OUT/$flashfile_dir/installer.cmd
-sed -i 's/flash super super.img/flash super super.img.part00 super.img.part01/g' $PRODUCT_OUT/$flashfile_dir/installer.cmd
 
 echo "========================"
 echo "Generate flash.json"
