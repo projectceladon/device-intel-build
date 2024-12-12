@@ -48,9 +48,11 @@ do
     else
       if [[ $i == "startup.nsh" ]]; then
         cp efi/startup.nsh $flashfile_dir/.
+      elif [[ $i == "gpt.ini" ]]; then
+        cp obj/PACKAGING/flashfiles_intermediates/root/$i $flashfile_dir/.
       else
-	  if [[ $i == "system.img" || $i == "odm.img" || $i == "vbmeta.img" || $i == "vendor_boot.img" ]]; then
-	    cp obj/PACKAGING/target_files_intermediates/$TARGET-target_files-*/IMAGES/$i $flashfile_dir/.
+	  if [[ $i == "boot.img" || $i == "vbmeta.img" || $i == "vendor_boot.img" ]]; then
+	    cp obj/PACKAGING/target_files_intermediates/$TARGET-target_files*/IMAGES/$i $flashfile_dir/.
 	  else
             cp $i $flashfile_dir/.
 	  fi
