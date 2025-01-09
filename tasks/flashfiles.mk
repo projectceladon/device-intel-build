@@ -33,7 +33,25 @@ APEX_LIST := com.android.tethering.apex,\
 			 com.android.btservices.apex,\
 			 com.android.sdkext.apex,\
 			 com.android.runtime.apex,\
-			 com.android.i18n.apex
+			 com.android.i18n.apex,\
+			 com.android.adservices.apex,\
+			 com.android.hardware.cas.apex,\
+			 com.android.os.statsd.apex,\
+			 com.android.hardware.audio.apex,\
+			 com.android.extservices.apex,\
+			 com.android.neuralnetworks.apex,\
+			 com.android.hardware.power.intel.apex,\
+			 com.android.virt.apex,\
+			 com.android.uwb.apex,\
+			 com.android.mediaprovider.apex,\
+			 com.android.hardware.thermal.intel.apex,\
+			 com.android.rkpd.apex,\
+			 com.android.appsearch.apex,\
+			 com.android.ipsec.apex,\
+			 com.android.permission.apex,\
+			 com.android.wifi.apex,\
+			 com.android.adbd.apex,\
+			 com.android.art.apex
 BUILT_APEXS := $(subst $(space),,$(APEX_LIST))
 
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE) sign_target_files_apks
