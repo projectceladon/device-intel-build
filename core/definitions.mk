@@ -162,7 +162,7 @@ $(eval SBL_DIR := $(dir $@))
 $(hide)rm -rf $(SBL_DIR)/cmdline1
 $(hide)touch $(SBL_DIR)/cmdline1
 python3 $(INTEL_PATH_BUILD)/containertool/GenContainer.py create -t MULTIBOOT -cl CMD1:$(SBL_DIR)/cmdline1 \
-ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -o $(SBL_DIR)/sbl_bm
+ELF1:$@ -k $(INTEL_PATH_BUILD)/testkeys/OS1_TestKey_Priv_RSA3072.pem -a RSA3072_PSS_SHA2_384 -o $(SBL_DIR)/sbl_bm
 
 if [ $(findstring kf4sbl,$(PRIVATE_MODULE) ) ]; then \
 	cp $(SBL_DIR)/sbl_bm $(PRODUCT_OUT)/sbl_bm; \
