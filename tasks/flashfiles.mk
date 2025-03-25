@@ -51,7 +51,11 @@ APEX_LIST := com.android.tethering.apex,\
 			 com.android.permission.apex,\
 			 com.android.wifi.apex,\
 			 com.android.adbd.apex,\
-			 com.android.art.apex
+			 com.android.art.apex,\
+			 com.android.hardware.audio.intel.apex,\
+			 com.android.extservices.apex,\
+			 com.android.permission.apex,\
+			 com.android.hardware.gnss.apex
 BUILT_APEXS := $(subst $(space),,$(APEX_LIST))
 
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE) sign_target_files_apks
