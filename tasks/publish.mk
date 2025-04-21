@@ -74,6 +74,9 @@ $(PUB_KERNEL_MODULES): $(LOCAL_KERNEL_PATH)/copy_modules
 
 publish_kernel_debug: $(PUB_KERNEL_DBG) $(PUB_KERNEL_MODULES)
 	@echo "Publish kernel debug: $(notdir $^)"
+	$(hide)($(ACP) $(PUB_KERNEL_DBG_PATH)/$(PUB_KERNEL_MODULES) $(publish_dest))
+	$(hide)($(ACP) $(PUB_KERNEL_DBG_PATH)/vmlinux.bz2 $(publish_dest))
+	$(hide)($(ACP) $(PUB_KERNEL_DBG_PATH)/System.map.bz2 $(publish_dest))
 endif # $(LOCAL_KERNEL_PATH)
 else
 publish_kernel_debug:
