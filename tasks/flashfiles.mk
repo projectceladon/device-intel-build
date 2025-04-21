@@ -21,7 +21,70 @@ BUILT_RELEASE_SUPER_IMAGE := $(PRODUCT_OUT)/release_sign/super.img
 endif
 SOONG_HOST_TOOL := \
 	PATH="$(SOONG_HOST_OUT)/bin:$$PATH"
-
+APK_LIST := AdServicesApk.apk,\
+			 AdIdSdk.apk,\
+			 AppSetIdSdk.apk,\
+			 CodeProviderWithResources.apk,\
+			 CrashTestSdkProvider.apk,\
+			 EmptySdkProviderApp.apk,\
+			 FailingSdkProvider.apk,\
+			 com.android.appsearch.apk.apk,\
+			 Bluetooth.apk,\
+			 ServiceConnectivityResources.apk,\
+			 OsuLogin.apk,\
+			 RestrictionsProvider.apk,\
+			 SampleCodeProviderApp.apk,\
+			 Sdk1.apk,\
+			 SdkFledge.apk,\
+			 SdkSandbox.apk,\
+			 SdkMeasurement.apk,\
+			 SdkSandboxCodeProvider.apk,\
+			 SdkSandboxDataIsolationTestProvider.apk,\
+			 SdkSandboxManagerCtsProvider.apk,\
+			 SdkSandboxMediateeProvider.apk,\
+			 SdkSandboxMediationTestProvider.apk,\
+			 SdkSandboxStorageTestProvider.apk,\
+			 SdkSandboxTestUtilsExampleTestSdk.apk,\
+			 SdkSandboxWebViewProvider.apk,\
+			 SocketSdkProvider.apk,\
+			 StorageTestCodeProvider.apk,\
+			 TestCodeProvider.apk,\
+			 TestCodeProvider2.apk,\
+			 WebViewSandboxTestSdk.apk,\
+			 ServiceUwbResources.apk,\
+			 WifiDialog.apk,\
+			 ServiceWifiResources.apk,\
+			 com.android.tethering.apex,\
+			 com.android.media.swcodec.apex,\
+			 com.android.ondevicepersonalization.apex,\
+			 com.android.scheduling.apex,\
+			 com.android.media.apex,\
+			 com.android.conscrypt.apex,\
+			 com.android.resolv.apex,\
+			 com.android.tzdata.apex,\
+			 com.android.btservices.apex,\
+			 com.android.sdkext.apex,\
+			 com.android.runtime.apex,\
+			 com.android.i18n.apex,\
+			 com.android.adservices.apex,\
+			 com.android.hardware.cas.apex,\
+			 com.android.os.statsd.apex,\
+			 com.android.neuralnetworks.apex,\
+			 com.android.hardware.power.intel.apex,\
+			 com.android.virt.apex,\
+			 com.android.uwb.apex,\
+			 com.android.mediaprovider.apex,\
+			 com.android.hardware.thermal.intel.apex,\
+			 com.android.rkpd.apex,\
+			 com.android.appsearch.apex,\
+			 com.android.ipsec.apex,\
+			 com.android.wifi.apex,\
+			 com.android.adbd.apex,\
+			 com.android.art.apex,\
+			 com.android.hardware.audio.intel.apex,\
+			 com.android.extservices.gms.apex,\
+			 com.android.permission.gms.apex
+BUILT_APKS := $(subst $(space),,$(APK_LIST))
 APEX_LIST := com.android.tethering.apex,\
 			 com.android.media.swcodec.apex,\
 			 com.android.ondevicepersonalization.apex,\
@@ -60,7 +123,7 @@ $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE) sign_target_
 	$(HOST_OUT_EXECUTABLES)/sign_target_files_apks -o \
 	-d device/intel/build/testkeys/cts-release-test \
 	--key_mapping  build/target/product/security/networkstack=device/intel/build/testkeys/cts-release-test/networkstack \
-	--extra_apks             $(BUILT_APEXS)=device/intel/build/testkeys/cts-release-test/apex \
+	--extra_apks             $(BUILT_APKS)=device/intel/build/testkeys/cts-release-test/apex \
 	--extra_apex_payload_key $(BUILT_APEXS)=device/intel/build/testkeys/cts-release-test/apex.pem \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
 
