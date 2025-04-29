@@ -29,6 +29,7 @@ APK_LIST := AdServicesApk.apk,\
 			 EmptySdkProviderApp.apk,\
 			 FailingSdkProvider.apk,\
 			 com.android.appsearch.apk.apk,\
+			 Bluetooth.apk,\
 			 ServiceConnectivityResources.apk,\
 			 OsuLogin.apk,\
 			 RestrictionsProvider.apk,\
@@ -124,7 +125,6 @@ $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE) sign_target_
 	--key_mapping  build/target/product/security/networkstack=device/intel/build/testkeys/cts-release-test/networkstack \
 	--extra_apks             $(BUILT_APKS)=device/intel/build/testkeys/cts-release-test/apex \
 	--extra_apex_payload_key $(BUILT_APEXS)=device/intel/build/testkeys/cts-release-test/apex.pem \
-	--extra_apks             Bluetooth.apk=device/intel/build/testkeys/cts-release-test/bluetooth \
 	$(BUILT_TARGET_FILES_PACKAGE) $@
 
 ifeq ($(SUPER_IMG_IN_FLASHZIP),true)
