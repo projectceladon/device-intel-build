@@ -68,6 +68,7 @@ APK_LIST := AdServicesApk.apk,\
 			 com.android.adservices.apex,\
 			 com.android.hardware.cas.apex,\
 			 com.android.os.statsd.apex,\
+			 com.android.hardware.audio.apex,\
 			 com.android.neuralnetworks.apex,\
 			 com.android.hardware.power.intel.apex,\
 			 com.android.virt.apex,\
@@ -99,6 +100,7 @@ APEX_LIST := com.android.tethering.apex,\
 			 com.android.adservices.apex,\
 			 com.android.hardware.cas.apex,\
 			 com.android.os.statsd.apex,\
+			 com.android.hardware.audio.apex,\
 			 com.android.neuralnetworks.apex,\
 			 com.android.hardware.power.intel.apex,\
 			 com.android.virt.apex,\
