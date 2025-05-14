@@ -81,8 +81,8 @@ APK_LIST := AdServicesApk.apk,\
 			 com.android.adbd.apex,\
 			 com.android.art.apex,\
 			 com.android.hardware.audio.intel.apex,\
-			 com.android.extservices.gms.apex,\
-			 com.android.permission.gms.apex
+			 com.android.extservices.apex,\
+			 com.android.permission.apex
 BUILT_APKS := $(subst $(space),,$(APK_LIST))
 APEX_LIST := com.android.tethering.apex,\
 			 com.android.media.swcodec.apex,\
@@ -112,8 +112,8 @@ APEX_LIST := com.android.tethering.apex,\
 			 com.android.adbd.apex,\
 			 com.android.art.apex,\
 			 com.android.hardware.audio.intel.apex,\
-			 com.android.extservices.gms.apex,\
-			 com.android.permission.gms.apex
+			 com.android.extservices.apex,\
+			 com.android.permission.apex
 BUILT_APEXS := $(subst $(space),,$(APEX_LIST))
 
 $(BUILT_RELEASE_TARGET_FILES_PACKAGE):$(BUILT_TARGET_FILES_PACKAGE) sign_target_files_apks
