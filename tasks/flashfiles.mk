@@ -553,11 +553,9 @@ endif
 	done;
 
 	$(hide)rm -rf $(ISO_EFI); \
-	flashfile_size=`du -s ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
-	flashfile_size=`expr $${flashfile_size} + 102400`; \
-	flashfile_size=`expr $${flashfile_size} / 63 + 1 `; \
-	flashfile_size=`expr $${flashfile_size} \* 63 `; \
-	dd if=/dev/zero of=$(ISO_EFI) bs=1024 count=$${flashfile_size};
+	flashfile_size=`du -b -s ${PRODUCT_OUT}/efi_images_tmp/ | awk '{print $$1}'`; \
+	flashfile_size=`expr $${flashfile_size} / 1048576 + 11`; \
+	dd if=/dev/zero of=$(ISO_EFI) bs=1M count=$${flashfile_size};
 
 	$(hide)mkdosfs -F32 -n EFI $(ISO_EFI);
 	$(hide)mmd -i $(ISO_EFI) ::EFI;
