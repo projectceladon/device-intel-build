@@ -163,7 +163,6 @@ $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
 		--super $(GPT_DIR)/super.img.raw \
 		--acpio  $(GPT_DIR)/acpio.img \
 		--vendor_boot $(GPT_DIR)/vendor_boot.img \
-		--init_boot $(GPT_DIR)/init_boot.img \
 		--config $(GPT_DIR)/config.img.raw
 	$(hide) rm -f $@.gz
 	$(hide) gzip -f $@
