@@ -143,6 +143,11 @@ ifeq ($(tos_bin),none)
 tos_image := none
 endif
 
+optional_init_boot :=
+ifeq ($(INITBOOT_ENABLE), true)
+optional_init_boot := --init_boot $(GPT_DIR)/init_boot.img
+endif
+
 ifeq ($(BUILD_GPTIMAGE), true)
 $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
 	rm -rf $(GPT_DIR)
@@ -163,7 +168,7 @@ $(gpt_name):$(BUILT_RELEASE_FLASH_FILES_PACKAGE)
 		--super $(GPT_DIR)/super.img.raw \
 		--acpio  $(GPT_DIR)/acpio.img \
 		--vendor_boot $(GPT_DIR)/vendor_boot.img \
-		--init_boot $(GPT_DIR)/init_boot.img \
+		$(optional_init_boot) \
 		--config $(GPT_DIR)/config.img.raw
 	$(hide) rm -f $@.gz
 	$(hide) gzip -f $@
