@@ -66,7 +66,18 @@ echo "========================"
 echo "Generate installer.cmd"
 echo "========================"
 device/intel/build/releasetools/flash_cmd_generator.py device/intel/project-celadon/$TARGET/flashfiles.ini $TARGET $VARIANT | sed '$d' | sed '$d' | sed -n '/installer.cmd/,$p' | sed '1d' > $PRODUCT_OUT/$flashfile_dir/installer.cmd
+super_img_size=$(stat -c%s "$PRODUCT_OUT/$flashfile_dir/super.img")
+four_gib=$((4 * 1024 * 1024 * 1024))
+eight_gib=$((8 * 1024 * 1024 * 1024))
+twelve_gib=$((12 * 1024 * 1024 * 1024))
+echo "super size $super_img_size"
+if [ "$super_img_size" -gt "$four_gib" ] && [ "$super_img_size" -le "$eight_gib" ]; then
 sed -i 's/flash super super.img/flash super super.img.part00 super.img.part01/g' $PRODUCT_OUT/$flashfile_dir/installer.cmd
+elif [ "$super_img_size" -gt "$eight_gib" ] && [ "$super_img_size" -le "$twelve_gib" ]; then
+sed -i 's/flash super super.img/flash super super.img.part00 super.img.part01 super.img.part02/g' $PRODUCT_OUT/$flashfile_dir/installer.cmd
+elif [ "$super_img_size" -gt "$twelve_gib" ]; then
+    echo "error: super.img is larger than 12GiB. Not support"
+fi
 
 echo "========================"
 echo "Generate flash.json"
